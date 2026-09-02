@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>트레이너 배틀 시뮬 v0.2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#eef2f7;--panel:#fff;--panel2:#f5f7fb;--ink:#1a2233;--sub:#5a6580;
+  --line:#c3cddd;--line2:#dde4ef;--accent:#2f5da8;
+  --hp-hi:#48c05a;--hp-md:#e8b423;--hp-lo:#e0503f;
+  --sky1:#8ec8e8;--sky2:#c8e4f0;--ground:#d8c88a;--ground2:#c0b070;
+  --box:#f8f8f8;--boxline:#485870;--red:#c0392b;--blue:#2f5da8;--gold:#a8770b;
+}
+:root:not([data-theme="light"]){@media (prefers-color-scheme:dark){
+  --bg:#12161f;--panel:#1b212e;--panel2:#232b3b;--ink:#e6ecf5;--sub:#9aa7bd;
+  --line:#39445a;--line2:#2b3446;--accent:#7aa0dd;
+  --sky1:#2a4a68;--sky2:#1e3448;--ground:#4a4430;--ground2:#3a3626;
+  --box:#252d3d;--boxline:#7a8aa8;--red:#e5776a;--blue:#7aa0dd;--gold:#d9b64a;}}
+:root[data-theme="dark"]{
+  --bg:#12161f;--panel:#1b212e;--panel2:#232b3b;--ink:#e6ecf5;--sub:#9aa7bd;
+  --line:#39445a;--line2:#2b3446;--accent:#7aa0dd;
+  --sky1:#2a4a68;--sky2:#1e3448;--ground:#4a4430;--ground2:#3a3626;
+  --box:#252d3d;--boxline:#7a8aa8;--red:#e5776a;--blue:#7aa0dd;--gold:#d9b64a;}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:var(--bg);color:var(--ink);
+  font-family:'Gothic A1',-apple-system,'Malgun Gothic',sans-serif;font-size:14px;line-height:1.5}
+.wrap{max-width:760px;margin:0 auto}
+h1{font-size:17px;margin:0 0 3px}
+.sub{color:var(--sub);font-size:12px;margin-bottom:12px}
+.panel{background:var(--panel);border:2px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px}
+.panel-t{font-size:12px;font-weight:700;color:var(--sub);margin-bottom:8px}
+
+/* ===== 배틀 화면 ===== */
+.scene{position:relative;width:100%;aspect-ratio:4/2.55;min-height:210px;border-radius:8px;
+  border:3px solid var(--boxline);overflow:hidden;
+  background:linear-gradient(180deg,var(--sky1) 0%,var(--sky2) 62%,var(--ground2) 62%,var(--ground) 100%)}
+.plat{position:absolute;border-radius:50%;background:rgba(0,0,0,.13)}
+.plat.foe{width:31%;height:9%;right:8%;top:44%}
+.plat.me{width:37%;height:10%;left:6%;bottom:12%}
+.spr{position:absolute;transition:transform .16s ease,opacity .3s}
+.spr.foe{width:23%;right:12%;top:15%}
+.spr.me{width:30%;left:9%;bottom:14%}
+.spr svg{width:100%;height:100%;display:block;filter:drop-shadow(0 2px 2px rgba(0,0,0,.28))}
+.spr.flip svg{transform:scaleX(-1)}
+.spr.hit{animation:shk .28s}
+.spr.hurt svg{filter:brightness(0) invert(1) drop-shadow(0 2px 2px rgba(0,0,0,.3))}
+.spr.dead{transform:translateY(38px);opacity:0}
+.spr.lunge-r{transform:translateX(14%) translateY(-6%)}
+.spr.lunge-l{transform:translateX(-14%) translateY(6%)}
+@keyframes shk{0%,100%{transform:translateX(0)}20%{transform:translateX(-7%)}
+  45%{transform:translateX(6%)}70%{transform:translateX(-4%)}}
+
+.hpbox{position:absolute;background:var(--box);border:2px solid var(--boxline);border-radius:6px;
+  padding:4px 7px;width:47%;box-shadow:1px 2px 0 rgba(0,0,0,.18)}
+.hpbox.foe{left:3%;top:5%}
+.hpbox.me{right:3%;bottom:5%}
+.hpb-n{font-size:11px;font-weight:800;display:flex;justify-content:space-between;gap:4px;line-height:1.3}
+.hpb-n em{font-style:normal;font-weight:400;color:var(--sub);font-size:10px}
+.hpb-bar{height:6px;background:#5a5a5a;border-radius:3px;overflow:hidden;margin:3px 0 1px;border:1px solid var(--boxline)}
+.hpb-bar i{display:block;height:100%;transition:width .45s ease}
+.hpb-x{font-size:9.5px;color:var(--sub);display:flex;justify-content:space-between;
+  font-variant-numeric:tabular-nums;min-height:13px}
+.hpb-x b{color:var(--gold);font-weight:700}
+
+.fx{position:absolute;pointer-events:none;font-weight:800;font-size:15px;
+  text-shadow:0 0 6px rgba(0,0,0,.5);animation:fxup .8s ease-out forwards}
+@keyframes fxup{0%{opacity:0;transform:translateY(6px) scale(.8)}
+  25%{opacity:1;transform:translateY(-2px) scale(1.1)}100%{opacity:0;transform:translateY(-26px)}}
+.burst{position:absolute;border-radius:50%;pointer-events:none;animation:brs .42s ease-out forwards}
+@keyframes brs{0%{opacity:.95;transform:scale(.2)}100%{opacity:0;transform:scale(2.6)}}
+
+.tbox{margin-top:6px;background:var(--box);border:3px solid var(--boxline);border-radius:8px;
+  padding:9px 11px;min-height:56px;font-size:13.5px;font-weight:700;line-height:1.5}
+.tbox small{display:block;font-weight:400;font-size:12px;color:var(--sub);margin-top:2px}
+
+/* ===== 트레이너 ===== */
+.trainers{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:560px){.trainers{grid-template-columns:1fr}}
+.tcard{background:var(--panel2);border:2px solid var(--line2);border-radius:8px;padding:10px}
+.tname{font-weight:800;font-size:14px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:6px}
+.stat{display:flex;align-items:center;gap:6px;margin:2px 0;font-size:12px}
+.stat b{width:42px;font-weight:400;color:var(--sub)}
+.stat input[type=range]{flex:1;min-width:0;height:15px;accent-color:var(--accent);cursor:pointer}
+.stat span{width:24px;text-align:right;font-variant-numeric:tabular-nums;font-size:11px}
+.team{margin-top:7px;font-size:11px;color:var(--sub);line-height:1.6}
+select{font-family:inherit;font-size:11px;padding:2px 4px;border-radius:5px;
+  border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+
+.ctrl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button{font-family:inherit;font-size:13px;font-weight:700;padding:8px 14px;border-radius:8px;
+  border:2px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}
+button.ghost{background:transparent;color:var(--accent)}
+button:disabled{opacity:.45;cursor:default}
+label.chk{font-size:12px;color:var(--sub);display:flex;align-items:center;gap:4px;cursor:pointer}
+
+#log{background:var(--panel2);border:2px solid var(--line2);border-radius:8px;padding:10px;
+  height:230px;overflow-y:auto;font-family:ui-monospace,Menlo,monospace;font-size:12px;
+  line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.l-turn{color:var(--accent);font-weight:700;margin-top:7px;border-top:1px dashed var(--line);padding-top:5px}
+.l-turn:first-child{margin-top:0;border-top:none;padding-top:0}
+.l-red{color:var(--red)}.l-blue{color:var(--blue)}.l-sub{color:var(--sub)}.l-gold{color:var(--gold)}
+.l-think{color:var(--sub);font-size:11px;padding-left:9px;border-left:2px solid var(--line2)}
+.l-win{font-weight:800;color:var(--gold);margin-top:7px}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
+th,td{border:1px solid var(--line2);padding:5px 7px;text-align:left}
+th{background:var(--panel2);color:var(--sub)}td.n{text-align:right;font-variant-numeric:tabular-nums}
+.note{font-size:11px;color:var(--sub);margin-top:8px;line-height:1.65}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>트레이너 배틀 시뮬 · v0.2 <span style="font-size:12px;font-weight:400;color:var(--sub)">난천 시점</span></h1>
+<div class="sub">물리/특수 구분 · 기점기 · 특성 반영 · 판단력/운영/집중력/지식/멘탈 검증용</div>
+
+<div class="panel">
+  <div class="scene" id="scene">
+    <div class="plat foe"></div><div class="plat me"></div>
+    <div class="hpbox foe" id="hp-B"></div>
+    <div class="hpbox me" id="hp-A"></div>
+    <div class="spr foe" id="sp-B"></div>
+    <div class="spr me flip" id="sp-A"></div>
+  </div>
+  <div class="tbox" id="tbox">난천 vs 단델 — "배틀 시작"을 누르세요.</div>
+</div>
+
+<div class="panel">
+  <div class="ctrl">
+    <button id="btn-run">배틀 시작</button>
+    <button id="btn-100" class="ghost">100회 시뮬</button>
+    <select id="speed">
+      <option value="1100">1배속</option>
+      <option value="620" selected>2배속</option>
+      <option value="300">4배속</option>
+      <option value="0">즉시(로그만)</option>
+    </select>
+    <label class="chk"><input type="checkbox" id="think"> 판단 근거</label>
+    <select id="bulk" title="HP 배율 — 배틀 길이를 늘려 기점기가 성립하는지 보는 실험용">
+      <option value="1" selected>내구 ×1</option>
+      <option value="1.5">내구 ×1.5</option>
+      <option value="2">내구 ×2</option>
+      <option value="3">내구 ×3</option>
+    </select>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-t">트레이너</div>
+  <div class="trainers" id="trainers"></div>
+</div>
+
+<div class="panel">
+  <div class="panel-t">배틀 로그</div>
+  <div id="log"></div>
+</div>
+
+<div class="panel" id="result-panel" style="display:none">
+  <div class="panel-t">100회 시뮬 결과</div><div id="result"></div>
+</div>
+
+<div class="note">
+스프라이트는 저작권 · 외부 이미지 제약으로 직접 그린 픽셀 플레이스홀더입니다.<br>
+Lv50 · 노력치 0 · 무보정 · 개체값 31 기준. 데미지 공식 / 급소 / 명중 / 랭크업 / 다단히트 / 난수 0.85~1.00 구현.<br>
+특성: 까칠한피부(접촉기 반동 1/8) · 클리어바디(상대발 랭크 하락 무효) · 맹화(HP 1/3 이하 불꽃 1.5배) 반영.
+프레셔는 PP를 추적하지 않아 현재 효과 없음. 상태이상(화상·풀죽음)은 미구현.
+</div>
+</div>
+
+<script>
+/* ============ 타입 ============ */
+const TC={
+normal:{rock:.5,ghost:0,steel:.5},
+fire:{fire:.5,water:.5,grass:2,ice:2,bug:2,rock:.5,dragon:.5,steel:2},
+water:{fire:2,water:.5,grass:.5,ground:2,rock:2,dragon:.5},
+electric:{water:2,electric:.5,grass:.5,ground:0,flying:2,dragon:.5},
+grass:{fire:.5,water:2,grass:.5,poison:.5,ground:2,flying:.5,bug:.5,rock:2,dragon:.5,steel:.5},
+ice:{fire:.5,water:.5,grass:2,ice:.5,ground:2,flying:2,dragon:2,steel:.5},
+fighting:{normal:2,ice:2,poison:.5,flying:.5,psychic:.5,bug:.5,rock:2,ghost:0,dark:2,steel:2,fairy:.5},
+poison:{grass:2,poison:.5,ground:.5,rock:.5,ghost:.5,steel:0,fairy:2},
+ground:{fire:2,electric:2,grass:.5,poison:2,flying:0,bug:.5,rock:2,steel:2},
+flying:{electric:.5,grass:2,fighting:2,bug:2,rock:.5,steel:.5},
+psychic:{fighting:2,poison:2,psychic:.5,dark:0,steel:.5},
+bug:{fire:.5,grass:2,fighting:.5,poison:.5,flying:.5,psychic:2,ghost:.5,dark:2,steel:.5,fairy:.5},
+rock:{fire:2,ice:2,fighting:.5,ground:.5,flying:2,bug:2,steel:.5},
+ghost:{normal:0,psychic:2,ghost:2,dark:.5},
+dragon:{dragon:2,steel:.5,fairy:0},
+dark:{fighting:.5,psychic:2,ghost:2,dark:.5,fairy:.5},
+steel:{fire:.5,water:.5,electric:.5,ice:2,rock:2,steel:.5,fairy:2},
+fairy:{fire:.5,fighting:2,poison:.5,dragon:2,dark:2,steel:.5}};
+const TKR={normal:'노말',fire:'불꽃',water:'물',electric:'전기',grass:'풀',ice:'얼음',fighting:'격투',
+poison:'독',ground:'땅',flying:'비행',psychic:'에스퍼',bug:'벌레',rock:'바위',ghost:'고스트',
+dragon:'드래곤',dark:'악',steel:'강철',fairy:'페어리'};
+const TFX={fire:'#ff7a30',flying:'#b8d0f0',rock:'#c8a850',ghost:'#8a6ac0',dark:'#4a3a58',
+psychic:'#f07aa0',dragon:'#7a6ad8',ground:'#d0a860',normal:'#d8d8c0',steel:'#a8b8c8'};
+function eff(mt,dt){let m=1;for(const t of dt){const r=TC[mt];if(r&&r[t]!==undefined)m*=r[t];}return m;}
+
+/* ============ 기술 ============ */
+const MV={
+'섀도볼':{type:'ghost',pw:80,acc:100,cat:'spec'},
+'악의파동':{type:'dark',pw:80,acc:100,cat:'spec'},
+'사이코키네시스':{type:'psychic',pw:90,acc:100,cat:'spec'},
+'저주':{type:'ghost',pw:0,acc:101,cat:'status',ghostCurse:true},
+'지진':{type:'ground',pw:100,acc:100,cat:'phys'},
+'스케일샷':{type:'dragon',pw:25,acc:90,cat:'phys',contact:true,hits:[2,5],self:{def:-1,spe:1}},
+'칼춤':{type:'normal',pw:0,acc:101,cat:'status',self:{atk:2}},
+'암석봉인':{type:'rock',pw:60,acc:95,cat:'phys',tgt:{spe:-1}},
+'섀도클로':{type:'ghost',pw:70,acc:100,cat:'phys',contact:true,critB:1},
+'드래곤애로':{type:'dragon',pw:50,acc:100,cat:'phys',hits:[2,2]},
+'용성군':{type:'dragon',pw:130,acc:90,cat:'spec',self:{spa:-2}},
+'화염방사':{type:'fire',pw:90,acc:100,cat:'spec'},
+'에어슬래시':{type:'flying',pw:75,acc:95,cat:'spec'},
+'원시의힘':{type:'rock',pw:60,acc:100,cat:'spec',chance:{p:.1,self:{atk:1,def:1,spa:1,spd:1,spe:1}}},
+'드래곤클로':{type:'dragon',pw:80,acc:100,cat:'phys',contact:true}};
+
+/* ============ 픽셀 스프라이트 ============ */
+const PAL={
+'화강돌':{p:'#6B4A8F',l:'#A98BC9',k:'#6A8F5A',y:'#E8D44A',w:'#F2ECFA',d:'#3E2A5A'},
+'한카리아스':{b:'#4A72AE',d:'#2C4A78',r:'#C0392B',y:'#E8C44A',w:'#FFFFFF'},
+'드래펄트':{g:'#3F9A78',d:'#26604A',p:'#7A5BB0',y:'#E8D44A',w:'#FFFFFF'},
+'리자몽':{o:'#E8703A',c:'#F5D6A0',w:'#B85A2A',f:'#FFC040',e:'#221818'}};
+const ART={
+'화강돌':[
+'.....pp..pp.....',
+'...pppppppppp...',
+'..pppplpplpppp..',
+'..pplyplplyppp..',
+'.ppplwplpwlpppp.',
+'.pppppppppppppp.',
+'..ppplddlpppp...',
+'...pppppppppp...',
+'....kkkkkkkk....',
+'...kkkyyyykkk...',
+'...kkyywwyykk...',
+'...kkkyyyykkk...',
+'....kkkkkkkk....',
+'................'],
+'한카리아스':[
+'.....b......b...',
+'....bb.....bb...',
+'...bbbbbbbbbb...',
+'..bbbwbbbwbbb...',
+'..bbbdbbbdbbb...',
+'..bbrrrrrrrbb...',
+'.bbbrryyyrrbbb..',
+'bb..brrrrrb..bb.',
+'.....bbbbb......',
+'....bbb.bbb.....',
+'...bbb...bbb....',
+'..bbb.....bbb...',
+'.bb.........bb..',
+'................'],
+'드래펄트':[
+'.......gg.......',
+'......gggg......',
+'.....ggggggg....',
+'....ggwddwgg....',
+'....gggggggg....',
+'..ppgggggggpp...',
+'.pp..gggggg..pp.',
+'.....gggggg.....',
+'......gggg......',
+'......gggg......',
+'.....gg..gg.....',
+'....gg....gg....',
+'...gg......gg...',
+'................'],
+'리자몽':[
+'.......oo.......',
+'......oooo......',
+'.....ooeeoo.....',
+'w....oooooo..ff.',
+'ww...oooooo.fff.',
+'.ww..cccccc.ff..',
+'.www.cccccc.....',
+'..wwwoooooo.....',
+'..wwooccccoo....',
+'...wooccccoo....',
+'....oocccco.....',
+'....oo....oo....',
+'...ooo....ooo...',
+'................']};
+function pixel(name){
+  const art=ART[name],pal=PAL[name];let r='';
+  art.forEach((row,y)=>{for(let x=0;x<row.length;x++){const c=row[x];
+    if(c==='.'||!pal[c])continue;
+    r+='<rect x="'+x+'" y="'+y+'" width="1.02" height="1.02" fill="'+pal[c]+'"/>';}});
+  return '<svg viewBox="0 0 16 14" shape-rendering="crispEdges">'+r+'</svg>';
+}
+
+/* ============ 포켓몬 ============ */
+const DEX={
+'화강돌':{types:['ghost','dark'],ab:'프레셔',base:{hp:50,atk:92,def:108,spa:92,spd:108,spe:35},
+  moves:['섀도볼','악의파동','사이코키네시스','저주']},
+'한카리아스':{types:['dragon','ground'],ab:'까칠한피부',base:{hp:108,atk:130,def:95,spa:80,spd:85,spe:102},
+  moves:['지진','스케일샷','칼춤','암석봉인']},
+'드래펄트':{types:['dragon','ghost'],ab:'클리어바디',base:{hp:88,atk:120,def:75,spa:100,spd:75,spe:142},
+  moves:['섀도클로','드래곤애로','용성군','섀도볼']},
+'리자몽':{types:['fire','flying'],ab:'맹화',base:{hp:78,atk:84,def:78,spa:109,spd:85,spe:100},
+  moves:['화염방사','에어슬래시','원시의힘','드래곤클로']}};
+
+const TR={
+A:{name:'난천',stats:{judge:18,ops:19,focus:18,know:17,mental:20},style:'대면형',
+   team:['화강돌','한카리아스'],potions:2},
+B:{name:'단델',stats:{judge:20,ops:20,focus:20,know:20,mental:20},style:'기점형',
+   team:['드래펄트','리자몽'],potions:2}};
+const STYLE={'대면형':{phys:1.3,spec:1.3,status:.55,sw:.7},
+  '기점형':{phys:.95,spec:.95,status:1.8,sw:1.0},'균형형':{phys:1,spec:1,status:1,sw:1}};
+const SKR={judge:'판단력',ops:'운영',focus:'집중력',know:'지식',mental:'멘탈'};
+const STN={atk:'공격',def:'방어',spa:'특공',spd:'특방',spe:'스피드'};
+
+/* ============ 엔진 ============ */
+const LV=50;
+let BULK=1;
+function mkMon(n){const d=DEX[n],b=d.base;
+  const s=k=>Math.floor((2*b[k]+31)/2)+5;
+  const hp=Math.round((Math.floor((2*b.hp+31)/2)+60)*BULK);
+  return {name:n,types:d.types,ab:d.ab,moves:d.moves.slice(),maxhp:hp,hp,
+    st:{atk:s('atk'),def:s('def'),spa:s('spa'),spd:s('spd'),spe:s('spe')},
+    stage:{atk:0,def:0,spa:0,spd:0,spe:0},cursed:false,fainted:false};}
+const stg=v=>v>=0?(2+v)/2:2/(2-v);
+function ef(m,k,ignN,ignP){let v=m.stage[k];if(ignN&&v<0)v=0;if(ignP&&v>0)v=0;return m.st[k]*stg(v);}
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const ri=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+function gauss(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+const pct=m=>Math.max(0,Math.round(m.hp/m.maxhp*100));
+
+function dmgCalc(a,d,mv,crit,roll,noEff){
+  const ph=mv.cat==='phys';
+  const A=ph?ef(a,'atk',crit,false):ef(a,'spa',crit,false);
+  const D=ph?ef(d,'def',false,crit):ef(d,'spd',false,crit);
+  let pw=mv.pw;
+  if(a.ab==='맹화'&&mv.type==='fire'&&a.hp<=a.maxhp/3)pw=Math.floor(pw*1.5);
+  let base=Math.floor(Math.floor(Math.floor(2*LV/5+2)*pw*A/D)/50)+2;
+  let mod=1;
+  if(a.types.includes(mv.type))mod*=1.5;
+  const e=eff(mv.type,d.types);
+  if(!noEff)mod*=e;
+  if(crit)mod*=1.5;
+  mod*=roll;
+  return {dmg:(!noEff&&e===0)?0:Math.max(1,Math.floor(base*mod)),e};
+}
+function neutralPct(a,d,mv){if(mv.cat==='status')return 0;
+  const r=dmgCalc(a,d,mv,false,.925,true);const n=mv.hits?(mv.hits[0]+mv.hits[1])/2:1;
+  return r.dmg*n/d.maxhp*100*(mv.acc>100?1:mv.acc/100);}
+const avgDmg=(a,d,mv)=>mv.cat==='status'?0:neutralPct(a,d,mv)*eff(mv.type,d.types);
+
+/* ============ AI ============ */
+function temperature(t,turn,shock){const s=t.stats;
+  let T=1.2+Math.pow(Math.max(0,20-s.judge),1.7)*.55;
+  const st0=s.focus/2;
+  if(turn>st0)T*=1+(turn-st0)*((21-s.focus)*.035+.02);
+  if(shock>0)T*=1+(20-s.mental)*.07*shock;
+  return T;}
+function perceive(t,te){const n=(20-t.stats.know)*.075;
+  if(n<=0)return te;
+  if(te===0)return Math.min(1.2,Math.abs(gauss())*n*1.4);
+  return Math.max(0,te*(1+gauss()*n));}
+function softmax(sc,T){const mx=Math.max(...sc);
+  const e=sc.map(v=>Math.exp((v-mx)/Math.max(.05,T)));const s=e.reduce((a,b)=>a+b,0);
+  return e.map(v=>v/s);}
+function pickI(p){let r=Math.random(),a=0;for(let i=0;i<p.length;i++){a+=p[i];if(r<=a)return i;}return p.length-1;}
+
+function decide(T,me,foe,turn,shock,bench,thinkOut){
+  const sty=STYLE[T.style],opts=[];
+  /* 남은 턴 추정 — 기점기의 가치는 "앞으로 몇 턴이나 써먹느냐"로 결정된다 */
+  let myBest=0,foeBest=0;
+  for(const mn of me.moves)myBest=Math.max(myBest,avgDmg(me,foe,MV[mn]));
+  for(const mn of foe.moves)foeBest=Math.max(foeBest,avgDmg(foe,me,MV[mn]));
+  const tKO=myBest>0?Math.ceil(pct(foe)/myBest):9;      /* 내가 상대를 잡는 데 걸리는 턴 */
+  const tSurv=foeBest>0?Math.ceil(pct(me)/foeBest):9;   /* 내가 버틸 수 있는 턴 */
+  const R=Math.max(0,Math.min(tKO,tSurv,6));            /* 실질 남은 턴 */
+
+  for(const mn of me.moves){
+    const mv=MV[mn];let sc;
+    if(mv.cat==='status'){
+      if(mv.ghostCurse){
+        /* 저주: 내 HP 절반을 내고 상대에게 턴당 25% */
+        if(foe.cursed||me.hp<=me.maxhp/2){sc=-40;}
+        else{
+          const survAfter=foeBest>0?Math.ceil((pct(me)-50)/foeBest):9;
+          const ticks=Math.max(0,Math.min(survAfter,tKO,5));
+          sc=(25*ticks-myBest)*sty.status;
+        }
+      }else{
+        /* 능력치 상승기: (배율-1) × 최대타 × 남은턴 − 이번 턴 손해 */
+        const key=Object.keys(mv.self||{}).find(k=>(k==='atk'||k==='spa')&&mv.self[k]>0);
+        if(!key||R<=1){sc=-25;}
+        else{
+          const c=me.stage[key],n=Math.min(6,c+mv.self[key]);
+          const mult=stg(n)/stg(c);
+          sc=(myBest*(mult-1)*(R-1)-myBest)*sty.status;
+          if(tSurv<=1)sc=-40;               /* 이번 턴에 죽을 것 같으면 세팅 금지 */
+        }
+      }
+    }else{
+      const te=eff(mv.type,foe.types),pe=perceive(T,te);
+      const adj=neutralPct(me,foe,mv)*pe;
+      sc=adj*(mv.cat==='phys'?sty.phys:sty.spec);
+      if(adj>=pct(foe))sc+=42;
+    }
+    opts.push({kind:'move',mv:mn,score:sc});
+  }
+  const hpr=me.hp/me.maxhp;
+  if(T.potions>0){const thr=.24+(T.stats.ops/20)*.20;
+    opts.push({kind:'item',score:hpr<thr?(thr-hpr)*180*(T.stats.ops/20):-16});}
+  if(bench&&!bench.fainted){
+    let inc=0,inb=0;
+    for(const mn of foe.moves){inc=Math.max(inc,avgDmg(foe,me,MV[mn]));inb=Math.max(inb,avgDmg(foe,bench,MV[mn]));}
+    const pI=perceive(T,inc/100)*100,pB=perceive(T,inb/100)*100;
+    const risk=pI/Math.max(1,pct(me)),thr=.85+(20-T.stats.ops)*.06;
+    let sc=(risk-thr)*30+(pI-pB)*.42;sc*=sty.sw;
+    if(T.justSw)sc-=26;
+    opts.push({kind:'switch',score:sc});
+  }
+  const Tp=temperature(T,turn,shock),pr=softmax(opts.map(o=>o.score),Tp);
+  const i=pickI(pr);
+  if(thinkOut)thinkOut.push('['+T.name+' T='+Tp.toFixed(2)+'] '+opts.map((o,j)=>
+    (o.kind==='move'?o.mv:(o.kind==='item'?'회복약':'교체'))+' '+Math.round(pr[j]*100)+'%').join(' / '));
+  return opts[i];
+}
+
+/* ============ 배틀 ============ */
+function newBattle(){
+  const A=JSON.parse(JSON.stringify(TR.A)),B=JSON.parse(JSON.stringify(TR.B));
+  const g=id=>document.getElementById(id);
+  if(g('sty-A')){A.style=g('sty-A').value;B.style=g('sty-B').value;}
+  if(g('bulk'))BULK=+g('bulk').value;
+  A.mons=A.team.map(mkMon);B.mons=B.team.map(mkMon);
+  A.act=0;B.act=0;A.shock=0;B.shock=0;
+  return {A,B,turn:0,ev:[]};
+}
+const cur=s=>s.mons[s.act];
+const bench=s=>s.mons.find((m,i)=>i!==s.act&&!m.fainted);
+const push=(st,e)=>st.ev.push(e);
+
+function chStage(st,side,mon,ch,byFoe){
+  for(const k in ch){
+    if(byFoe&&ch[k]<0&&mon.ab==='클리어바디'){
+      push(st,{t:'ability',side,mon:mon.name,ab:'클리어바디',
+        txt:mon.name+'의 클리어바디! 랭크가 떨어지지 않는다!'});continue;}
+    const b=mon.stage[k];
+    mon.stage[k]=Math.max(-6,Math.min(6,b+ch[k]));
+    if(mon.stage[k]!==b)push(st,{t:'stage',side,mon:mon.name,stat:STN[k],d:ch[k],
+      stages:Object.assign({},mon.stage)});
+  }
+}
+
+function act(st,side,a,osd){
+  const S=st[side],O=st[osd],me=cur(S),foe=cur(O);
+  if(me.fainted)return;
+  if(a.kind==='switch'){
+    const bi=S.mons.findIndex((m,i)=>i!==S.act&&!m.fainted);
+    if(bi>=0){push(st,{t:'switch',side,from:me.name,to:S.mons[bi].name,tr:S.name});
+      me.stage={atk:0,def:0,spa:0,spd:0,spe:0};S.act=bi;S._sw=true;}
+    return;}
+  if(a.kind==='item'){
+    S.potions--;const b=pct(me);me.hp=Math.min(me.maxhp,me.hp+Math.floor(me.maxhp*.5));
+    push(st,{t:'item',side,mon:me.name,tr:S.name,before:b,after:pct(me),left:S.potions,hp:me.hp});
+    return;}
+  const mv=MV[a.mv];
+  if(mv.cat==='status'){
+    if(mv.ghostCurse){
+      const cost=Math.floor(me.maxhp/2),b=pct(me);
+      me.hp=Math.max(0,me.hp-cost);foe.cursed=true;
+      push(st,{t:'curse',side,mon:me.name,foe:foe.name,before:b,after:pct(me),hp:me.hp});
+      if(me.hp<=0){me.fainted=true;push(st,{t:'faint',side,mon:me.name});O.shock=0;S.shock=2;}
+      return;}
+    push(st,{t:'move',side,mon:me.name,mv:a.mv,status:true,type:mv.type});
+    if(mv.self)chStage(st,side,me,mv.self,false);
+    return;}
+
+  if(mv.acc<=100&&Math.random()*100>mv.acc){
+    push(st,{t:'move',side,mon:me.name,mv:a.mv,target:foe.name,miss:true,type:mv.type});return;}
+  const before=pct(foe);let hits=mv.hits?ri(mv.hits[0],mv.hits[1]):1,crits=0,e=1,land=0;
+  for(let h=0;h<hits;h++){
+    if(foe.hp<=0)break;
+    const cr=Math.random()<(mv.critB?1/8:1/24);if(cr)crits++;
+    const r=dmgCalc(me,foe,mv,cr,rnd(.85,1),false);e=r.e;
+    foe.hp=Math.max(0,foe.hp-r.dmg);land++;}
+  push(st,{t:'move',side,mon:me.name,mv:a.mv,target:foe.name,type:mv.type,
+    before,after:pct(foe),hits:land,e,crits,hp:foe.hp,cat:mv.cat});
+  if(mv.self)chStage(st,side,me,mv.self,false);
+  if(mv.tgt&&foe.hp>0)chStage(st,osd,foe,mv.tgt,true);
+  if(mv.chance&&Math.random()<mv.chance.p&&mv.chance.self)chStage(st,side,me,mv.chance.self,false);
+  /* 까칠한피부 */
+  if(mv.contact&&foe.ab==='까칠한피부'&&foe.hp>0&&land>0){
+    const d=Math.floor(me.maxhp/8),b=pct(me);me.hp=Math.max(0,me.hp-d);
+    push(st,{t:'ability',side:osd,mon:foe.name,ab:'까칠한피부',hitSide:side,hitMon:me.name,
+      txt:foe.name+'의 까칠한피부! '+me.name+'이(가) 상처를 입었다!',before:b,after:pct(me),hp:me.hp});
+    if(me.hp<=0){me.fainted=true;push(st,{t:'faint',side,mon:me.name});S.shock=2;}}
+  if(foe.hp<=0){foe.fainted=true;push(st,{t:'faint',side:osd,mon:foe.name});O.shock=2;}
+}
+
+function endTurn(st,side){
+  const S=st[side],m=cur(S);
+  if(m.fainted||!m.cursed)return;
+  const d=Math.floor(m.maxhp/4),b=pct(m);m.hp=Math.max(0,m.hp-d);
+  push(st,{t:'curseTick',side,mon:m.name,before:b,after:pct(m),hp:m.hp});
+  if(m.hp<=0){m.fainted=true;push(st,{t:'faint',side,mon:m.name});st[side].shock=2;}
+}
+
+function run(st,think,maxT=80){
+  push(st,{t:'send',side:'A',mon:cur(st.A).name,tr:st.A.name});
+  push(st,{t:'send',side:'B',mon:cur(st.B).name,tr:st.B.name});
+  while(st.turn<maxT){
+    st.turn++;
+    const a=cur(st.A),b=cur(st.B),th=think?[]:null;
+    const aA=decide(st.A,a,b,st.turn,st.A.shock,bench(st.A),th);
+    const bA=decide(st.B,b,a,st.turn,st.B.shock,bench(st.B),th);
+    push(st,{t:'turn',n:st.turn,think:th});
+    const pri=x=>x.kind==='switch'?2:(x.kind==='item'?1:0);
+    let first='A';
+    if(pri(aA)!==pri(bA))first=pri(aA)>pri(bA)?'A':'B';
+    else{const sa=ef(a,'spe'),sb=ef(b,'spe');
+      first=sa>sb?'A':(sb>sa?'B':(Math.random()<.5?'A':'B'));}
+    const ord=first==='A'?[['A','B',aA],['B','A',bA]]:[['B','A',bA],['A','B',aA]];
+    for(const [s,o,x] of ord){
+      if(cur(st[s]).fainted)continue;
+      act(st,s,x,o);
+      if(st.A.mons.every(m=>m.fainted)||st.B.mons.every(m=>m.fainted))break;}
+    if(!st.A.mons.every(m=>m.fainted)&&!st.B.mons.every(m=>m.fainted)){
+      endTurn(st,first);endTurn(st,first==='A'?'B':'A');}
+    st.A.shock=Math.max(0,st.A.shock-1);st.B.shock=Math.max(0,st.B.shock-1);
+    st.A.justSw=st.A._sw;st.B.justSw=st.B._sw;st.A._sw=false;st.B._sw=false;
+    if(st.A.mons.every(m=>m.fainted)){push(st,{t:'end',w:'B',tr:st.B.name,turns:st.turn});return 'B';}
+    if(st.B.mons.every(m=>m.fainted)){push(st,{t:'end',w:'A',tr:st.A.name,turns:st.turn});return 'A';}
+    for(const s of ['A','B']){const S=st[s];
+      if(cur(S).fainted){const bi=S.mons.findIndex(m=>!m.fainted);
+        if(bi>=0){S.act=bi;push(st,{t:'send',side:s,mon:S.mons[bi].name,tr:S.name});}}}
+  }
+  push(st,{t:'end',w:'D',turns:st.turn});return 'D';
+}
+
+/* ============ 렌더 ============ */
+const $=id=>document.getElementById(id);
+const hpCol=p=>p>50?'var(--hp-hi)':(p>20?'var(--hp-md)':'var(--hp-lo)');
+const view={A:null,B:null};
+
+function drawMon(side,mon){
+  view[side]=mon;
+  const sp=$('sp-'+side);
+  sp.innerHTML=pixel(mon.name);
+  sp.className='spr '+(side==='A'?'me flip':'foe');
+  drawHP(side);
+}
+function drawHP(side){
+  const m=view[side];if(!m)return;
+  const p=pct(m);
+  const sg=Object.entries(m.stage).filter(([,v])=>v!==0)
+    .map(([k,v])=>({atk:'공',def:'방',spa:'특공',spd:'특방',spe:'속'}[k]+(v>0?'+':'')+v).toString()).join(' ');
+  $('hp-'+side).innerHTML=
+    '<div class="hpb-n"><span>'+m.name+'</span><em>Lv50 '+m.types.map(t=>TKR[t]).join('·')+'</em></div>'+
+    '<div class="hpb-bar"><i style="width:'+p+'%;background:'+hpCol(p)+'"></i></div>'+
+    '<div class="hpb-x"><span>'+Math.max(0,m.hp)+'/'+m.maxhp+' ('+p+'%)</span><b>'+
+    sg+(m.cursed?' 저주':'')+'</b></div>';
+}
+function fx(side,txt,col){
+  const sc=$('scene'),d=document.createElement('div');
+  d.className='fx';d.textContent=txt;d.style.color=col||'#fff';
+  d.style.left=side==='A'?'18%':'62%';d.style.top=side==='A'?'62%':'26%';
+  sc.appendChild(d);setTimeout(()=>d.remove(),900);
+}
+function burst(side,color){
+  const sc=$('scene'),d=document.createElement('div');
+  d.className='burst';d.style.background='radial-gradient(circle,'+color+' 0%,transparent 70%)';
+  d.style.width='22%';d.style.paddingBottom='22%';
+  d.style.left=side==='A'?'15%':'58%';d.style.top=side==='A'?'58%':'18%';
+  sc.appendChild(d);setTimeout(()=>d.remove(),460);
+}
+function say(main,sub){$('tbox').innerHTML=main+(sub?'<small>'+sub+'</small>':'');}
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+
+const logEl=()=>$('log');
+function wl(cls,txt){const d=document.createElement('div');d.className=cls||'';d.textContent=txt;
+  logEl().appendChild(d);logEl().scrollTop=logEl().scrollHeight;}
+
+function effTxt(e){return e===0?'효과가 없는 것 같다…':
+  (e>=4?'효과가 굉장했다! (4배)':(e>=2?'효과가 굉장했다!':(e<1?'효과가 별로인 듯하다…':'')));}
+
+async function playEvents(st,sp){
+  const stA=st.A.mons,stB=st.B.mons;
+  const byName=(side,n)=>st[side].mons.find(m=>m.name===n);
+  for(const e of st.ev){
+    const tag=e.side==='A'?'l-blue':'l-red';
+    switch(e.t){
+      case 'turn':
+        wl('l-turn','턴 '+e.n);
+        if(e.think)e.think.forEach(t=>wl('l-think','  '+t));
+        break;
+      case 'send':{
+        const m=byName(e.side,e.mon);
+        drawMon(e.side,m);
+        say(e.tr+': 가랏! '+e.mon+'!');
+        wl(tag,e.tr+': '+e.mon+' 출전!');
+        if(sp)await wait(sp*.7);
+        break;}
+      case 'switch':{
+        const m=byName(e.side,e.to);
+        say(e.tr+'이(가) '+e.from+'을(를) 되돌렸다!','가랏! '+e.to+'!');
+        wl(tag,e.tr+': '+e.from+' → '+e.to);
+        if(sp)await wait(sp*.55);
+        drawMon(e.side,m);
+        if(sp)await wait(sp*.5);
+        break;}
+      case 'item':{
+        const m=byName(e.side,e.mon);m.hp=e.hp;
+        say(e.tr+'은(는) '+e.mon+'에게 회복약을 사용했다!');
+        fx(e.side,'+'+(e.after-e.before)+'%','#5ad06a');
+        drawHP(e.side);
+        wl('l-gold',e.mon+' 회복약 사용  '+e.before+'% → '+e.after+'%  (남은 개수 '+e.left+')');
+        if(sp)await wait(sp*.8);
+        break;}
+      case 'move':{
+        const sp1=$('sp-'+e.side);
+        say(e.mon+'의 '+e.mv+'!');
+        wl(tag,e.mon+'의 '+e.mv+(e.target?' → '+e.target:'')+
+          (e.miss?'':(e.status?'':'  '+e.before+'% → '+e.after+'%'+(e.hits>1?'  ('+e.hits+'번 맞았다)':''))));
+        if(sp){
+          sp1.classList.add(e.side==='A'?'lunge-r':'lunge-l');
+          await wait(sp*.28);
+          sp1.classList.remove('lunge-r','lunge-l');
+        }
+        if(e.miss){say(e.mon+'의 '+e.mv+'!','하지만 빗나갔다!');wl('l-sub','  빗나갔다!');
+          if(sp)await wait(sp*.6);break;}
+        if(e.status)  {if(sp)await wait(sp*.4);break;}
+        const osd=e.side==='A'?'B':'A',tm=byName(osd,e.target);
+        if(sp){
+          const spT=$('sp-'+osd);
+          burst(osd,TFX[e.type]||'#fff');
+          spT.classList.add('hit','hurt');
+          await wait(160);spT.classList.remove('hurt');
+          await wait(140);spT.classList.remove('hit');
+        }
+        tm.hp=e.hp;drawHP(osd);
+        const notes=[];
+        const et=effTxt(e.e);if(et)notes.push(et);
+        if(e.crits>0)notes.push('급소에 맞았다!'+(e.hits>1?' ×'+e.crits:''));
+        if(notes.length){say(e.mon+'의 '+e.mv+'!',notes.join(' '));wl('l-sub','  '+notes.join(' '));}
+        if(e.e>=2)fx(osd,'효과 굉장!','#ffd24a');
+        if(e.e===0)fx(osd,'무효','#c8c8c8');
+        if(sp)await wait(sp*.65);
+        break;}
+      case 'stage':{
+        const m=byName(e.side,e.mon);m.stage=e.stages;drawHP(e.side);
+        const up=e.d>0;
+        say(m.name+'의 '+e.stat+(up?'이(가) 올라갔다!':'이(가) 떨어졌다!'));
+        fx(e.side,(up?'▲ ':'▼ ')+e.stat,up?'#5ad0d0':'#e88a5a');
+        wl('l-gold','  '+m.name+' '+e.stat+(up?' +':' ')+e.d);
+        if(sp)await wait(sp*.5);
+        break;}
+      case 'ability':{
+        say(e.txt);wl('l-gold','  '+e.txt);
+        if(e.hitMon){const m=byName(e.hitSide,e.hitMon);m.hp=e.hp;
+          if(sp){$('sp-'+e.hitSide).classList.add('hit');await wait(180);
+            $('sp-'+e.hitSide).classList.remove('hit');}
+          drawHP(e.hitSide);
+          fx(e.hitSide,'-'+(e.before-e.after)+'%','#e8705a');
+          wl('l-sub','  '+e.hitMon+'  '+e.before+'% → '+e.after+'%');}
+        if(sp)await wait(sp*.55);
+        break;}
+      case 'curse':{
+        const m=byName(e.side,e.mon);m.hp=e.hp;
+        const osd=e.side==='A'?'B':'A';byName(osd,e.foe).cursed=true;
+        say(e.mon+'은(는) 자신의 체력을 깎아 '+e.foe+'에게 저주를 걸었다!');
+        fx(e.side,'-'+(e.before-e.after)+'%','#e8705a');
+        drawHP(e.side);drawHP(osd);
+        wl('l-gold',e.mon+'의 저주 → '+e.foe+'  (자신 '+e.before+'% → '+e.after+'%)');
+        if(sp)await wait(sp*.85);
+        break;}
+      case 'curseTick':{
+        const m=byName(e.side,e.mon);m.hp=e.hp;
+        say(e.mon+'은(는) 저주에 시달리고 있다!');
+        burst(e.side,'#8a6ac0');fx(e.side,'-'+(e.before-e.after)+'%','#a878d8');
+        drawHP(e.side);
+        wl('l-sub','  저주: '+e.mon+'  '+e.before+'% → '+e.after+'%');
+        if(sp)await wait(sp*.6);
+        break;}
+      case 'faint':{
+        const m=byName(e.side,e.mon);m.fainted=true;m.hp=0;drawHP(e.side);
+        say(e.mon+'은(는) 쓰러졌다!');
+        wl('l-sub','  '+e.mon+' 쓰러졌다!');
+        if(sp){$('sp-'+e.side).classList.add('dead');await wait(sp*.8);}
+        break;}
+      case 'end':{
+        if(e.w==='D'){say('무승부 (턴 제한)');wl('l-win','▶ 무승부');}
+        else{say('▶ '+e.tr+' 승리!','총 '+e.turns+'턴');wl('l-win','▶ '+e.tr+' 승리! ('+e.turns+'턴)');}
+        break;}
+    }
+  }
+}
+
+/* ============ UI ============ */
+function renderTrainers(){
+  $('trainers').innerHTML=['A','B'].map(k=>{
+    const t=TR[k];
+    const rows=Object.keys(SKR).map(s=>'<div class="stat"><b>'+SKR[s]+'</b>'+
+      '<input type="range" min="1" max="20" value="'+t.stats[s]+'" data-t="'+k+'" data-s="'+s+'">'+
+      '<span id="v-'+k+'-'+s+'">'+t.stats[s]+'</span></div>').join('');
+    const sel='<select id="sty-'+k+'">'+['대면형','기점형','균형형']
+      .map(o=>'<option'+(o===t.style?' selected':'')+'>'+o+'</option>').join('')+'</select>';
+    const team=t.team.map(n=>{const d=DEX[n];
+      return n+' <span style="opacity:.75">('+d.types.map(x=>TKR[x]).join('·')+' / '+d.ab+')</span>';}).join('<br>');
+    return '<div class="tcard"><div class="tname">'+t.name+sel+'</div>'+rows+
+      '<div class="team">'+team+'</div></div>';}).join('');
+  $('trainers').querySelectorAll('input[type=range]').forEach(i=>{
+    i.oninput=()=>{TR[i.dataset.t].stats[i.dataset.s]=+i.value;
+      $('v-'+i.dataset.t+'-'+i.dataset.s).textContent=i.value;};});
+}
+let busy=false;
+async function play(){
+  if(busy)return;busy=true;
+  $('btn-run').disabled=$('btn-100').disabled=true;
+  logEl().innerHTML='';$('result-panel').style.display='none';
+  ['A','B'].forEach(s=>{$('sp-'+s).className='spr '+(s==='A'?'me flip':'foe');});
+  const st=newBattle();
+  run(st,$('think').checked);
+  await playEvents(st,+$('speed').value);
+  busy=false;$('btn-run').disabled=$('btn-100').disabled=false;
+}
+function sim100(){
+  if(busy)return;
+  let a=0,b=0,d=0,t=0;
+  for(let i=0;i<100;i++){const st=newBattle();const r=run(st,false);t+=st.turn;
+    if(r==='A')a++;else if(r==='B')b++;else d++;}
+  $('result-panel').style.display='';
+  const s=k=>Object.keys(SKR).map(x=>TR[k].stats[x]).join('/');
+  $('result').innerHTML='<table><tr><th>트레이너</th><th>승</th><th>승률</th></tr>'+
+    '<tr><td>난천 ('+s('A')+')</td><td class="n">'+a+'</td><td class="n">'+a+'%</td></tr>'+
+    '<tr><td>단델 ('+s('B')+')</td><td class="n">'+b+'</td><td class="n">'+b+'%</td></tr>'+
+    (d?'<tr><td>무승부</td><td class="n">'+d+'</td><td class="n">'+d+'%</td></tr>':'')+
+    '</table><div class="note">평균 '+(t/100).toFixed(1)+'턴</div>';
+}
+$('btn-run').onclick=play;$('btn-100').onclick=sim100;
+renderTrainers();
+drawMon('A',mkMon('화강돌'));drawMon('B',mkMon('드래펄트'));
+wl('l-sub','"배틀 시작"을 누르세요.');
+</script>
+</body>
+</html>
