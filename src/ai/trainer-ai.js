@@ -11,10 +11,12 @@
  */
 import {
   bestDamagePct,
+  curve,
   hpPct,
   neutralDamagePct,
   realDamagePct,
   selfBoostsOf,
+  shortfallEffect,
   stageMul,
   typeEff,
 } from './estimate.js';
@@ -69,19 +71,40 @@ export class TrainerAI {
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   }
 
-  /** 판단력·집중력·멘탈이 합쳐진 softmax 온도. 낮을수록 최적수에 가깝다. */
+  /**
+   * 판단력·집중력·멘탈이 합쳐진 softmax 온도. 낮을수록 최적수에 가깝다.
+   * 원 스탯이 아니라 curve() 통과값을 쓴다 (SPEC §4.2, v3) — 20을 기준점으로
+   * 상단 구간(17~20) 차이를 벌리고, 20 초과(네임드용)는 계속 이득이 붙는다.
+   */
   temperature(turn) {
     const s = this.stats;
-    let T = 1.2 + Math.pow(Math.max(0, MAX_STAT - s.judge), 1.7) * 0.55;
-    const settled = s.focus / 2;
-    if (turn > settled) T *= 1 + (turn - settled) * ((MAX_STAT + 1 - s.focus) * 0.035 + 0.02);
-    if (this.shock > 0) T *= 1 + (MAX_STAT - s.mental) * 0.07 * this.shock;
-    return T;
+    const j = curve(s.judge);
+    const fo = curve(s.focus);
+    const me = curve(s.mental);
+    let T = 1.2 + shortfallEffect(MAX_STAT - j, 0.62);
+    const settled = fo / 2;
+    /* 두 배율 다 max(0, ...)로 묶는다 — curve()로 20을 크게 넘는 네임드는 원 공식대로면
+       배율이 음수로 뒤집혀 "멘탈이 좋을수록 동요 시 더 나쁜 수를 고른다"는 역설이 생긴다.
+       0에서 멈추면 최악의 경우 "동요를 완전히 무시한다"가 되어 의도와 맞는다. */
+    if (turn > settled) {
+      const fatigue = 1 + (turn - settled) * ((MAX_STAT + 1 - fo) * 0.035 + 0.02);
+      T *= Math.max(0, fatigue);
+    }
+    if (this.shock > 0) {
+      const rattled = 1 + (MAX_STAT - me) * 0.07 * this.shock;
+      T *= Math.max(0, rattled);
+    }
+    return Math.max(0.12, T);
   }
 
-  /** 지식 스탯 — 상성 판정에 노이즈를 얹는다. 낮으면 0배/4배를 오판한다. */
+  /**
+   * 지식 스탯 — 상성 판정에 노이즈를 얹는다. 낮으면 0배/4배를 오판한다.
+   * curve() 초과분(20 넘는 네임드용 수치)은 오판 억제 효과가 완만하게 이어지도록
+   * 기울기를 .075→.03으로 낮춘다 — 계속 좋아지되 체감 한계가 있다는 뜻.
+   */
   perceive(trueEff) {
-    const n = (MAX_STAT - this.stats.know) * 0.075;
+    const k = curve(this.stats.know);
+    const n = (MAX_STAT - k) * (k < MAX_STAT ? 0.075 : 0.03);
     if (n <= 0) return trueEff;
     if (trueEff === 0) return Math.min(1.2, Math.abs(this.gauss()) * n * 1.4);
     return Math.max(0, trueEff * (1 + this.gauss() * n));
@@ -211,7 +234,7 @@ export class TrainerAI {
     const feltBench = this.perceive(incBench / 100) * 100;
 
     const risk = feltMe / Math.max(1, hpPct(me));
-    const threshold = 0.85 + (MAX_STAT - this.stats.ops) * 0.06;
+    const threshold = 0.85 + (MAX_STAT - curve(this.stats.ops)) * 0.06;
 
     let score = (risk - threshold) * 30 + (feltMe - feltBench) * 0.42;
     score *= this.sty.sw;
