@@ -4,6 +4,7 @@ import { STYLES, STAT_KO } from './data/styles.js';
 import { TEAM_PRESETS } from './data/teams.js';
 import { toKoreanLog } from './ui/protocol-ko.js';
 import { spriteUrl, fallbackSvg, TYPE_FX } from './ui/sprites.js';
+import { spriteFitScale } from './data/sprite-fit.js';
 
 const $ = (id) => document.getElementById(id);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -64,9 +65,19 @@ function drawSprite(side, speciesName) {
   const img = document.createElement('img');
   img.src = url;
   img.alt = speciesName;
-  img.onerror = () => { el.innerHTML = fallbackSvg(); };
+  img.onerror = () => { fit.innerHTML = fallbackSvg(); };
+
+  /* 종별 채움 비율 보정 — 짧고 둥근 종(해피너스 등)은 96x96 캔버스 안에서
+     실제 캐릭터가 차지하는 비중이 작아 다른 종보다 훨씬 작게 보인다.
+     발(캔버스 하단) 기준으로 확대해서 시각적 크기를 맞춘다. (src/data/sprite-fit.js) */
+  const fit = document.createElement('div');
+  fit.className = 'fit';
+  const scale = spriteFitScale(speciesName, side === 'p1' ? 'back' : 'front');
+  if (scale !== 1) fit.style.transform = `scale(${scale})`;
+  fit.appendChild(img);
+
   el.innerHTML = '';
-  el.appendChild(img);
+  el.appendChild(fit);
 }
 
 function drawHpBox(side, f, trainerName) {
