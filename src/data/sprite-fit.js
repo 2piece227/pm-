@@ -7,7 +7,7 @@
  * 발 위치(캔버스 하단) 기준으로 확대해서 채움 비율을 목표치에 맞춘다.
  */
 export const SPRITE_FIT = {
-  'Blissey': { back: 1.6, front: 1.23 },
+  'Blissey': { back: 1.38, front: 1.28 },
   'Charizard': { back: 1, front: 1 },
   'Corviknight': { back: 1.06, front: 1.02 },
   'Dragapult': { back: 1, front: 1 },
@@ -16,7 +16,7 @@ export const SPRITE_FIT = {
   'Garchomp': { back: 1, front: 1 },
   'Gholdengo': { back: 1, front: 1 },
   'Landorus-Therian': { back: 1, front: 1 },
-  'Spiritomb': { back: 1.02, front: 1.23 },
+  'Spiritomb': { back: 1.33, front: 1.33 },
   'Toxapex': { back: 1, front: 1 },
   'Tyranitar': { back: 1, front: 1 },
   'Volcarona': { back: 1.03, front: 1.05 },

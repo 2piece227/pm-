@@ -35,15 +35,15 @@ import('./src/data/teams.js').then(({TEAM_PRESETS}) => {
 $species = $species -split "`n" | Where-Object { $_ -ne '' }
 Write-Host "로스터: $($species -join ', ')"
 
-# 2) 종별 실제 해상 URL 얻기 (@pkmn/img — gen4 우선, 없으면 자동 상위 세대)
+# 2) 종별 실제 해상 URL 얻기 (@pkmn/img — gen5 우선, 없으면 자동 상위 세대. src/ui/sprites.js의 SPRITE_GEN과 맞출 것)
 $urlsJson = node -e @"
 import('@pkmn/img').then(({Sprites}) => {
   const names = ``$(($species | ForEach-Object { "'$_'" }) -join ',')``.split(',').map(s=>s.slice(1,-1));
   const out = {};
   for (const n of names) {
     out[n] = {
-      back: Sprites.getPokemon(n, {gen:'gen4', side:'p1'}).url,
-      front: Sprites.getPokemon(n, {gen:'gen4', side:'p2'}).url,
+      back: Sprites.getPokemon(n, {gen:'gen5', side:'p1'}).url,
+      front: Sprites.getPokemon(n, {gen:'gen5', side:'p2'}).url,
     };
   }
   console.log(JSON.stringify(out));
