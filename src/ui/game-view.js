@@ -10,7 +10,7 @@ import {
   refreshMarket, signTrainer, releaseTrainer, marketFeeFor,
   findTrainer, findAgency, allTrainers, GAME_CONFIG, ACTION_LABELS,
 } from '../engine/game.js';
-import { standings, runMatch } from '../engine/league.js';
+import { standings, replayMatch } from '../engine/league.js';
 import { STAT_KEYS, displayStats } from '../data/agencies.js';
 import { STAT_KO } from '../data/styles.js';
 import { teamSpecies } from '../engine/team-builder.js';
@@ -260,8 +260,8 @@ async function watchMatch(tournament, index) {
   resetScene();
   $('watch-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  /* 저장된 시드로 같은 배틀을 그대로 재생 */
-  const replay = runMatch(game.league, m.aId, m.bId, m.seed, { collectLog: true });
+  /* 경기 시점의 스냅샷으로 재생한다 — 지금 상태로 다시 돌리면 브래킷과 다른 승자가 나온다 */
+  const replay = replayMatch(m);
   await playBattleLog(replay.log, { p1: a.name, p2: b.name }, Number($('speed').value));
   const w = findTrainer(game.league, replay.winnerId);
   say(`▶ ${w ? w.name : '무승부'} 승리! (${replay.turns}턴)`);

@@ -281,19 +281,37 @@ export function decideEntrants(league, tournament, { skipAgencyIds = [], minCond
   return tournament;
 }
 
-/** 매치 1회 — 시드를 넣으면 항상 같은 결과가 나온다(AI를 매번 새로 만든다) */
-export function runMatch(league, aId, bId, seed, { collectLog = false } = {}) {
-  const a = findTrainer(league, aId);
-  const b = findTrainer(league, bId);
-  /* 컨디션이 깎인 트레이너는 실제로 약해진다 (§4.5) */
-  const aiA = createTrainerAI({ name: a.name, stats: effectiveStats(a) }, a.nature.style, makeRng(seed));
-  const aiB = createTrainerAI({ name: b.name, stats: effectiveStats(b) }, b.nature.style, makeRng(seed + 1));
+/**
+ * 매치 1회.
+ *
+ * **재현성의 핵심:** 배틀에 들어가는 입력(실효 스탯·팀·스타일)을 스냅샷으로 떠서 같이 돌려준다.
+ * 트레이너의 컨디션과 스탯은 대회가 끝난 뒤에도 계속 변하기 때문에(대회 -30, 훈련 성장 등),
+ * 나중에 관전할 때 "지금 상태"로 다시 돌리면 **브래킷 결과와 다른 승자가 나온다.**
+ * 실제로 그 버그가 있었다 — 기록은 정태윤 승인데 관전하면 최태윤이 이기는 식.
+ * 그래서 재생은 반드시 이 스냅샷으로만 한다. (팀은 문자열이라 참조만 잡혀서 메모리 부담 없음)
+ */
+export function runMatch(league, aId, bId, seed, { collectLog = false, snapshot = null } = {}) {
+  let snap = snapshot;
+  if (!snap) {
+    const a = findTrainer(league, aId);
+    const b = findTrainer(league, bId);
+    snap = {
+      aName: a.name, bName: b.name,
+      /* 컨디션이 깎인 트레이너는 실제로 약해진다 (§4.5) — 그 시점 값을 그대로 굳힌다 */
+      aStats: { ...effectiveStats(a) }, bStats: { ...effectiveStats(b) },
+      aStyle: a.nature.style, bStyle: b.nature.style,
+      aTeam: a.team, bTeam: b.team,
+    };
+  }
+
+  const aiA = createTrainerAI({ name: snap.aName, stats: snap.aStats }, snap.aStyle, makeRng(seed));
+  const aiB = createTrainerAI({ name: snap.bName, stats: snap.bStats }, snap.bStyle, makeRng(seed + 1));
 
   const r = runBattle({
     trainerA: aiA,
     trainerB: aiB,
-    teamA: a.team,
-    teamB: b.team,
+    teamA: snap.aTeam,
+    teamB: snap.bTeam,
     seed,
     collectThink: false,
   });
@@ -302,7 +320,16 @@ export function runMatch(league, aId, bId, seed, { collectLog = false } = {}) {
     winnerId: r.winner === 'p1' ? aId : r.winner === 'p2' ? bId : null,
     turns: r.turns,
     log: collectLog ? r.log : null,
+    snapshot: snap,
   };
+}
+
+/** 기록된 경기를 그대로 재생한다 — 스냅샷만 쓰므로 리그 상태가 어떻게 변했든 결과가 같다 */
+export function replayMatch(match) {
+  return runMatch(null, match.aId, match.bId, match.seed, {
+    collectLog: true,
+    snapshot: match.snapshot,
+  });
 }
 
 /** 2의 거듭제곱으로 올림 (부전승 채우기용) */
@@ -375,6 +402,8 @@ export function runTournament(league, tournament, rng) {
         loserId: loser,
         turns: m.turns,
         seed,
+        /* 이 시점의 입력값. 나중에 관전할 때 이걸로 재생해야 결과가 일치한다 */
+        snapshot: m.snapshot,
       });
 
       /* 전적 반영 */
