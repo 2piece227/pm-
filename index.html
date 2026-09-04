@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>트레이너 매니지먼트 — 배틀 시뮬 v0.3 (실엔진)</title>
+<title>트레이너 매니지먼트 — 관동·성도</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;700;800&display=swap" rel="stylesheet">
@@ -116,19 +116,60 @@ th{background:var(--panel2);color:var(--sub)}td.n{text-align:right;font-variant-
 .lg-row.on td{background:var(--panel2);box-shadow:inset 2px 0 0 var(--accent)}
 .lg-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media(max-width:760px){.lg-cols{grid-template-columns:1fr}}
+
+/* ===== 게임 UI ===== */
+.topbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
+  background:var(--panel);border:2px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.topbar .who{font-weight:800;font-size:15px}
+.stats-row{display:flex;flex-wrap:wrap;gap:14px;font-size:12px}
+.stats-row b{font-size:14px;font-variant-numeric:tabular-nums}
+.stats-row .neg{color:var(--red)}
+#btn-day{font-size:14px;padding:10px 20px}
+.tcards{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:700px){.tcards{grid-template-columns:1fr}}
+.tc{background:var(--panel2);border:2px solid var(--line2);border-radius:8px;padding:10px}
+.tc-h{display:flex;justify-content:space-between;align-items:baseline;gap:6px;margin-bottom:5px}
+.tc-h b{font-size:14px}
+.cond{height:7px;background:var(--line2);border-radius:4px;overflow:hidden;margin:4px 0}
+.cond i{display:block;height:100%;transition:width .3s}
+.tc select{width:100%;margin-top:6px;font-size:12px;padding:5px}
+.pill{display:inline-block;font-size:10px;padding:1px 6px;border-radius:9px;
+  border:1px solid var(--line);color:var(--sub)}
+.stars{color:var(--gold);letter-spacing:1px}
+.rep-line{display:flex;gap:5px;align-items:center;font-size:11px;color:var(--sub);margin-top:3px}
+.dayrep{background:var(--panel2);border:2px solid var(--line2);border-radius:8px;padding:10px;font-size:12px;line-height:1.7}
+.dayrep .big{font-weight:800;font-size:13px}
+.mkt{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:700px){.mkt{grid-template-columns:1fr}}
+.over{background:var(--red);color:#fff;padding:12px;border-radius:8px;font-weight:800;text-align:center}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>트레이너 배틀 시뮬 · v0.3 <span style="font-size:12px;font-weight:400;color:var(--sub)">@pkmn/sim 실엔진</span></h1>
-  <div class="sub">배틀 계산은 포켓몬쇼다운 시뮬레이터가 담당. 트레이너 AI는 "어떤 수를 둘까"만 결정한다.</div>
 
-  <div class="tabs">
-    <button class="tab on" data-tab="sim">배틀 시뮬</button>
-    <button class="tab" data-tab="league">관동·성도 리그</button>
+  <div class="topbar">
+    <div>
+      <div class="who" id="hd-agency">—</div>
+      <div class="note" id="hd-concept"></div>
+    </div>
+    <div class="stats-row" id="hd-stats"></div>
+    <button id="btn-day">다음 날 ▶</button>
   </div>
 
-  <div class="panel" data-panel="sim">
+  <div id="gameover" style="display:none" class="panel"><div class="over" id="gameover-msg"></div></div>
+
+  <div class="tabs">
+    <button class="tab on" data-tab="today">오늘</button>
+    <button class="tab" data-tab="roster">트레이너</button>
+    <button class="tab" data-tab="tour">대회</button>
+    <button class="tab" data-tab="market">시장</button>
+    <button class="tab" data-tab="league">리그</button>
+    <button class="tab" data-tab="news">소식</button>
+  </div>
+
+  <!-- 관전 화면: 평소엔 접혀 있고 [관전] 누르면 열린다 -->
+  <div class="panel" id="watch-panel" style="display:none">
+    <div class="panel-t" id="watch-title">관전</div>
     <div class="scene" id="scene">
       <div class="plat foe"></div><div class="plat me"></div>
       <div class="hpbox foe" id="hp-p2"></div>
@@ -136,90 +177,78 @@ th{background:var(--panel2);color:var(--sub)}td.n{text-align:right;font-variant-
       <div class="spr foe" id="sp-p2"></div>
       <div class="spr me" id="sp-p1"></div>
     </div>
-    <div class="tbox" id="tbox">"배틀 시작"을 누르세요.</div>
-  </div>
-
-  <div class="panel" data-panel="sim">
-    <div class="ctrl">
-      <button id="btn-run">배틀 시작</button>
-      <button id="btn-bulk" class="ghost">200회 시뮬</button>
+    <div class="tbox" id="tbox"></div>
+    <div class="ctrl" style="margin-top:8px">
       <select id="speed">
-        <option value="900">1배속</option>
-        <option value="450" selected>2배속</option>
-        <option value="200">4배속</option>
+        <option value="700">1배속</option>
+        <option value="350" selected>2배속</option>
+        <option value="160">4배속</option>
         <option value="0">즉시(로그만)</option>
       </select>
-      <select id="preset">
-        <option value="proto" selected>프로토 재현 (노력치 0)</option>
-        <option value="tuned">내구 투자 (252 HP)</option>
-        <option value="full6">6마리 파티 (교체 검증)</option>
-      </select>
-      <label class="chk"><input type="checkbox" id="think"> 판단 근거</label>
+      <button id="watch-close" class="ghost">닫기</button>
+    </div>
+    <div id="log" style="margin-top:8px"></div>
+  </div>
+
+  <!-- 오늘 -->
+  <div class="panel" data-panel="today">
+    <div class="panel-t">오늘 일정</div>
+    <div id="today-sched"></div>
+  </div>
+  <div class="panel" data-panel="today">
+    <div class="panel-t">트레이너에게 오늘 할 일 배정</div>
+    <div class="tcards" id="today-cards"></div>
+  </div>
+  <div class="panel" data-panel="today">
+    <div class="panel-t">어제 리포트</div>
+    <div id="today-report"></div>
+  </div>
+
+  <!-- 트레이너 -->
+  <div class="panel" data-panel="roster" style="display:none">
+    <div class="panel-t">내 트레이너</div>
+    <div id="roster-body"></div>
+  </div>
+
+  <!-- 대회 -->
+  <div class="panel" data-panel="tour" style="display:none">
+    <div class="panel-t">다가오는 대회</div>
+    <div id="tour-upcoming"></div>
+  </div>
+  <div class="panel" data-panel="tour" style="display:none">
+    <div class="panel-t">지난 대회</div>
+    <div class="lg-cols">
+      <div id="tour-list"></div>
+      <div id="tour-matches"></div>
     </div>
   </div>
 
-  <div class="panel" data-panel="sim">
-    <div class="panel-t">트레이너</div>
-    <div class="trainers" id="trainers"></div>
+  <!-- 시장 -->
+  <div class="panel" data-panel="market" style="display:none">
+    <div class="panel-t">영입 가능 (7일마다 갱신)</div>
+    <div class="mkt" id="market-body"></div>
+  </div>
+  <div class="panel" data-panel="market" style="display:none">
+    <div class="panel-t">방출</div>
+    <div id="release-body"></div>
   </div>
 
-  <div class="panel" data-panel="sim">
-    <div class="panel-t">배틀 로그</div>
-    <div id="log"></div>
-  </div>
-
-  <div class="panel" data-panel="sim" id="result-panel" style="display:none">
-    <div class="panel-t">반복 시뮬 결과</div><div id="result"></div>
-  </div>
-
-  <div class="panel note" data-panel="sim">
-    난수 0.85~1.00 · 급소 · 명중 · 랭크(−6~+6) · 다단히트 · 물리/특수 분리 · 특성 · 도구 · 상태이상 ·
-    우선도는 전부 <b>@pkmn/sim</b>이 처리한다. 이 프로젝트가 만든 건 트레이너 AI 레이어뿐이다.<br>
-    스프라이트는 포켓몬쇼다운 gen4(HGSS 세대) 도트 — 그 세대에 없는 종은 상위 세대로 자동 대체된다.<br>
-    <b>미구현:</b> 회복약(가방 아이템) — 쇼다운 시뮬레이터에 트레이너 가방 개념이 없어 별도 설계가 필요하다.
-    운영 스탯은 현재 교체 판단에만 걸려 있다.
-  </div>
-
-  <div class="panel" data-panel="league" style="display:none">
-    <div class="ctrl">
-      <button id="lg-next">다음 주 진행</button>
-      <button id="lg-season" class="ghost">시즌 끝까지 (12주)</button>
-      <button id="lg-reset" class="ghost">새 리그</button>
-      <span class="note" id="lg-status"></span>
-    </div>
-    <div class="note" style="margin-top:8px">
-      로컬 대회는 등급별로 열린다 (§3.5 — 스탯 낮은 트레이너는 하위 대회만, 강한 트레이너는 상위 대회만):
-      <b id="lg-tiers"></b>
-    </div>
-  </div>
-
+  <!-- 리그 -->
   <div class="panel" data-panel="league" style="display:none">
     <div class="panel-t">리그 순위표</div>
-    <div id="lg-standings"></div>
+    <div id="league-body"></div>
   </div>
 
-  <div class="panel" data-panel="league" style="display:none">
-    <div class="panel-t">로스터</div>
-    <div id="lg-roster"></div>
-  </div>
-
-  <div class="panel" data-panel="league" style="display:none">
-    <div class="panel-t">대회 / 경기</div>
-    <div class="lg-cols">
-      <div id="lg-tournaments"></div>
-      <div id="lg-matches"></div>
-    </div>
-  </div>
-
-  <div class="panel" data-panel="league" style="display:none">
+  <!-- 소식 -->
+  <div class="panel" data-panel="news" style="display:none">
     <div class="panel-t">소식</div>
-    <div id="lg-news"></div>
+    <div id="news-body"></div>
   </div>
 
-  <div class="panel note" data-panel="league" style="display:none">
-    이번 세션 범위: 정밀 계층(§3.4)만, 관동·성도 리그 1개, 로컬 대회만.<br>
-    <b>스키마만 있고 로직은 비어 있는 것</b> (SPEC §0.2): 코치 · 계약/바이아웃 · 천성(순응도·스타일) ·
-    육성 루프(PA/CA) · 글로벌 대회 인원 제한 · 경량 계층(타지방) · 전설의 포켓몬 · 콘테스트.
+  <div class="panel note">
+    배틀 계산은 <b>@pkmn/sim</b>(포켓몬쇼다운 시뮬레이터)이 처리하고, 이 프로젝트가 만든 건
+    트레이너 AI 레이어와 매니지먼트 루프다. 스프라이트는 쇼다운 gen5 도트를 링크해서 쓴다.<br>
+    <b>미구현(스키마만):</b> 코치 · 계약 협상/바이아웃 · 글로벌 대회 · 타지방 · 전설의 포켓몬 · 콘테스트 · 회복약.
   </div>
 </div>
 <script type="module" src="/src/main.js"></script>

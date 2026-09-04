@@ -99,39 +99,41 @@ export function makeName(rng) {
  * 이번 세션에서 실제로 쓰이는 건 stats / team / record 뿐이고,
  * 나머지는 §0.2에 따라 "필드는 있고 로직은 비어있는" 상태로 둔다.
  */
-export function createTrainer({ id, name, agencyId, stats, team }) {
+export function createTrainer({ id, name, agencyId, stats, potential, team }) {
   return {
     id,
     name,
     agencyId,
 
-    /* §4.1 실력 스탯 — 이번 세션에서는 고정값 (육성 루프 §13-6은 범위 밖) */
+    /* §4.1 실력 스탯. 훈련·배틀로 잠재력까지 성장한다 (소수점 누적, 표시할 땐 반올림) */
     stats,
 
-    /* §4.3 잠재력/실력 (FM의 PA/CA) — 필드만. 성장 로직 없음 */
-    potential: null,
-    current: null,
+    /* §4.3 잠재력(PA) — 숨김. 훈련으로 오르지 않고 도달 상한만 정한다 */
+    potential,
 
-    /* §4.4 천성 — 필드만. AI 연결은 이번 범위 밖이라 스타일은 균형형 고정으로 취급 */
+    /* §4.4 천성 — 스타일은 AI에 실제로 연결돼 있다 */
     nature: {
-      compliance: null,     // 순응도
-      preferredType: null,  // 선호 타입
-      style: '균형형',       // 플레이 스타일 (현재 AI에 연결 안 함)
-      stardom: null,        // 스타성
+      compliance: null,     // 순응도 (미연결)
+      preferredType: null,  // 선호 타입 (미연결)
+      style: '균형형',
+      stardom: null,
     },
 
     team,
 
-    /* §4.5 연패 페널티 / 컨디션 — 필드만 */
+    /* §4.5 컨디션 — 대회/훈련으로 깎이고 휴식으로 회복. 낮으면 배틀 능력이 떨어진다 */
     condition: 100,
     satisfaction: 70,
     mentalDebuff: 0,
     lossStreak: 0,
 
+    /* 일일 경비 — 자금 압박의 핵심. 영입할수록 늘어난다 */
+    salary: 0,
+
     /* §6 코치 — 필드만 */
     coachAssigned: null,
 
-    /* §5.3 계약 — 필드만. 위약금은 소속사가 임의로 부르는 값(§5.3) */
+    /* §5.3 계약 — 이번엔 이적료만 쓰고 나머지는 필드만 */
     contract: {
       period: null,
       expenseSupport: null,
@@ -142,7 +144,31 @@ export function createTrainer({ id, name, agencyId, stats, team }) {
     },
 
     record: { wins: 0, losses: 0, titles: 0 },
+
+    /* 최근에 뭘 했는지 (UI 표시용) */
+    lastAction: null,
   };
+}
+
+export const STAT_KEYS = ['judge', 'ops', 'focus', 'know', 'mental'];
+
+/**
+ * 컨디션이 반영된 실효 스탯. — 배틀에 실제로 들어가는 값.
+ * 컨디션 100이면 그대로, 0이면 65%까지 떨어진다.
+ * 이게 있어야 "연속 출전시키면 약해진다"가 성립하고, 로테이션 결정이 의미를 갖는다.
+ */
+export function effectiveStats(trainer) {
+  const f = 0.65 + 0.35 * (Math.max(0, Math.min(100, trainer.condition)) / 100);
+  const out = {};
+  for (const k of STAT_KEYS) out[k] = Math.max(1, trainer.stats[k] * f);
+  return out;
+}
+
+/** 표시용 정수 스탯 */
+export function displayStats(trainer) {
+  const out = {};
+  for (const k of STAT_KEYS) out[k] = Math.round(trainer.stats[k]);
+  return out;
 }
 
 /**

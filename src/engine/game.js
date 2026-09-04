@@ -1,0 +1,377 @@
+/**
+ * 게임 루프 — 플레이어가 하루하루 소속사를 굴린다. (SPEC §2 코어 루프의 [하루 단위])
+ *
+ * 이전 버전은 "리그가 알아서 돌아가는 걸 구경하는" 물건이었다. 여기서 바뀌는 핵심은
+ * **시간이 플레이어의 [다음 날] 클릭으로만 흐른다**는 것. NPC 세계는 그 사이에 같이 움직인다(§0.1-4).
+ *
+ * 결정이 의미를 갖게 하는 축 3개:
+ *   1. 컨디션 — 대회는 크게 깎이고 휴식으로만 찬다. 에이스를 매번 못 굴린다.
+ *   2. 자금   — 일일 경비가 계속 나간다. 안 벌면 말라죽는다.
+ *   3. 성장   — 훈련시키면 강해지지만 그날 대회엔 못 나간다 (단기 vs 장기).
+ */
+import { makeRng } from './run-battle.js';
+import {
+  createLeague, decideEntrants, findAgency, findTrainer, openTournament, runTournament,
+  trainerRating, allTrainers, makeTrainerFor, salaryFor, isEligible,
+  LOCAL_TOURNAMENT_TIERS,
+} from './league.js';
+import { STAT_KEYS } from '../data/agencies.js';
+
+export const GAME_CONFIG = {
+  /* 대회 일정 — 등급마다 7일 주기, 요일을 어긋나게 둬서 매주 세 번 기회가 온다 */
+  schedule: { rookie: 3, open: 5, elite: 7 },
+  scheduleCycle: 7,
+
+  /* 컨디션 수지 */
+  condition: {
+    tournament: -30,  // 대회 하루는 크게 깎인다
+    train: -9,
+    rest: +32,
+    idle: +14,        // 아무것도 안 시키면 그냥 쉰 걸로 친다
+    minToEnter: 35,   // 이 아래면 대회 출전 불가
+  },
+
+  /* 성장 (§4.3) — 성장량 = 기본률 × (PA − CA) × 컨디션계수 × 만족도계수 */
+  growth: {
+    trainRate: 0.10,   // 지정 훈련한 스탯
+    battleRate: 0.02,  // 배틀은 전 스탯에 소량
+  },
+
+  market: {
+    refreshDays: 7,
+    size: 4,
+    /* 이적료 = 레이팅^2 × 계수. 강한 트레이너는 확 비싸진다 */
+    feeCoef: 2.2,
+  },
+
+  startDay: 1,
+};
+
+/* ---------------- 게임 생성 ---------------- */
+
+export function createGame({ seed = Date.now() & 0x7fffffff } = {}) {
+  const league = createLeague({ seed });
+  const player = league.agencies.find((a) => a.isPlayer);
+
+  const game = {
+    seed,
+    day: GAME_CONFIG.startDay,
+    league,
+    playerAgencyId: player.id,
+    rng: makeRng(seed ^ 0x5f3a),
+
+    actions: {},       // trainerId -> 'rest' | 'train:judge' | 'enter:rookie'
+    market: [],
+    marketSeq: 1,
+    log: [],           // 날짜별 리포트
+    lastReport: null,
+    gameOver: null,    // 파산하면 사유가 들어간다
+  };
+
+  refreshMarket(game);
+  return game;
+}
+
+export const playerAgency = (game) => findAgency(game.league, game.playerAgencyId);
+export const playerRoster = (game) => playerAgency(game).roster;
+
+/* ---------------- 일정 ---------------- */
+
+/** 그 날짜에 열리는 대회 등급 (없으면 null) */
+export function tournamentOn(day) {
+  for (const tier of LOCAL_TOURNAMENT_TIERS) {
+    const offset = GAME_CONFIG.schedule[tier.id];
+    if (day >= offset && (day - offset) % GAME_CONFIG.scheduleCycle === 0) return tier;
+  }
+  return null;
+}
+
+/** 앞으로 N일간의 대회 일정 */
+export function upcomingTournaments(game, days = 10) {
+  const out = [];
+  for (let d = game.day; d < game.day + days; d++) {
+    const tier = tournamentOn(d);
+    if (tier) out.push({ day: d, tier, daysAway: d - game.day });
+  }
+  return out;
+}
+
+/* ---------------- 행동 배정 ---------------- */
+
+export const ACTION_LABELS = {
+  rest: '휴식',
+  'train:judge': '훈련 · 판단력',
+  'train:ops': '훈련 · 운영',
+  'train:focus': '훈련 · 집중력',
+  'train:know': '훈련 · 지식',
+  'train:mental': '훈련 · 멘탈',
+};
+
+/** 오늘 이 트레이너가 고를 수 있는 행동들 */
+export function availableActions(game, trainer) {
+  const list = [
+    { id: 'rest', label: '휴식', hint: `컨디션 +${GAME_CONFIG.condition.rest}` },
+    ...STAT_KEYS.map((k) => ({
+      id: `train:${k}`,
+      label: ACTION_LABELS[`train:${k}`],
+      hint: `컨디션 ${GAME_CONFIG.condition.train}`,
+    })),
+  ];
+
+  const tier = tournamentOn(game.day);
+  if (tier) {
+    const eligible = isEligible(trainer, { ratingBand: tier.ratingBand });
+    const fit = trainer.condition >= GAME_CONFIG.condition.minToEnter;
+    list.unshift({
+      id: `enter:${tier.id}`,
+      label: `${tier.label} 컵 출전`,
+      hint: !eligible
+        ? `출전 자격 없음 (레이팅 ${tier.ratingBand[0]}~${tier.ratingBand[1] === 999 ? '∞' : tier.ratingBand[1]})`
+        : !fit
+          ? `컨디션 부족 (${GAME_CONFIG.condition.minToEnter} 이상 필요)`
+          : `참가비 ${tier.entryCost} · 컨디션 ${GAME_CONFIG.condition.tournament}`,
+      disabled: !eligible || !fit,
+    });
+  }
+  return list;
+}
+
+export function assignAction(game, trainerId, actionId) {
+  game.actions[trainerId] = actionId;
+}
+
+export function clearActions(game) {
+  game.actions = {};
+}
+
+/* ---------------- 성장 ---------------- */
+
+function growStat(trainer, key, rate) {
+  const gap = (trainer.potential[key] ?? 20) - trainer.stats[key];
+  if (gap <= 0) return 0;
+  const condF = 0.5 + 0.5 * (trainer.condition / 100);
+  const satF = 0.7 + 0.3 * (trainer.satisfaction / 100);
+  const gain = rate * gap * condF * satF;
+  trainer.stats[key] = Math.min(trainer.potential[key], trainer.stats[key] + gain);
+  return gain;
+}
+
+/* ---------------- 하루 진행 ---------------- */
+
+/**
+ * 하루를 넘긴다. 이 함수 하나가 게임의 심장.
+ * @returns 그날 리포트 (UI가 그대로 보여준다)
+ */
+export function advanceDay(game) {
+  if (game.gameOver) return game.lastReport;
+
+  const report = {
+    day: game.day,
+    trained: [],
+    rested: [],
+    tournament: null,
+    myResults: [],
+    income: 0,
+    expense: 0,
+    news: [],
+  };
+
+  const league = game.league;
+  const player = playerAgency(game);
+  const tier = tournamentOn(game.day);
+
+  /* 하루 시작 시점을 먼저 잡아둬야 상금/참가비/경비의 순증감을 제대로 잴 수 있다 */
+  const fundsAtStart = player.funds;
+  const newsAtStart = league.newsFeed.length;
+
+  /* --- 1. 플레이어 트레이너의 배정 행동 실행 (대회 출전은 아래에서 따로) --- */
+  const myEntrants = [];
+  for (const t of player.roster) {
+    const action = game.actions[t.id] || 'rest';
+    t.lastAction = action;
+
+    if (action.startsWith('enter:')) {
+      if (tier && action === `enter:${tier.id}` && t.condition >= GAME_CONFIG.condition.minToEnter
+          && isEligible(t, { ratingBand: tier.ratingBand })) {
+        myEntrants.push(t);
+        continue;
+      }
+      /* 조건이 안 맞으면 그냥 쉰 걸로 */
+      t.condition = Math.min(100, t.condition + GAME_CONFIG.condition.idle);
+      t.lastAction = 'rest';
+      continue;
+    }
+
+    if (action.startsWith('train:')) {
+      const key = action.split(':')[1];
+      const gain = growStat(t, key, GAME_CONFIG.growth.trainRate);
+      t.condition = Math.max(0, t.condition + GAME_CONFIG.condition.train);
+      report.trained.push({ name: t.name, key, gain });
+      continue;
+    }
+
+    t.condition = Math.min(100, t.condition + GAME_CONFIG.condition.rest);
+    report.rested.push(t.name);
+  }
+
+  /* --- 2. NPC 트레이너: 대회에 안 나가면 알아서 회복 --- */
+  /* --- 3. 오늘 대회가 있으면 개최 --- */
+  if (tier) {
+    const tournament = openTournament(league, tier);
+    /* NPC는 §3.5 자동 판단, 플레이어는 위에서 직접 고른 사람만 */
+    decideEntrants(league, tournament, {
+      skipAgencyIds: [player.id],
+      minCondition: GAME_CONFIG.condition.minToEnter,
+    });
+    for (const t of myEntrants) {
+      tournament.entrants.push({ trainerId: t.id, agencyId: player.id, score: null, winChance: null });
+    }
+
+    runTournament(league, tournament, game.rng);
+    league.tournaments.push(tournament);
+
+    /* 참가자 컨디션 소모 */
+    for (const e of tournament.entrants) {
+      const t = findTrainer(league, e.trainerId);
+      if (t) t.condition = Math.max(0, t.condition + GAME_CONFIG.condition.tournament);
+    }
+
+    /* 배틀을 뛰면 전 스탯이 조금씩 는다 */
+    for (const m of tournament.matches) {
+      for (const id of [m.aId, m.bId]) {
+        const t = findTrainer(league, id);
+        if (!t) continue;
+        for (const k of STAT_KEYS) growStat(t, k, GAME_CONFIG.growth.battleRate);
+      }
+    }
+
+    report.tournament = tournament;
+    report.myResults = myEntrants.map((t) => ({
+      trainerId: t.id,
+      name: t.name,
+      placement: placementOf(tournament, t.id),
+    }));
+  }
+
+  /* NPC 회복 — 오늘 대회에 안 나간 NPC 트레이너 */
+  const playedToday = new Set((report.tournament?.entrants || []).map((e) => e.trainerId));
+  for (const a of league.agencies) {
+    if (a.id === player.id) continue;
+    for (const t of a.roster) {
+      if (playedToday.has(t.id)) continue;
+      t.condition = Math.min(100, t.condition + GAME_CONFIG.condition.idle);
+      /* NPC도 조금씩 자란다 — 세상이 멈춰 있으면 안 된다 (§0.1-4) */
+      for (const k of STAT_KEYS) growStat(t, k, GAME_CONFIG.growth.battleRate * 0.5);
+    }
+  }
+
+  /* --- 4. 정산: 상금·참가비는 runTournament가 이미 반영했고, 여기선 일일 경비 --- */
+  const upkeep = player.roster.reduce((n, t) => n + (t.salary || 0), 0);
+  player.funds -= upkeep;
+  report.upkeep = upkeep;
+  report.net = player.funds - fundsAtStart;      // 그날 자금 순증감
+  report.prize = report.net + upkeep;            // 경비를 빼기 전 = 대회에서 번 돈(참가비 차감 후)
+
+  /* --- 5. 시장 갱신 --- */
+  if (game.day % GAME_CONFIG.market.refreshDays === 0) refreshMarket(game);
+
+  /* --- 6. 뉴스 — 이번 하루 동안 새로 생긴 것만 (league 쪽은 day를 안 찍으므로 여기서 찍는다) */
+  const fresh = league.newsFeed.length - newsAtStart;
+  report.news = league.newsFeed.slice(0, Math.max(0, fresh));
+  for (const n of report.news) if (n.day === undefined) n.day = game.day;
+
+  /* --- 7. 파산 판정 (§3.3 자체 소속사는 경질이 아니라 파산) --- */
+  if (player.funds < 0) {
+    game.gameOver = { reason: '자금 고갈 — 소속사 해체', day: game.day };
+  }
+
+  game.day++;
+  clearActions(game);
+  game.lastReport = report;
+  game.log.unshift(report);
+  if (game.log.length > 60) game.log.pop();
+  return report;
+}
+
+/** 그 대회에서 이 트레이너가 어디까지 갔나 */
+export function placementOf(tournament, trainerId) {
+  const r = tournament.result;
+  if (!r) return null;
+  if (r.championId === trainerId) return '우승';
+  if (r.runnerUpId === trainerId) return '준우승';
+  if (r.semifinalists.includes(trainerId)) return '4강';
+  const played = tournament.matches.filter((m) => m.aId === trainerId || m.bId === trainerId);
+  if (!played.length) return '부전승 탈락 없음';
+  const lost = played.find((m) => m.loserId === trainerId);
+  return lost ? `${lost.roundLabel} 탈락` : '진출';
+}
+
+/* ---------------- 스카웃 시장 ---------------- */
+
+export function marketFeeFor(rating) {
+  return Math.round(rating * rating * GAME_CONFIG.market.feeCoef);
+}
+
+export function refreshMarket(game) {
+  const league = game.league;
+  const player = playerAgency(game);
+  game.market = [];
+
+  /* 시장 매물은 등급이 섞여서 나온다 — 싼 유망주부터 비싼 즉시전력까지 */
+  const profiles = ['weak', 'mid', 'strong', 'grunt', 'mid'];
+  for (let i = 0; i < GAME_CONFIG.market.size; i++) {
+    const profile = profiles[Math.floor(game.rng() * profiles.length)];
+    const fakeAgency = {
+      id: 'market',
+      statRange: profile === 'strong' ? [15, 20] : profile === 'mid' ? [11, 17] : [8, 14],
+      rosterProfile: profile,
+    };
+    const t = makeTrainerFor(fakeAgency, `m${game.marketSeq++}`, game.rng);
+    t.agencyId = null;
+    game.market.push({ trainer: t, fee: marketFeeFor(trainerRating(t)) });
+  }
+  return game.market;
+}
+
+/** 영입 — 이적료를 내고 로스터에 넣는다. 일일 경비가 늘어난다 */
+export function signTrainer(game, marketIndex) {
+  const player = playerAgency(game);
+  const entry = game.market[marketIndex];
+  if (!entry) return { ok: false, msg: '없는 매물입니다.' };
+  if (player.funds < entry.fee) return { ok: false, msg: '자금이 부족합니다.' };
+
+  player.funds -= entry.fee;
+  const t = entry.trainer;
+  t.agencyId = player.id;
+  t.salary = salaryFor(t);
+  player.roster.push(t);
+  game.market.splice(marketIndex, 1);
+
+  game.league.newsFeed.unshift({
+    day: game.day, type: 'transfer',
+    text: `${player.name}이(가) ${t.name}을(를) 영입했다 (이적료 ${entry.fee})`,
+  });
+  return { ok: true, trainer: t };
+}
+
+/** 방출 — 일일 경비가 줄어든다. 이적료는 안 돌아온다 */
+export function releaseTrainer(game, trainerId) {
+  const player = playerAgency(game);
+  if (player.roster.length <= 1) return { ok: false, msg: '마지막 트레이너는 방출할 수 없습니다.' };
+  const i = player.roster.findIndex((t) => t.id === trainerId);
+  if (i < 0) return { ok: false, msg: '없는 트레이너입니다.' };
+  const [t] = player.roster.splice(i, 1);
+  game.league.newsFeed.unshift({
+    day: game.day, type: 'transfer',
+    text: `${player.name}이(가) ${t.name}을(를) 방출했다`,
+  });
+  return { ok: true, trainer: t };
+}
+
+/* ---------------- 조회용 ---------------- */
+
+export function dailyUpkeep(game) {
+  return playerRoster(game).reduce((n, t) => n + (t.salary || 0), 0);
+}
+
+export { trainerRating, allTrainers, findTrainer, findAgency, LOCAL_TOURNAMENT_TIERS };

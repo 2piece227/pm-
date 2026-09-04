@@ -12,7 +12,9 @@
  */
 import { createTrainerAI, runBattle, makeRng, GEN } from './run-battle.js';
 import { buildTeam } from './team-builder.js';
-import { KANTO_JOHTO_AGENCIES, createAgency, createTrainer, makeName } from '../data/agencies.js';
+import {
+  KANTO_JOHTO_AGENCIES, createAgency, createTrainer, makeName, effectiveStats, STAT_KEYS,
+} from '../data/agencies.js';
 import { curve } from '../ai/estimate.js';
 import { POKEMON_POOL } from '../data/pokemon-pool.js';
 
@@ -88,9 +90,44 @@ export function teamPower(teamText) {
  * 실력 스탯(곡선 적용)과 팀 전력을 절반씩 본다.
  */
 export function trainerRating(trainer) {
+  /* 컨디션은 빼고 순수 실력만 본다 — 출전 자격/시드는 컨디션 때문에 흔들리면 안 된다 */
   const s = trainer.stats;
-  const skill = (curve(s.judge) + curve(s.ops) + curve(s.focus) + curve(s.know) + curve(s.mental)) / 5;
+  const skill = STAT_KEYS.reduce((acc, k) => acc + curve(s[k]), 0) / STAT_KEYS.length;
   return skill * 0.5 + teamPower(trainer.team) * 0.5;
+}
+
+/* ---------------- 트레이너 생성 ---------------- */
+
+/**
+ * 소속사 성격에 맞는 트레이너 하나를 만든다. 리그 초기화와 스카웃 시장이 같이 쓴다.
+ * 현재 실력(CA)은 statRange 안에서 뽑고, 잠재력(PA)은 그보다 위로 잡는다 —
+ * PA와 CA의 간격이 곧 "얼마나 더 클 수 있는 선수인가"다 (§4.3).
+ */
+export function makeTrainerFor(agency, id, rng, { name = null } = {}) {
+  const [lo, hi] = agency.statRange;
+  const stats = {};
+  const potential = {};
+  for (const k of STAT_KEYS) {
+    const ca = lo + rng() * (hi - lo);
+    stats[k] = ca;
+    /* 잠재력은 현재치보다 0~6 위. 상한 24(네임드 구간 §4.2는 별도) */
+    potential[k] = Math.min(24, ca + rng() * 6);
+  }
+  const t = createTrainer({
+    id,
+    name: name || makeName(rng),
+    agencyId: agency.id,
+    stats,
+    potential,
+    team: buildTeam(rng, agency.rosterProfile),
+  });
+  t.salary = salaryFor(t);
+  return t;
+}
+
+/** 일일 경비 — 강할수록 비싸다. 영입할수록 고정비가 늘어난다 */
+export function salaryFor(trainer) {
+  return Math.round(4 + trainerRating(trainer) * 0.8);
 }
 
 /* ---------------- 리그 생성 ---------------- */
@@ -107,19 +144,8 @@ export function createLeague({ seed = 20260904 } = {}) {
     const agency = createAgency(def);
     const [lo, hi] = def.statRange;
     for (let i = 0; i < LEAGUE_CONFIG.trainersPerAgency; i++) {
-      const stats = {};
-      for (const k of ['judge', 'ops', 'focus', 'know', 'mental']) {
-        stats[k] = Math.round(lo + rng() * (hi - lo));
-      }
-      agency.roster.push(
-        createTrainer({
-          id: `t${trainerSeq++}`,
-          name: makeName(rng),
-          agencyId: agency.id,
-          stats,
-          team: buildTeam(rng, agency.rosterProfile),
-        })
-      );
+      const t = makeTrainerFor(agency, `t${trainerSeq++}`, rng);
+      agency.roster.push(t);
     }
     agencies.push(agency);
   }
@@ -235,9 +261,11 @@ export function openTournament(league, tierDef) {
 }
 
 /** 각 소속사가 스스로 판단해서 참가자를 낸다 */
-export function decideEntrants(league, tournament) {
+export function decideEntrants(league, tournament, { skipAgencyIds = [], minCondition = 35 } = {}) {
   for (const agency of league.agencies) {
+    if (skipAgencyIds.includes(agency.id)) continue; // 플레이어는 직접 고른다
     for (const trainer of agency.roster) {
+      if (trainer.condition < minCondition) continue; // 지친 트레이너는 안 내보낸다
       if (!isEligible(trainer, tournament)) {
         tournament.ineligible.push({ trainerId: trainer.id, agencyId: agency.id });
         continue;
@@ -257,8 +285,9 @@ export function decideEntrants(league, tournament) {
 export function runMatch(league, aId, bId, seed, { collectLog = false } = {}) {
   const a = findTrainer(league, aId);
   const b = findTrainer(league, bId);
-  const aiA = createTrainerAI({ name: a.name, stats: a.stats }, a.nature.style, makeRng(seed));
-  const aiB = createTrainerAI({ name: b.name, stats: b.stats }, b.nature.style, makeRng(seed + 1));
+  /* 컨디션이 깎인 트레이너는 실제로 약해진다 (§4.5) */
+  const aiA = createTrainerAI({ name: a.name, stats: effectiveStats(a) }, a.nature.style, makeRng(seed));
+  const aiB = createTrainerAI({ name: b.name, stats: effectiveStats(b) }, b.nature.style, makeRng(seed + 1));
 
   const r = runBattle({
     trainerA: aiA,
