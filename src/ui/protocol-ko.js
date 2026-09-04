@@ -32,7 +32,18 @@ function condPct(cond) {
 /** `Garchomp, L50, M` → `Garchomp` */
 const speciesOf = (details) => (details || '').split(',')[0].trim();
 
-const monKo = (ident) => (ident ? ko(SPECIES_KO, ident.name) : '?');
+/**
+ * 포켓몬 이름 — p2(상대 쪽)는 "상대 ○○"로 적는다.
+ *
+ * 풀이 36종뿐이라 6마리씩 뽑으면 **양 팀에 같은 종족이 들어가는 일이 아주 흔하다**
+ * (실측: 19경기 중 38건). 그러면 "또가스 출전! ... 또가스 출전!"처럼 보여서
+ * 같은 개체가 두 번 나온 것처럼 읽힌다. 쇼다운 리플레이와 같은 방식으로 구분한다.
+ */
+const monKo = (ident) => {
+  if (!ident) return '?';
+  const name = ko(SPECIES_KO, ident.name);
+  return ident.side === 'p2' ? `상대 ${name}` : name;
+};
 
 /** AI가 뱉은 구조화된 판단 근거를 한 줄 텍스트로 */
 function formatThink(t) {

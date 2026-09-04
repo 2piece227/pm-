@@ -36,6 +36,25 @@ export function makeRng(seed = 1) {
 const KO_BONUS = 42;
 const MAX_STAT = 20;
 
+/**
+ * softmax 온도 상한. — "못 두는 것"과 "아무거나 두는 것"을 가르는 선.
+ *
+ * §4.2 곡선이 20 미만을 강하게 깎다 보니(판단력 14 → 실효 10.5), 그 부족분이
+ * 온도식의 1.7제곱으로 증폭돼 T가 26~60까지 치솟았다. T=55면 점수 차 40짜리 수를
+ * 겨우 2:1로 선호하는 수준이라 **사실상 동전던지기**가 된다. 실측으로 리그 20명 중
+ * 13명이 그 구간에 있었고, 그래서 배틀이 42턴씩 늘어지고 1턴에 이유 없이 교체하는
+ * 것처럼 보였다.
+ *
+ * SPEC §4.2가 검증한 구간(올20 vs 네임드)은 T=1.2~1.9라 이 상한에 닿지 않는다.
+ * §4.4가 전제한 "일반 트레이너 상단 구간 17~20"도 T=9.6 이하라 영향 없다.
+ * 상한이 무는 건 16 이하 구간뿐이고, 거기서도 T=14면 점수 차 40을 17:1로 선호하므로
+ * 실수는 충분히 자주 나온다 — 약한 트레이너는 여전히 약하되, 무작위는 아니다.
+ *
+ * 실측 효과: 스탯14 대결 평균 42.6턴 → 24.4턴, 1턴 교체의 상성 개선률 30%→38%
+ * (악화 9%→3%). 만점 대결 승률은 변화 없음.
+ */
+const MAX_TEMPERATURE = 14;
+
 export class TrainerAI {
   constructor({ gen, name, stats, style, styleVec, rng = Math.random }) {
     this.gen = gen;
@@ -94,7 +113,7 @@ export class TrainerAI {
       const rattled = 1 + (MAX_STAT - me) * 0.07 * this.shock;
       T *= Math.max(0, rattled);
     }
-    return Math.max(0.12, T);
+    return Math.min(MAX_TEMPERATURE, Math.max(0.12, T));
   }
 
   /**
