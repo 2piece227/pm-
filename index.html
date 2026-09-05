@@ -44,11 +44,26 @@ h1{font-size:17px;margin:0 0 3px}
 .spr{position:absolute;transition:transform .16s ease,opacity .3s}
 .spr.foe{width:24%;right:12%;top:14%}
 .spr.me{width:30%;left:8%;bottom:12%}
-/* fit — 종별 "캔버스 채움 비율" 보정을 위한 내부 래퍼. 발(캔버스 하단) 기준으로 확대한다.
-   .spr 자체(바깥)는 위치·교체/피격 애니메이션만 담당해 서로 transform이 안 겹친다. */
-.spr .fit{width:100%;display:block;transform-origin:bottom center}
+/* 스프라이트는 BW 애니메이션 GIF. 내용에 맞게 잘려 있어 종마다 크기가 다르므로
+   컨테이너 폭을 자연 크기 비례로 JS가 잡아준다 (battle-view.js). 예전 static 96x96
+   시절에 필요했던 "캔버스 채움 비율" 보정(.fit)은 소스가 바뀌면서 불필요해졌다. */
 .spr svg,.spr img{width:100%;height:auto;display:block;image-rendering:pixelated;
   filter:drop-shadow(0 2px 2px rgba(0,0,0,.28))}
+
+/* 특성 발동 팝업 — 쇼다운 스타일. 에셋 없이 순수 CSS */
+.abilitybox{position:absolute;z-index:5;pointer-events:none;
+  background:var(--box);border:2px solid var(--boxline);border-radius:6px;
+  padding:4px 9px;box-shadow:1px 2px 0 rgba(0,0,0,.25);
+  animation:abpop 1.6s ease-out forwards;max-width:44%}
+.abilitybox b{display:block;font-size:12px;font-weight:800;line-height:1.25}
+.abilitybox em{display:block;font-style:normal;font-size:9.5px;color:var(--sub)}
+.abilitybox.foe{left:3%;top:26%}
+.abilitybox.me{right:3%;bottom:26%}
+@keyframes abpop{
+  0%{opacity:0;transform:translateY(6px) scale(.9)}
+  12%{opacity:1;transform:translateY(0) scale(1)}
+  80%{opacity:1;transform:translateY(0) scale(1)}
+  100%{opacity:0;transform:translateY(-6px) scale(.97)}}
 .spr.hit{animation:shk .28s}
 .spr.hurt svg,.spr.hurt img{filter:brightness(0) invert(1) drop-shadow(0 2px 2px rgba(0,0,0,.3))}
 .spr.dead{transform:translateY(38px);opacity:0}

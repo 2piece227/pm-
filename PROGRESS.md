@@ -4,6 +4,75 @@
 
 ---
 
+## 최근 작업 3: 특성 팝업 + 스프라이트 소스 교체 + 포켓로그 에셋 검토
+
+### (1) 특성 발동 팝업 — 완료
+
+쇼다운처럼 특성이 터질 때 화면에 박스가 뜬다. **에셋 없이 순수 CSS/HTML.**
+프로토콜의 `|-ability|`는 이미 파싱되고 있었고 로그에만 찍히던 것을 화면으로 끌어냈다.
+
+- `protocol-ko.js`: `-ability`에 `{k:'ability', side, ability, mon}` 표시 지시 추가
+- `battle-view.js`: `abilityPopup()` — 해당 진영 쪽에 박스를 띄우고 1.6초 뒤 사라짐
+- `index.html`: `.abilitybox` 스타일 + `abpop` 키프레임
+
+확인: `<b>부유</b><em>상대 또가스</em>` 박스가 상대 진영에 정상 렌더링.
+
+### (2) 스프라이트 — BW 애니메이션으로 교체, 완료
+
+**지시에 사실과 다른 부분이 하나 있었다:** "지금 PokeAPI의 `other/showdown/`을 쓰고 있다"고
+하셨는데, 실제로는 `@pkmn/img`를 통해 **쇼다운 CDN의 gen5 정지 PNG**를 쓰고 있었다.
+base64로 내장해둔 스프라이트도 없었다. (그래서 "다시 받아서 교체" 작업은 해당 없음)
+
+바꾼 내용:
+- 소스를 `PokeAPI/sprites`의 `versions/generation-v/black-white/animated/`로 교체.
+  정지 → **애니메이션**이 되면서 실제 DS 원본 도트 느낌이 살아났다.
+- 5세대 이후 종은 이 폴더에 없어서 `other/showdown/`으로 자동 폴백
+  (실측 확인: 타부자고 #1000은 BW 404 → showdown 63x82 정상)
+- 폼 변형도 정상 (`645-therian.gif`, `479-wash.gif` 실측 확인)
+- `@pkmn/img` 의존 제거, `@pkmn/dex`로 도감번호+폼 접미사를 직접 만든다
+
+**부수 효과 — `sprite-fit.js` 보정표가 불필요해졌다.**
+예전 정지 스프라이트는 96x96 고정 캔버스라 종마다 여백이 달라 보정이 필요했는데,
+BW 애니메이션 GIF는 **내용에 맞게 잘려 있다**(리자몽 87x89 / 해피너스 61x59).
+그래서 "픽셀당 배율을 일정하게" 유지하는 방식으로 바꿨고, 덩치 차이가 자연스럽게 살아난다.
+(실측: 레트라 57px → 박스 15.5%, 아보크 87px → 29.7%)
+
+### (3) 포켓로그 배틀 애니메이션 — **보류. 라이선스가 알려진 것과 다르다**
+
+가져오지 않았다. 저장소를 실제로 확인한 결과:
+
+**JSON 프레임 데이터** — `battle-anims/`에 924개 파일이 있는 건 맞다. 그런데
+루트 `REUSE.toml`은 이걸 AGPL-3.0-only로 적어놨지만, **폴더 안에 자체 `REUSE.toml`이 또 있고
+그게 우선한다.** 거기서 갈라지는 실제 내역:
+
+| 라이선스 | 파일 수 | 비고 |
+|---|---|---|
+| `LicenseRef-POKEMON-REBORN` | **785개** | 포켓몬 리본 팀 저작물. flamethrower / swords-dance / earthquake / scratch 전부 여기 |
+| `CC-BY-NC-SA-4.0` | 나머지 | **NC = 비상업 전용, SA = 동일조건 변경허락** |
+
+**그래픽(`images/battle_anims/`)** — 이쪽이 진짜 문제다. 저장소의
+`LICENSES/LicenseRef-FAIR-USE.txt`가 이렇게 적고 있다:
+
+> "The asset is the intellectual property of Nintendo, Creatures, inc., and GAME FREAK, inc. ...
+> The authors of this repository believe its inclusion is covered under Fair Use.
+> **We do not claim to re-license nor hold any ownership over the asset.**"
+
+즉 **이미지에는 넘겨받을 라이선스 자체가 없다.** 공정이용은 특정 사용에 대한 항변이지
+남에게 넘길 수 있는 허락이 아니다. 출처를 표기해도 해결되지 않는 종류의 문제다.
+
+덧붙여, AGPL인 부분도 "출처 표기"와는 성격이 다르다 — 네트워크로 서비스하면
+(GitHub Pages가 여기 해당) 전체 소스 공개 의무가 붙는 강한 카피레프트다.
+
+**대안:** 지난번에 정리한 CC0 경로가 그대로 유효하다. 프레임 데이터 방식 자체는 좋은 설계라
+그대로 따르되, 시트만 CC0(Kenney / itch.io CC0 태그)로 채우면 된다. 재생 엔진은 우리가 짜면 되고,
+`spriteUrl()`처럼 소스를 한 곳에 가둬두면 나중에 교체도 쉽다.
+
+### 크레딧
+
+`CREDITS.md` 신규 작성 — 코드 라이브러리 / 스프라이트 출처 / 폰트 / 보류한 리소스까지 정리.
+
+---
+
 ## 최근 작업 2: 배틀 로그 혼동 + 온도 폭주
 
 ### "또가스가 두 번 출전하는 버그" — 실은 두 가지가 겹쳐 있었다

@@ -246,7 +246,15 @@ export function toKoreanLog(protocolLog, names, think = []) {
 
       case '-ability': {
         const id = parseIdent(parts[1]);
-        push('l-gold', `  ${monKo(id)}의 ${ko(ABILITY_KO, parts[2])}!`);
+        const ab = ko(ABILITY_KO, parts[2]);
+        /* 특성 발동은 배틀에서 판을 뒤집는 순간이 많은데 로그 한 줄로는 눈에 안 띈다.
+           쇼다운처럼 화면에 팝업을 띄우도록 표시 지시를 같이 넘긴다. */
+        push('l-gold', `  ${monKo(id)}의 ${ab}!`, {
+          k: 'ability',
+          side: id.side,
+          ability: ab,
+          mon: monKo(id),
+        });
         break;
       }
 

@@ -5,8 +5,7 @@
  * 시뮬 로직은 여기를 전혀 모르고, 프로토콜 로그만 넘겨받아 재생한다 (§0.1-3).
  */
 import { toKoreanLog } from './protocol-ko.js';
-import { spriteUrl, fallbackSvg, TYPE_FX } from './sprites.js';
-import { spriteFitScale } from '../data/sprite-fit.js';
+import { spriteUrl, fallbackSvg, TYPE_FX, REFERENCE_WIDTH } from './sprites.js';
 
 const $ = (id) => document.getElementById(id);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -20,26 +19,48 @@ export function drawSprite(side, speciesName) {
   shown[side] = speciesName;
   if (!speciesName) {
     el.innerHTML = '';
+    el.style.width = '';
     return;
   }
-  /* p1은 후면 도트라 별도 이미지다 — CSS로 좌우 반전하지 않는다 */
-  const { url } = spriteUrl(speciesName, side);
+
+  /* p1은 뒷모습이라 별도 이미지다 — CSS로 좌우 반전하지 않는다 */
+  const { url, fallback } = spriteUrl(speciesName, side);
   const img = document.createElement('img');
-  img.src = url;
   img.alt = speciesName;
 
-  /* 종별 채움 비율 보정 — 짧고 둥근 종(해피너스 등)은 96x96 캔버스 안에서
-     실제 캐릭터가 차지하는 비중이 작아 다른 종보다 훨씬 작게 보인다.
-     발(캔버스 하단) 기준으로 확대해서 시각적 크기를 맞춘다. (src/data/sprite-fit.js) */
-  const fit = document.createElement('div');
-  fit.className = 'fit';
-  const scale = spriteFitScale(speciesName, side === 'p1' ? 'back' : 'front');
-  if (scale !== 1) fit.style.transform = `scale(${scale})`;
-  img.onerror = () => { fit.innerHTML = fallbackSvg(); };
-  fit.appendChild(img);
+  /* BW 애니메이션 GIF는 내용에 맞게 잘려 있어 종마다 크기가 다르다.
+     전부 같은 폭으로 늘리면 덩치 차이가 뭉개지므로, "픽셀당 배율"을 일정하게 유지한다.
+     (리자몽 87px / 해피너스 61px → 화면에서도 그 비율 그대로) */
+  const basePct = side === 'p1' ? 30 : 24;
+  img.onload = () => {
+    if (!img.naturalWidth) return;
+    el.style.width = `${(basePct * img.naturalWidth) / REFERENCE_WIDTH}%`;
+  };
+
+  /* 5세대 이후 종은 BW 폴더에 없다 → showdown 폴더로, 그것도 없으면 실루엣 */
+  let triedFallback = false;
+  img.onerror = () => {
+    if (!triedFallback && fallback) {
+      triedFallback = true;
+      img.src = fallback;
+      return;
+    }
+    el.innerHTML = fallbackSvg();
+    el.style.width = `${basePct}%`;
+  };
+  img.src = url;
 
   el.innerHTML = '';
-  el.appendChild(fit);
+  el.appendChild(img);
+}
+
+/** 특성 발동 팝업 — 쇼다운처럼 화면에 박스를 띄운다 (에셋 없이 순수 UI) */
+function abilityPopup(side, mon, ability) {
+  const d = document.createElement('div');
+  d.className = `abilitybox ${side === 'p1' ? 'me' : 'foe'}`;
+  d.innerHTML = `<b>${ability}</b><em>${mon}</em>`;
+  $('scene').appendChild(d);
+  setTimeout(() => d.remove(), 1600);
 }
 
 function drawHpBox(side, f, trainerName) {
@@ -122,6 +143,10 @@ async function playAnim(anim, speed) {
     case 'fx':
       fxText(anim.side, anim.text, anim.color);
       await wait(speed * 0.35);
+      break;
+    case 'ability':
+      abilityPopup(anim.side, anim.mon, anim.ability);
+      await wait(speed * 0.8);
       break;
     case 'faint':
       $(`sp-${anim.side}`).classList.add('dead');
