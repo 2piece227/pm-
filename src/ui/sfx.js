@@ -1,20 +1,38 @@
 /**
- * 효과음 레이어 — Web Audio로 **직접 합성한다.**
+ * 효과음 레이어 — **실제 게임 음원을 링크로 가져온다.**
  *
- * 왜 합성인가:
- *   1. 외부 에셋이 필요 없다 → 라이선스 문제가 원천적으로 없다 (CREDITS.md 참고)
- *   2. 도트 화면에 레트로 합성음이 오히려 잘 맞는다
- *   3. 파일 로딩·용량이 0이라 첫 재생이 즉시 난다
+ * 스프라이트와 같은 방식이다 (파일을 이 저장소에 복제하지 않는다).
+ *   - 공용 효과음: PokeRogue의 audio/se (hit / hit_strong / faint / low_hp …)
+ *   - 기술별 음원: audio/battle_anims의 PRSFX-*.wav — 기술 JSON이 지정한 것
+ *   - 울음소리: PokeAPI/cries. legacy(구형 합성음)가 BW 도트와 결이 맞는다
  *
- * 나중에 실제 음원(CC0 팩 등)으로 바꾸고 싶으면 SAMPLE_URLS에 경로만 넣으면 된다.
- * 그 이름이 있으면 합성 대신 파일을 재생한다 — 호출부는 그대로 둔 채 교체 가능.
+ * 합성음은 **폴백으로만** 남겨뒀다. 네트워크가 없거나 파일을 못 받으면
+ * 소리가 아예 안 나는 것보다 낫기 때문이다.
  *
- * 브라우저 자동재생 정책: 사용자 제스처 전에는 소리가 안 난다.
+ * 브라우저 자동재생 정책상 사용자 제스처 전에는 소리가 안 난다.
  * 아무 클릭에서나 unlock()이 한 번 불리도록 걸어둔다.
  */
+import { seUrl, animSoundUrl, cryUrl } from '../data/battle-assets.js';
 
-/** 실제 음원으로 갈아끼울 자리. { hit: '/sfx/hit.wav', ... } 형태 */
-export const SAMPLE_URLS = {};
+/**
+ * 이름 → 실제 음원. 여기 있으면 파일을 쓰고, 못 받으면 합성으로 떨어진다.
+ * PokeRogue audio/se의 파일명을 그대로 쓴다.
+ */
+export const SAMPLE_URLS = {
+  hitWeak: seUrl('hit_weak'),
+  hitNormal: seUrl('hit'),
+  hitStrong: seUrl('hit_strong'),
+  punch: seUrl('hit_strong'),
+  slash: seUrl('hit'),
+  bite: seUrl('hit'),
+  crit: seUrl('crit_throw'),
+  faint: seUrl('faint'),
+  beam: seUrl('beam'),
+  lowHp: seUrl('low_hp'),
+  statUp: seUrl('charge'),
+  win: seUrl('level_up_fanfare'),
+  send: seUrl('pb_rel'),
+};
 
 let ctx = null;
 let master = null;
@@ -148,22 +166,51 @@ const SOUNDS = {
 
 /* ---------------- 재생 ---------------- */
 
-async function playSample(name) {
-  const url = SAMPLE_URLS[name];
-  if (!url) return false;
+const failed = new Set();
+
+/** URL 하나를 받아 재생. 실패하면 false (호출부가 합성으로 떨어진다) */
+async function playUrl(key, url, { volume = 1, pitch = 1 } = {}) {
+  if (failed.has(key)) return false;
   try {
-    if (!buffers.has(name)) {
+    if (!buffers.has(key)) {
       const res = await fetch(url);
-      buffers.set(name, await ctx.decodeAudioData(await res.arrayBuffer()));
+      if (!res.ok) throw new Error(String(res.status));
+      buffers.set(key, await ctx.decodeAudioData(await res.arrayBuffer()));
     }
     const src = ctx.createBufferSource();
-    src.buffer = buffers.get(name);
-    src.connect(master);
+    src.buffer = buffers.get(key);
+    src.playbackRate.value = pitch;
+    const g = ctx.createGain();
+    g.gain.value = volume;
+    src.connect(g); g.connect(master);
     src.start();
     return true;
   } catch {
-    return false; // 파일이 없거나 깨졌으면 합성으로 떨어진다
+    failed.add(key); // 한 번 실패한 건 다시 시도하지 않는다
+    return false;
   }
+}
+
+/** 기술 JSON이 지정한 음원 (PRSFX- Flamethrower.wav 같은 이름) */
+export function playAnimSound(resourceName, { volume = 100, pitch = 100 } = {}) {
+  if (!enabled || !unlocked || !resourceName) return;
+  if (!ensureCtx()) return;
+  /* BG 트랙 같은 비음원 리소스는 건너뛴다 */
+  if (!/\.(wav|m4a|mp3|ogg)$/i.test(resourceName)) return;
+  playUrl('anim:' + resourceName, animSoundUrl(resourceName), {
+    volume: Math.max(0, Math.min(1, volume / 100)),
+    pitch: Math.max(0.5, Math.min(2, pitch / 100)),
+  });
+}
+
+/** 포켓몬 울음소리 — 출전할 때 운다 */
+export function playCry(dexNum) {
+  if (!enabled || !unlocked || !dexNum) return;
+  if (!ensureCtx()) return;
+  const { url, fallback } = cryUrl(dexNum);
+  playUrl('cry:' + dexNum, url, { volume: 0.85 }).then((ok) => {
+    if (!ok) playUrl('cryx:' + dexNum, fallback, { volume: 0.85 });
+  });
 }
 
 /**
@@ -174,9 +221,16 @@ export function play(name) {
   if (!enabled || !unlocked) return;
   const c = ensureCtx();
   if (!c || c.state !== 'running') return;
-  if (SAMPLE_URLS[name]) { playSample(name); return; }
-  const fn = SOUNDS[name];
-  if (fn) { try { fn(); } catch { /* 오디오는 실패해도 배틀을 막지 않는다 */ } }
+
+  const synth = () => {
+    const fn = SOUNDS[name];
+    if (fn) { try { fn(); } catch { /* 오디오는 실패해도 배틀을 막지 않는다 */ } }
+  };
+
+  const url = SAMPLE_URLS[name];
+  if (!url) { synth(); return; }
+  /* 이미 받아둔 게 있으면 즉시, 없으면 받아보고 실패 시 합성 */
+  playUrl(name, url).then((ok) => { if (!ok) synth(); });
 }
 
 /** 원형(archetype) → 타격음 이름 */

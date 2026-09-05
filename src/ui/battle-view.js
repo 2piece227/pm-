@@ -13,6 +13,8 @@ import { toKoreanLog } from './protocol-ko.js';
 import { spriteUrl, fallbackSvg, TYPE_FX, REFERENCE_WIDTH } from './sprites.js';
 import { ARCHETYPE_TRAITS } from '../data/move-anim.js';
 import * as sfx from './sfx.js';
+import { loadAnim, playMoveAnim, clearMoveAnim } from './move-fx.js';
+import { dexNumOf } from './sprites.js';
 
 const $ = (id) => document.getElementById(id);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -312,6 +314,7 @@ async function playAnim(anim, token) {
     case 'send': {
       const el = $(`sp-${anim.side}`);
       sfx.play('send');
+      sfx.playCry(dexNumOf(anim.species));
       el.classList.remove('dead');
       el.classList.add('enter');
       await wait(unit * 0.9);
@@ -322,6 +325,37 @@ async function playAnim(anim, token) {
     case 'move': {
       const el = $(`sp-${anim.side}`);
       const color = TYPE_FX[anim.type] || '#fff';
+
+      /* 실제 게임 기술 애니메이션이 있으면 그걸 쓴다. 없는 기술만 아래 CSS 연출로 떨어진다. */
+      const realAnim = anim.moveEn ? await loadAnim(anim.moveEn) : null;
+      if (realAnim && anim.target) {
+        const myToken = runToken;
+        /* 시전 모션은 그대로 두고(몸이 움직여야 자연스럽다) 그 위에 이펙트를 얹는다 */
+        const lunge = ARCHETYPE_TRAITS[anim.archetype]?.approach;
+        if (lunge === 'lunge') {
+          el.classList.add(anim.side === 'p1' ? 'lunge-r' : 'lunge-l');
+          setTimeout(() => el.classList.remove('lunge-r', 'lunge-l'), Math.max(90, unit * 0.4));
+        } else if (lunge === 'cast') {
+          el.classList.add('cast');
+          setTimeout(() => el.classList.remove('cast'), Math.max(90, unit * 0.4));
+        }
+        await playMoveAnim(sceneEl(), realAnim, anim.side, anim.target, Math.max(16, 46 / spd()), () => myToken === runToken);
+        if (anim.missed) { sfx.play('miss'); break; }
+        if (anim.hit) {
+          const t = $(`sp-${anim.hit}`);
+          if (anim.crit) sfx.play('crit');
+          sfx.play(sfx.impactSoundFor(anim.archetype, anim.eff));
+          t.classList.add('hit', 'hurt');
+          await wait(Math.max(80, unit * 0.3));
+          t.classList.remove('hurt');
+          await wait(Math.max(70, unit * 0.24));
+          t.classList.remove('hit');
+          if (anim.eff === 'super') sfx.play('superEffective');
+          else if (anim.eff === 'resisted') sfx.play('resisted');
+        }
+        break;
+      }
+
       const tr = ARCHETYPE_TRAITS[anim.archetype] || ARCHETYPE_TRAITS.contact;
       const fx = tr.color || color;
 
@@ -427,6 +461,7 @@ async function playAnim(anim, token) {
 
 export function resetScene() {
   stopPlayback();
+  clearMoveAnim($('scene'));
   shown.p1 = null;
   shown.p2 = null;
   drawSprite('p1', null);

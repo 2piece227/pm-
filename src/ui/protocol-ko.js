@@ -186,7 +186,7 @@ export function toKoreanLog(protocolLog, names, think = []) {
           : `${eunNeun(trainer)}\n${eulReul(name)} 내보냈다!`;
         push(sideCls(id.slot), `${trainer}: ${monKo(id)} 출전!`, {
           msg,
-          anim: { k: 'send', side: id.side },
+          anim: { k: 'send', side: id.side, species: det.species },
         });
         pending = null;
         break;
@@ -206,6 +206,7 @@ export function toKoreanLog(protocolLog, names, think = []) {
             target: target ? sideOf(target.slot) : null,
             type: MOVE_TYPE[mvName] || 'normal',
             move: mvKo,
+            moveEn: mvName,
             /* 기술마다 다른 연출을 쓴다 (src/data/move-anim.js) */
             archetype: animArchetype(mvName, MOVE_TYPE[mvName] || 'normal'),
           },

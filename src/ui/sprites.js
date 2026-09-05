@@ -29,6 +29,12 @@ function fileStem(species) {
   return `${sp.num}${forme}`;
 }
 
+/** 종족명 → 도감번호 (울음소리 등에 쓴다) */
+export function dexNumOf(species) {
+  const sp = species && Dex.species.get(species);
+  return sp && sp.exists ? sp.num : null;
+}
+
 /**
  * @param {string} species 영문 종족명
  * @param {'p1'|'p2'} side p1=아군(뒷모습), p2=상대(앞모습)

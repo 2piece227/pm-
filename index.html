@@ -108,6 +108,10 @@ h1{font-size:17px;margin:0 0 3px}
   animation:flsh ease-out forwards}
 @keyframes flsh{0%{opacity:0}25%{opacity:.45}100%{opacity:0}}
 
+/* 실제 기술 애니메이션이 그려지는 캔버스 (src/ui/move-fx.js) */
+.fxcanvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:4;
+  image-rendering:pixelated}
+
 /* 기술별 고유 연출 (src/data/move-anim.js의 원형에 대응) */
 .scene.quaking{animation:qk .5s ease-in-out}
 @keyframes qk{0%,100%{transform:translate(0,0)}
