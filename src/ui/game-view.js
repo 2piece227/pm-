@@ -15,7 +15,7 @@ import { STAT_KEYS, displayStats } from '../data/agencies.js';
 import { STAT_KO } from '../data/styles.js';
 import { teamSpecies } from '../engine/team-builder.js';
 import { SPECIES_KO, ko } from '../data/ko.js';
-import { playBattleLog, resetScene, say } from './battle-view.js';
+import { playBattleLog, resetScene, say, setSpeedSource, stopPlayback } from './battle-view.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -262,7 +262,7 @@ async function watchMatch(tournament, index) {
 
   /* 경기 시점의 스냅샷으로 재생한다 — 지금 상태로 다시 돌리면 브래킷과 다른 승자가 나온다 */
   const replay = replayMatch(m);
-  await playBattleLog(replay.log, { p1: a.name, p2: b.name }, Number($('speed').value));
+  await playBattleLog(replay.log, { p1: a.name, p2: b.name });
   const w = findTrainer(game.league, replay.winnerId);
   say(`▶ ${w ? w.name : '무승부'} 승리! (${replay.turns}턴)`);
   watching = false;
@@ -392,7 +392,14 @@ export function initGame() {
   game = createGame({ seed: 20260905 });
   initTabs();
   $('btn-day').onclick = nextDay;
-  $('watch-close').onclick = () => { $('watch-panel').style.display = 'none'; };
+  $('watch-close').onclick = () => {
+    stopPlayback();
+    watching = false;
+    $('watch-panel').style.display = 'none';
+  };
+
+  /* 배속은 값을 읽어가는 함수로 넘긴다 — 재생 도중에 바꿔도 즉시 반영된다 */
+  setSpeedSource(() => Number($('speed').value));
   renderAll();
   /* 디버그용 — 콘솔에서 상태를 들여다볼 수 있게 */
   window.__game = game;
