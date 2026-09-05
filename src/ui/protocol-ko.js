@@ -13,6 +13,7 @@ import {
   ABILITY_KO, BOOST_KO, CANT_MSG, ITEM_KO, MOVE_KO, MOVE_TYPE, SPECIES_KO, SPECIES_TYPES,
   STATUS_BADGE, STATUS_KO, STATUS_MSG, STATUS_TICK, WEATHER_MSG, ko,
 } from '../data/ko.js';
+import { animArchetype } from '../data/move-anim.js';
 
 /* ---------------- 한국어 조사 ---------------- */
 
@@ -101,8 +102,17 @@ export function toKoreanLog(protocolLog, names, think = []) {
     thinkByTurn.get(t.turn).push(formatThink(t.think));
   }
 
-  const push = (cls, text, { msg = null, anim = null } = {}) => {
+  /**
+   * noField — 이 줄은 화면 상태를 갱신하지 않는다.
+   *
+   * 쇼다운 프로토콜은 "효과가 굉장했다"류를 **데미지 줄보다 먼저** 보낸다.
+   * 그래서 이 줄들에 그 시점 스냅샷을 붙이면, 기술 줄이 HP 바를 내려놓은 직후
+   * 곧바로 데미지 전 값으로 되돌려 **바가 늘었다 줄었다 하는 것처럼 보인다.**
+   * 이 줄들은 순수 부연 설명이라 상태를 건드리지 않는 게 맞다.
+   */
+  const push = (cls, text, { msg = null, anim = null, noField = false } = {}) => {
     const line = { cls, text, msg, anim };
+    if (noField) line.noField = true;
     out.push(line);
     return line;
   };
@@ -196,6 +206,8 @@ export function toKoreanLog(protocolLog, names, think = []) {
             target: target ? sideOf(target.slot) : null,
             type: MOVE_TYPE[mvName] || 'normal',
             move: mvKo,
+            /* 기술마다 다른 연출을 쓴다 (src/data/move-anim.js) */
+            archetype: animArchetype(mvName, MOVE_TYPE[mvName] || 'normal'),
           },
         });
         pending = target
@@ -243,7 +255,11 @@ export function toKoreanLog(protocolLog, names, think = []) {
           break;
         }
 
-        if (pending && pending.slot === id.slot) {
+        /* 회복은 기술 줄에 합치지 않는다.
+           자기재생·날개쉬기처럼 **자신을 대상으로 하는 회복기**는 pending.slot이
+           시전자와 같아서, 그냥 합치면 "자기 자신을 때렸다"로 처리되어
+           피격 플래시가 뜨고 HP 표기도 데미지처럼 나온다. */
+        if (type === '-damage' && pending && pending.slot === id.slot) {
           /* 공격기 데미지는 새 줄을 만들지 않고 기술 줄에 합쳐 쓴다 */
           pending.hits++;
           const multi = pending.hits > 1 ? `  (${pending.hits}번 맞았다)` : '';
@@ -253,7 +269,8 @@ export function toKoreanLog(protocolLog, names, think = []) {
           break;
         }
 
-        push('l-sub', `  ${name}  ${before}% → ${after}%`, {
+        push(delta > 0 ? 'l-gold' : 'l-sub', `  ${name}  ${before}% → ${after}%`, {
+          msg: delta > 0 ? `${eunNeun(name)}\n체력을 회복했다!` : null,
           anim: {
             k: 'fx', side: id.side,
             text: `${delta > 0 ? '+' : ''}${delta}%`,
@@ -264,42 +281,63 @@ export function toKoreanLog(protocolLog, names, think = []) {
       }
 
       case '-sethp': {
+        /* 고통나누기처럼 HP를 직접 덮어쓰는 기술. 양쪽에 한 번씩 온다.
+           여기서 줄을 안 만들면 변화가 화면에 안 잡히고 **다음 줄에서 갑자기 튄다.** */
         const id = parseIdent(parts[1]);
         const cond = parseCond(parts[2]);
-        if (id && cond) hp[id.slot] = cond;
+        if (!id || !cond) break;
+        const before = hp[id.slot]?.pct ?? 100;
+        hp[id.slot] = cond;
+        const delta = cond.pct - before;
+        if (delta === 0) break;
+        const name = monKo(id);
+        push(delta > 0 ? 'l-gold' : 'l-sub', `  ${name}  ${before}% → ${cond.pct}%`, {
+          anim: {
+            k: 'fx', side: id.side,
+            text: `${delta > 0 ? '+' : ''}${delta}%`,
+            color: delta > 0 ? '#5ad06a' : '#e8705a',
+          },
+        });
         break;
       }
 
       case '-supereffective':
+        if (pending) pending.line.anim.eff = 'super';
         push('l-sub', '  효과가 굉장했다!', {
+          noField: true,
           msg: '효과가 굉장했다!',
           anim: pending && { k: 'fx', side: sideOf(pending.slot), text: '효과 굉장!', color: '#ffd24a' },
         });
         break;
       case '-resisted':
-        push('l-sub', '  효과가 별로인 것 같다…', { msg: '효과가 별로인 것 같다…' });
+        if (pending) pending.line.anim.eff = 'resisted';
+        push('l-sub', '  효과가 별로인 것 같다…', { noField: true, msg: '효과가 별로인 것 같다…' });
         break;
       case '-immune': {
         const id = parseIdent(parts[1]);
         push('l-sub', '  효과가 없는 것 같다…', {
+          noField: true,
           msg: `하지만 ${monKo(id)}에게는\n효과가 없었다…`,
           anim: id && { k: 'fx', side: id.side, text: '무효', color: '#c8c8c8' },
         });
         break;
       }
       case '-crit':
+        if (pending) pending.line.anim.crit = true;
         push('l-sub', '  급소에 맞았다!', {
+          noField: true,
           msg: '급소에 맞았다!',
           anim: pending && { k: 'fx', side: sideOf(pending.slot), text: '급소!', color: '#ff8a5a' },
         });
         break;
       case '-miss': {
         const id = parseIdent(parts[2]) || parseIdent(parts[1]);
-        push('l-sub', '  하지만 빗나갔다!', { msg: `하지만 ${monKo(id)}에게는\n맞지 않았다!` });
+        if (pending) pending.line.anim.missed = true;
+        push('l-sub', '  하지만 빗나갔다!', { noField: true, msg: `하지만 ${monKo(id)}에게는\n맞지 않았다!` });
         break;
       }
       case '-fail':
-        push('l-sub', '  하지만 실패했다!', { msg: '하지만 실패했다!' });
+        push('l-sub', '  하지만 실패했다!', { noField: true, msg: '하지만 실패했다!' });
         break;
 
       case '-boost':
@@ -470,7 +508,10 @@ ${ko(STATUS_KO, st)} 상태가 되었다!`,
 
     if (out.length > mark) {
       const f = snapshot();
-      for (let k = mark; k < out.length; k++) if (!out[k].field) out[k].field = f;
+      for (let k = mark; k < out.length; k++) {
+        if (out[k].noField || out[k].field) continue;
+        out[k].field = f;
+      }
     }
   }
   return out;

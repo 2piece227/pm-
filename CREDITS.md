@@ -28,6 +28,14 @@
 기술 이펙트 애니메이션 소스로 검토했으나, 실제 라이선스를 확인한 결과 재사용 조건이
 당초 알려진 것과 달라서 보류했다. 자세한 내용은 `PROGRESS.md`의 "포켓로그 에셋 검토" 항목 참고.
 
+## 효과음
+
+**외부 음원을 쓰지 않는다.** Web Audio API로 그 자리에서 합성한다 (`src/ui/sfx.js`).
+따라서 별도 출처 표기나 라이선스 고지가 필요 없다.
+
+나중에 실제 음원으로 바꿀 경우 `SAMPLE_URLS`에 경로를 넣으면 되며,
+그때는 해당 음원의 라이선스를 여기에 추가해야 한다 (CC0 권장 — Kenney, itch.io CC0 태그 등).
+
 ## 폰트
 
 - [Gothic A1](https://fonts.google.com/specimen/Gothic+A1) — SIL Open Font License 1.1

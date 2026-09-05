@@ -1,7 +1,7 @@
 /**
  * 팀 정의 — 포켓몬쇼다운 텍스트 포맷.
  * SPEC §8 검증 매치업을 실엔진에 그대로 재현한 프리셋과,
- * §8-(1) "평균 8~12턴" 목표를 위한 노력치/도구 투자 프리셋을 함께 둔다.
+ * §8-(1) "평균 8~12턴" 목표를 위한 노력치 투자 프리셋을 함께 둔다.
  */
 
 /* SPEC §8 원본 조건: Lv50 / 노력치 0 / 무보정 / 개체값 31 / 도구 없음 */
@@ -45,10 +45,10 @@ IVs: 31 HP / 31 Atk / 31 Def / 31 SpA / 31 SpD / 31 Spe
 - Dragon Claw
 `;
 
-/* 내구 투자 + 도구. 배틀 길이를 늘려 기점기/집중력/멘탈이 발동할 틈을 만드는 실험용.
+/* 내구 투자. 배틀 길이를 늘려 기점기/집중력/멘탈이 발동할 틈을 만드는 실험용.
    성격 보정은 "안 쓰는 공격 스탯"만 깎도록 맞춘다 — 한쪽 화력만 깎으면 승률이 100:0으로 튄다. */
 const TUNED_A = `
-Spiritomb @ Leftovers
+Spiritomb
 Ability: Pressure
 Level: 50
 EVs: 252 HP / 252 SpD / 4 SpA
@@ -58,7 +58,7 @@ Nature: Calm
 - Psychic
 - Curse
 
-Garchomp @ Leftovers
+Garchomp
 Ability: Rough Skin
 Level: 50
 EVs: 252 HP / 252 Def / 4 Atk
@@ -70,7 +70,7 @@ Nature: Impish
 `;
 
 const TUNED_B = `
-Dragapult @ Leftovers
+Dragapult
 Ability: Clear Body
 Level: 50
 EVs: 252 HP / 252 Def / 4 Atk
@@ -80,7 +80,7 @@ Nature: Impish
 - Draco Meteor
 - Shadow Ball
 
-Charizard @ Leftovers
+Charizard
 Ability: Blaze
 Level: 50
 EVs: 252 HP / 252 SpD / 4 SpA
@@ -97,7 +97,7 @@ Nature: Calm
  * 상성이 갈리는 타입(물리엄/내구형/공격형)을 일부러 섞었다.
  */
 const FULL6_A = `
-Garchomp @ Leftovers
+Garchomp
 Ability: Rough Skin
 Level: 50
 EVs: 252 HP / 252 Atk / 4 Spe
@@ -107,7 +107,7 @@ Nature: Adamant
 - Swords Dance
 - Rock Tomb
 
-Dragapult @ Choice Specs
+Dragapult
 Ability: Clear Body
 Level: 50
 EVs: 252 SpA / 4 SpD / 252 Spe
@@ -117,7 +117,7 @@ Nature: Timid
 - Dragon Darts
 - Flamethrower
 
-Ferrothorn @ Leftovers
+Ferrothorn
 Ability: Iron Barbs
 Level: 50
 EVs: 252 HP / 252 Def / 4 SpD
@@ -127,7 +127,7 @@ Nature: Relaxed
 - Curse
 - Rock Tomb
 
-Charizard @ Leftovers
+Charizard
 Ability: Blaze
 Level: 50
 EVs: 252 HP / 252 SpA / 4 Spe
@@ -137,7 +137,7 @@ Nature: Modest
 - Ancient Power
 - Dragon Claw
 
-Tyranitar @ Leftovers
+Tyranitar
 Ability: Sand Stream
 Level: 50
 EVs: 252 HP / 252 Atk / 4 SpD
@@ -147,7 +147,7 @@ Nature: Adamant
 - Earthquake
 - Swords Dance
 
-Blissey @ Leftovers
+Blissey
 Ability: Natural Cure
 Level: 50
 EVs: 252 HP / 252 Def / 4 SpD
@@ -159,7 +159,7 @@ Nature: Bold
 `;
 
 const FULL6_B = `
-Landorus-Therian @ Leftovers
+Landorus-Therian
 Ability: Intimidate
 Level: 50
 EVs: 252 HP / 252 Atk / 4 Def
@@ -169,7 +169,7 @@ Nature: Adamant
 - U-turn
 - Swords Dance
 
-Corviknight @ Leftovers
+Corviknight
 Ability: Pressure
 Level: 50
 EVs: 252 HP / 252 Def / 4 SpD
@@ -179,7 +179,7 @@ Nature: Impish
 - Roost
 - Bulk Up
 
-Toxapex @ Leftovers
+Toxapex
 Ability: Regenerator
 Level: 50
 EVs: 252 HP / 252 Def / 4 SpD
@@ -189,7 +189,7 @@ Nature: Bold
 - Recover
 - Venoshock
 
-Volcarona @ Leftovers
+Volcarona
 Ability: Flame Body
 Level: 50
 EVs: 252 HP / 252 SpA / 4 Spe
@@ -199,7 +199,7 @@ Nature: Modest
 - Quiver Dance
 - Giga Drain
 
-Dragonite @ Leftovers
+Dragonite
 Ability: Multiscale
 Level: 50
 EVs: 252 HP / 252 Atk / 4 Spe
@@ -209,7 +209,7 @@ Nature: Adamant
 - Earthquake
 - Dragon Dance
 
-Gholdengo @ Leftovers
+Gholdengo
 Ability: Good as Gold
 Level: 50
 EVs: 252 HP / 252 SpA / 4 SpD
@@ -222,6 +222,6 @@ Nature: Modest
 
 export const TEAM_PRESETS = {
   proto: { label: '프로토 재현 (노력치 0 · 도구 없음)', A: PROTO_A, B: PROTO_B },
-  tuned: { label: '내구 투자 (252 HP + 방어 · 남은음식)', A: TUNED_A, B: TUNED_B },
+  tuned: { label: '내구 투자 (252 HP + 방어)', A: TUNED_A, B: TUNED_B },
   full6: { label: '6마리 파티 (교체 검증용)', A: FULL6_A, B: FULL6_B },
 };

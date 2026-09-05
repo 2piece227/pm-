@@ -108,7 +108,53 @@ h1{font-size:17px;margin:0 0 3px}
   animation:flsh ease-out forwards}
 @keyframes flsh{0%{opacity:0}25%{opacity:.45}100%{opacity:0}}
 
+/* 기술별 고유 연출 (src/data/move-anim.js의 원형에 대응) */
+.scene.quaking{animation:qk .5s ease-in-out}
+@keyframes qk{0%,100%{transform:translate(0,0)}
+  15%{transform:translate(-4px,3px)}35%{transform:translate(4px,-3px)}
+  55%{transform:translate(-3px,-2px)}75%{transform:translate(3px,2px)}}
+.spr.stomp{animation:stomp .45s ease-out}
+@keyframes stomp{0%,100%{transform:translateY(0)}30%{transform:translateY(-14%)}55%{transform:translateY(4%)}}
+
+.beamfx{position:absolute;height:8px;transform-origin:left center;pointer-events:none;z-index:3;
+  border-radius:4px;filter:blur(1px);animation:beamgrow ease-out forwards}
+@keyframes beamgrow{0%{opacity:0;clip-path:inset(0 100% 0 0)}
+  25%{opacity:1;clip-path:inset(0 0 0 0)}80%{opacity:1}100%{opacity:0}}
+
+.rockfx{position:absolute;width:4.5%;padding-bottom:4.5%;border-radius:22%;pointer-events:none;z-index:3;
+  animation:fall ease-in forwards}
+.meteorfx{position:absolute;width:13%;padding-bottom:13%;border-radius:50%;pointer-events:none;z-index:3;
+  filter:blur(.5px);animation:fall ease-in forwards}
+@keyframes fall{0%{opacity:0;transform:translateY(0) rotate(0)}
+  15%{opacity:1}100%{opacity:1;transform:translateY(var(--fall)) rotate(140deg)}}
+
+.slashmark{position:absolute;width:18%;padding-bottom:18%;pointer-events:none;z-index:4;
+  border-left:3px solid;border-top:3px solid;transform:rotate(35deg);
+  animation:mk .43s ease-out forwards}
+.bitemark{position:absolute;width:16%;padding-bottom:16%;pointer-events:none;z-index:4;
+  border:3px dashed;border-radius:50%;animation:mk .43s ease-out forwards}
+@keyframes mk{0%{opacity:0;transform:scale(1.5) rotate(20deg)}
+  30%{opacity:1;transform:scale(1) rotate(35deg)}100%{opacity:0;transform:scale(.9) rotate(40deg)}}
+
+.ringfx{position:absolute;width:20%;padding-bottom:20%;border:3px solid;border-radius:50%;
+  pointer-events:none;z-index:3;animation:rng ease-out forwards}
+@keyframes rng{0%{opacity:0;transform:scale(.3)}35%{opacity:.95}100%{opacity:0;transform:scale(1.9)}}
+
+.arcfx{position:absolute;width:22%;padding-bottom:22%;border-top:4px solid;border-right:4px solid;
+  border-radius:50%;pointer-events:none;z-index:3;animation:arc ease-out forwards}
+@keyframes arc{0%{opacity:0;transform:rotate(-40deg) scale(.6)}
+  40%{opacity:1;transform:rotate(10deg) scale(1)}100%{opacity:0;transform:rotate(40deg) scale(1.2)}}
+
+.risefx{position:absolute;width:5px;height:11px;border-radius:3px;pointer-events:none;z-index:3;
+  animation:rise .95s ease-out forwards}
+@keyframes rise{0%{opacity:0;transform:translateY(6px)}20%{opacity:1}100%{opacity:0;transform:translateY(-46px)}}
+
+.gwave{position:absolute;left:0;right:0;bottom:18%;height:5px;pointer-events:none;z-index:2;
+  opacity:.75;animation:gw ease-out forwards}
+@keyframes gw{0%{opacity:0;transform:scaleX(.2)}30%{opacity:.8}100%{opacity:0;transform:scaleX(1.6)}}
+
 /* 자막 박스 — 실기처럼 2줄, 아래쪽 전체 폭 */
+
 .tbox{margin-top:6px;background:#1a1f2b;border:3px solid var(--boxline);border-radius:6px;
   padding:9px 13px;min-height:62px;font-size:14px;font-weight:700;line-height:1.55;color:#f2f5fa;
   text-shadow:1px 1px 0 rgba(0,0,0,.55)}
@@ -221,6 +267,7 @@ th{background:var(--panel2);color:var(--sub)}td.n{text-align:right;font-variant-
         <option value="4">4배속</option>
         <option value="0">즉시(로그만)</option>
       </select>
+      <label class="chk"><input type="checkbox" id="sfx-on" checked> 효과음</label>
       <button id="watch-close" class="ghost">닫기</button>
     </div>
     <div id="log" style="margin-top:8px"></div>

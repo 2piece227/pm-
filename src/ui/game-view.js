@@ -16,6 +16,7 @@ import { STAT_KO } from '../data/styles.js';
 import { teamSpecies } from '../engine/team-builder.js';
 import { SPECIES_KO, ko } from '../data/ko.js';
 import { playBattleLog, resetScene, say, setSpeedSource, stopPlayback } from './battle-view.js';
+import * as sfx from './sfx.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -400,6 +401,14 @@ export function initGame() {
 
   /* 배속은 값을 읽어가는 함수로 넘긴다 — 재생 도중에 바꿔도 즉시 반영된다 */
   setSpeedSource(() => Number($('speed').value));
+
+  /* 효과음 — 브라우저 정책상 사용자 제스처가 있어야 소리가 난다 */
+  sfx.installUnlockHandler();
+  const sfxToggle = $('sfx-on');
+  if (sfxToggle) {
+    sfx.setEnabled(sfxToggle.checked);
+    sfxToggle.onchange = () => { sfx.unlock(); sfx.setEnabled(sfxToggle.checked); };
+  }
   renderAll();
   /* 디버그용 — 콘솔에서 상태를 들여다볼 수 있게 */
   window.__game = game;

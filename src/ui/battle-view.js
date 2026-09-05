@@ -11,6 +11,8 @@
  */
 import { toKoreanLog } from './protocol-ko.js';
 import { spriteUrl, fallbackSvg, TYPE_FX, REFERENCE_WIDTH } from './sprites.js';
+import { ARCHETYPE_TRAITS } from '../data/move-anim.js';
+import * as sfx from './sfx.js';
 
 const $ = (id) => document.getElementById(id);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -196,6 +198,91 @@ async function projectile(from, to, color, ms) {
   await wait(ms);
 }
 
+/** 광선 — 시전자에서 대상까지 뻗는다 */
+async function beam(from, to, color, ms) {
+  const x1 = from === 'p1' ? 26 : 66, y1 = from === 'p1' ? 62 : 26;
+  const x2 = to === 'p1' ? 26 : 66, y2 = to === 'p1' ? 62 : 26;
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.hypot(dx, dy * 0.5);
+  const ang = (Math.atan2(dy, dx) * 180) / Math.PI;
+  const b = spawn('beamfx', {
+    left: `${x1}%`, top: `${y1}%`, width: `${len}%`,
+    background: `linear-gradient(90deg, ${color}, #fff, ${color})`,
+    transform: `rotate(${ang}deg)`,
+  }, ms + 150);
+  b.style.animationDuration = `${ms}ms`;
+  await wait(ms * 0.8);
+}
+
+/** 위에서 떨어지는 것들 (바위·용성군) */
+async function falling(to, color, count, ms, big = false) {
+  const cx = to === 'p1' ? 24 : 66;
+  const cy = to === 'p1' ? 58 : 20;
+  for (let i = 0; i < count; i++) {
+    const d = spawn(big ? 'meteorfx' : 'rockfx', {
+      left: `${cx + (Math.random() * 14 - 7)}%`,
+      top: '-12%',
+      background: big ? `radial-gradient(circle,#fff,${color})` : color,
+      animationDelay: `${i * (ms / (count + 1))}ms`,
+    }, ms + 500);
+    d.style.setProperty('--fall', `${cy + 14}%`);
+    d.style.animationDuration = `${ms}ms`;
+  }
+  await wait(ms * 0.85);
+}
+
+/** 베는 자국 / 물어뜯기 자국 */
+function mark(side, kind, color) {
+  const cx = side === 'p1' ? 20 : 62;
+  const cy = side === 'p1' ? 54 : 15;
+  spawn(kind === 'bite' ? 'bitemark' : 'slashmark', {
+    left: `${cx}%`, top: `${cy}%`, borderColor: color,
+  }, 430);
+}
+
+/** 상대를 감싸는 고리 (상태이상기) */
+async function ring(to, color, ms) {
+  const cx = to === 'p1' ? 24 : 66;
+  const cy = to === 'p1' ? 62 : 24;
+  const r = spawn('ringfx', { left: `${cx}%`, top: `${cy}%`, borderColor: color }, ms + 250);
+  r.style.animationDuration = `${ms}ms`;
+  await wait(ms * 0.8);
+}
+
+/** 자신에게서 피어오르는 빛 (강화·회복) */
+function rising(side, color) {
+  const cx = side === 'p1' ? 24 : 66;
+  const cy = side === 'p1' ? 62 : 26;
+  for (let i = 0; i < 7; i++) {
+    spawn('risefx', {
+      left: `${cx + (Math.random() * 12 - 6)}%`, top: `${cy}%`,
+      background: color, animationDelay: `${i * 55}ms`,
+    }, 950);
+  }
+}
+
+/** 지면 충격파 (지진) */
+function groundWave(color, ms) {
+  const d = spawn('gwave', { background: color }, ms + 250);
+  d.style.animationDuration = `${ms}ms`;
+}
+
+/** 화면 흔들기 */
+function shakeScreen(ms) {
+  const s = sceneEl();
+  s.classList.add('quaking');
+  setTimeout(() => s.classList.remove('quaking'), ms + 150);
+}
+
+/** 바람 베기 호 */
+async function slashArc(to, color, ms) {
+  const cx = to === 'p1' ? 22 : 64;
+  const cy = to === 'p1' ? 56 : 16;
+  const a = spawn('arcfx', { left: `${cx}%`, top: `${cy}%`, borderColor: color }, ms + 250);
+  a.style.animationDuration = `${ms}ms`;
+  await wait(ms * 0.7);
+}
+
 /** 화면 전체 플래시 (강한 기술) */
 function screenFlash(color, ms) {
   const d = spawn('flash', { background: color }, ms);
@@ -224,6 +311,7 @@ async function playAnim(anim, token) {
   switch (anim.k) {
     case 'send': {
       const el = $(`sp-${anim.side}`);
+      sfx.play('send');
       el.classList.remove('dead');
       el.classList.add('enter');
       await wait(unit * 0.9);
@@ -234,42 +322,84 @@ async function playAnim(anim, token) {
     case 'move': {
       const el = $(`sp-${anim.side}`);
       const color = TYPE_FX[anim.type] || '#fff';
-      const beam = BEAM_TYPES.has(anim.type);
+      const tr = ARCHETYPE_TRAITS[anim.archetype] || ARCHETYPE_TRAITS.contact;
+      const fx = tr.color || color;
 
-      if (beam) {
+      /* --- 시전 동작: 원형마다 다르다 --- */
+      const cast = sfx.castSoundFor(anim.archetype);
+      if (cast) sfx.play(cast);
+
+      if (tr.approach === 'cast') {
         el.classList.add('cast');
-        await wait(unit * 0.45);
+        await wait(unit * 0.4);
         el.classList.remove('cast');
-        if (anim.target) await projectile(anim.side, anim.target, color, unit * 0.75);
+      } else if (tr.approach === 'stomp') {
+        el.classList.add('stomp');
+        await wait(unit * 0.45);
+        el.classList.remove('stomp');
+      } else if (tr.approach === 'none') {
+        el.classList.add('glow');
+        if (tr.rise) rising(anim.side, fx);
+        await wait(unit * 0.7);
+        el.classList.remove('glow');
       } else {
-        /* 물리·접촉 계열은 몸으로 부딪힌다 */
         el.classList.add(anim.side === 'p1' ? 'lunge-r' : 'lunge-l');
-        await wait(unit * 0.42);
+        await wait(unit * 0.4);
         el.classList.remove('lunge-r', 'lunge-l');
       }
 
+      /* --- 투사체 / 낙하물 / 고리 --- */
+      if (anim.target) {
+        if (tr.projectile === 'beam') await beam(anim.side, anim.target, fx, unit * 0.6);
+        else if (tr.projectile === 'ball') await projectile(anim.side, anim.target, fx, unit * 0.7);
+        else if (tr.projectile === 'wind') await slashArc(anim.target, fx, unit * 0.5);
+        else if (tr.drop === 'rocks') await falling(anim.target, fx, 4, unit * 0.6);
+        else if (tr.drop === 'meteor') await falling(anim.target, fx, 1, unit * 0.7, true);
+        else if (tr.ring) await ring(anim.target, fx, unit * 0.6);
+      }
+
+      if (anim.missed) { sfx.play('miss'); break; }
+
+      /* --- 피격 --- */
       if (anim.hit) {
         const t = $(`sp-${anim.hit}`);
-        burst(anim.hit, color);
-        particles(anim.hit, color, beam ? 10 : 7);
-        if (!beam) screenFlash(color, unit * 0.3);
-        t.classList.add('hit', 'hurt');
-        await wait(Math.max(90, unit * 0.35));
-        t.classList.remove('hurt');
-        await wait(Math.max(80, unit * 0.3));
-        t.classList.remove('hit');
+        const times = tr.repeat || 1;
+        if (anim.crit) sfx.play('crit');
+        sfx.play(sfx.impactSoundFor(anim.archetype, anim.eff));
+
+        for (let i = 0; i < times; i++) {
+          burst(anim.hit, fx);
+          particles(anim.hit, fx, tr.shake === 'strong' ? 11 : 7);
+          if (tr.mark) mark(anim.hit, tr.mark, fx);
+          if (tr.flash) screenFlash(fx, unit * 0.28);
+          if (tr.shake === 'screen') shakeScreen(unit * 0.5);
+          if (tr.ground) groundWave(fx, unit * 0.6);
+          t.classList.add('hit', 'hurt');
+          await wait(Math.max(80, unit * 0.3));
+          t.classList.remove('hurt');
+          await wait(Math.max(70, unit * 0.24));
+          t.classList.remove('hit');
+          if (i < times - 1) await wait(Math.max(60, unit * 0.18));
+        }
+        if (anim.eff === 'super') sfx.play('superEffective');
+        else if (anim.eff === 'resisted') sfx.play('resisted');
+        if (tr.siphon) { rising(anim.side, '#5ad06a'); sfx.play('heal'); }
       }
       break;
     }
 
     case 'fx':
       fxText(anim.side, anim.text, anim.color);
+      if (/▲/.test(anim.text)) sfx.play('statUp');
+      else if (/▼/.test(anim.text)) sfx.play('statDown');
+      else if (anim.text.startsWith('+')) sfx.play('heal');
       await wait(unit * 0.5);
       break;
 
     case 'ability': {
       /* 실기는 자막으로 알리므로 화면에선 가볍게 반짝이기만 한다 */
       const el = $(`sp-${anim.side}`);
+      sfx.play('ability');
       el.classList.add('glow');
       await wait(unit * 0.8);
       el.classList.remove('glow');
@@ -277,12 +407,14 @@ async function playAnim(anim, token) {
     }
 
     case 'weather':
+      sfx.play('weather');
       screenFlash('rgba(200,180,120,.35)', unit * 0.6);
       await wait(unit * 0.5);
       break;
 
     case 'faint': {
       const el = $(`sp-${anim.side}`);
+      sfx.play('faint');
       el.classList.add('dead');
       await wait(unit * 1.1);
       break;

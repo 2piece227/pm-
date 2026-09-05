@@ -92,6 +92,13 @@ export const POKEMON_POOL = [
 ];
 
 /**
+ * 도구 사용 여부. **기본은 무도구(false)** — 도구가 붙으면 남은음식 회복 같은
+ * 부수 효과가 매 턴 끼어들어 AI/밸런스 실험의 변인이 늘어난다.
+ * 각 항목의 item 필드는 남겨두되(§0.2 스키마 유지), 켤 때만 쓴다.
+ */
+export const USE_ITEMS = false;
+
+/**
  * 노력치 배분 — role별로 어디에 넣을지만 정하고, 얼마나 넣을지는 소속사 육성 수준이 정한다.
  * evLevel 0 = 무투자(노하우 없음) ~ 1 = 252/252 풀투자(정통 육성).
  */
@@ -104,8 +111,9 @@ const EV_SPREAD = {
 const EV_LABEL = { hp: 'HP', atk: 'Atk', def: 'Def', spa: 'SpA', spd: 'SpD', spe: 'Spe' };
 
 /** 풀 항목 하나 → 포켓몬쇼다운 텍스트 블록 */
-export function toShowdownBlock(entry, { evLevel = 1, level = 50 } = {}) {
-  const lines = [`${entry.species} @ ${entry.item}`, `Ability: ${entry.ability}`, `Level: ${level}`];
+export function toShowdownBlock(entry, { evLevel = 1, level = 50, useItems = USE_ITEMS } = {}) {
+  const head = useItems && entry.item ? `${entry.species} @ ${entry.item}` : entry.species;
+  const lines = [head, `Ability: ${entry.ability}`, `Level: ${level}`];
 
   const invest = Math.round(252 * Math.max(0, Math.min(1, evLevel)));
   if (invest > 0) {
