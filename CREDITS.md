@@ -10,16 +10,22 @@
 
 ## 스프라이트
 
-**출처: [PokeAPI/sprites](https://github.com/PokeAPI/sprites)** — 링크로 참조하며, 이 저장소에 복제하지 않는다.
+**전부 5세대(블랙·화이트) 도트로 통일한다.** 링크로만 참조하며 이 저장소에 복제하지 않는다.
+후보 순서와 URL은 [`src/ui/sprites.js`](src/ui/sprites.js) 한 곳에 모여 있다.
 
-- 기본: `sprites/pokemon/versions/generation-v/black-white/animated/`
-  5세대(블랙·화이트) 애니메이션 도트. 앞모습/뒷모습(`back/`) 모두 사용.
-- 폴백: `sprites/pokemon/other/showdown/`
-  5세대 이후 등장 종은 BW 폴더에 없어서 이쪽으로 자동 대체된다 (예: 타부자고 #1000).
+| 순서 | 출처 | 경로 |
+|---|---|---|
+| 1 | [PokeAPI/sprites](https://github.com/PokeAPI/sprites) | `versions/generation-v/black-white/animated/` (애니메이션) |
+| 2 | [Pokémon Showdown](https://play.pokemonshowdown.com) | `sprites/gen5ani/`, `gen5ani-back/` (같은 그림체, 미러보다 최신) |
+| 3 | PokeAPI/sprites | `versions/generation-v/black-white/` (정지컷) |
+| 4 | Pokémon Showdown | `sprites/gen5/`, `gen5-back/` (정지컷 — 뒷모습 커버리지가 여기만 완전하다) |
 
-> PokeAPI/sprites 저장소 자체는 리소스별로 출처가 다르며, 스프라이트 원본의 지식재산권은
-> Nintendo / Creatures Inc. / GAME FREAK Inc.에 있다. 이 프로젝트는 비영리 팬 프로젝트이며
-> 위 회사들과 아무 관련이 없다.
+`other/showdown/` 폴더는 **쓰지 않는다.** 이름과 달리 BW 도트가 아니라 최신 고해상도
+스프라이트라서, 같은 칸에 넣으면 "고해상도를 축소한 것"처럼 보인다.
+
+> 스프라이트 원본의 지식재산권은 Nintendo / Creatures Inc. / GAME FREAK Inc.에 있다.
+> 5세대 이후 종의 BW 도트는 커뮤니티(Smogon 스프라이트 프로젝트) 제작물이다.
+> 이 프로젝트는 비영리 팬 프로젝트이며 위 회사들과 아무 관련이 없다.
 
 ## 기술 이펙트 애니메이션 · 배틀 효과음
 

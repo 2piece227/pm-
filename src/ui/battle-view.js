@@ -10,7 +10,9 @@
  * 배속은 매 프레임 다시 읽는다 — 재생 도중에 바꿔도 즉시 먹는다.
  */
 import { toKoreanLog } from './protocol-ko.js';
-import { spriteUrl, fallbackSvg, TYPE_FX, REFERENCE_WIDTH } from './sprites.js';
+import {
+  canReadPixels, cropToContent, fallbackSvg, PADDED_SHIFT, spriteCandidates, TYPE_FX, REFERENCE_WIDTH,
+} from './sprites.js';
 import { ANIM_ALIAS, ARCHETYPE_TRAITS } from '../data/move-anim.js';
 import * as sfx from './sfx.js';
 import { loadAnim, playMoveAnim, clearMoveAnim } from './move-fx.js';
@@ -56,38 +58,57 @@ function gate(token) {
 
 /* ---------------- 스프라이트 ---------------- */
 
+/* 늦게 도착한 로드 결과가 이미 바뀐 포켓몬을 덮어쓰지 않도록 세대를 센다 */
+const spriteToken = { p1: 0, p2: 0 };
+
 export function drawSprite(side, speciesName) {
   const el = $(`sp-${side}`);
   el.className = `spr ${side === 'p1' ? 'me' : 'foe'}`;
   shown[side] = speciesName;
+  const myToken = ++spriteToken[side];
   if (!speciesName) {
     el.innerHTML = '';
     el.style.width = '';
     return;
   }
 
-  const { url, fallback } = spriteUrl(speciesName, side);
-  const img = document.createElement('img');
-  img.alt = speciesName;
-  /* 얼음 상태에서 현재 프레임을 캔버스에 떠야 해서 CORS가 필요하다 (raw.githubusercontent는 * 허용) */
-  img.crossOrigin = 'anonymous';
-
-  /* BW 애니메이션 GIF는 내용에 맞게 잘려 있어 종마다 크기가 다르다.
-     "픽셀당 배율"을 일정하게 유지해야 실제 덩치 차이가 살아난다. */
+  /* BW 스프라이트는 종마다 덩치가 다르다. "픽셀당 배율"을 일정하게 유지해야
+     실제 덩치 차이가 살아난다 (sprites.js의 REFERENCE_WIDTH 주석 참고) */
   const basePct = side === 'p1' ? 30 : 24;
-  img.onload = () => {
-    if (img.naturalWidth) el.style.width = `${(basePct * img.naturalWidth) / REFERENCE_WIDTH}%`;
-  };
-  let triedFallback = false;
-  img.onerror = () => {
-    if (!triedFallback && fallback) { triedFallback = true; img.src = fallback; return; }
+  tryCandidates(el, side, myToken, speciesName, spriteCandidates(speciesName, side), 0, basePct);
+}
+
+/** 후보를 위에서부터 하나씩 시도한다. 다 실패하면 실루엣 */
+function tryCandidates(el, side, token, speciesName, cands, i, basePct) {
+  if (token !== spriteToken[side]) return;
+  if (i >= cands.length) {
     el.innerHTML = fallbackSvg();
     el.style.width = `${basePct}%`;
+    return;
+  }
+
+  const { url, kind } = cands[i];
+  const img = new Image();
+  img.alt = speciesName;
+  /* 여백 자르기와 얼음 상태 캡처에 캔버스를 쓰므로 CORS가 필요한데, 쇼다운 서버는
+     허용 헤더를 안 보낸다. 거기에 crossOrigin을 붙이면 로드 자체가 실패한다. */
+  if (canReadPixels(url)) img.crossOrigin = 'anonymous';
+  img.onerror = () => tryCandidates(el, side, token, speciesName, cands, i + 1, basePct);
+  img.onload = () => {
+    if (token !== spriteToken[side]) return;
+    if (!img.naturalWidth) { tryCandidates(el, side, token, speciesName, cands, i + 1, basePct); return; }
+
+    /* 정지 PNG는 96x96 고정 캔버스라 여백이 붙어 있다. 잘라내야 잘린 GIF와 같은 잣대가 된다 */
+    const cropped = kind === 'static' ? cropToContent(img) : null;
+    const node = cropped || img;
+    const padded = kind === 'static' && !cropped;   // 못 자른 경우 (쇼다운 소스)
+    node.style.transform = padded ? `translateY(${PADDED_SHIFT[side]})` : '';
+
+    el.innerHTML = '';
+    el.appendChild(node);
+    el.style.width = `${(basePct * (cropped ? cropped.width : img.naturalWidth)) / REFERENCE_WIDTH}%`;
   };
   img.src = url;
-
-  el.innerHTML = '';
-  el.appendChild(img);
 }
 
 /* ---------------- HP 박스 (실기 배치) ---------------- */
@@ -475,6 +496,7 @@ function freezeSprite(el, on) {
     if (img) img.style.display = '';
     return;
   }
+  /* 정지 스프라이트(캔버스)는 애초에 안 움직이니 그대로 두면 된다 */
   if (frozen || !img) return;
   /* 아직 GIF가 안 내려왔으면 다 받은 뒤에 다시 시도한다 */
   if (!img.naturalWidth) {
