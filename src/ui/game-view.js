@@ -15,7 +15,7 @@ import { STAT_KEYS, displayStats } from '../data/agencies.js';
 import { STAT_KO } from '../data/styles.js';
 import { teamSpecies } from '../engine/team-builder.js';
 import { SPECIES_KO, ko } from '../data/ko.js';
-import { playBattleLog, resetScene, say, setSpeedSource, stopPlayback } from './battle-view.js';
+import { isPaused, playBattleLog, resetScene, say, setPaused, setSpeedSource, stopPlayback } from './battle-view.js';
 import * as sfx from './sfx.js';
 
 const $ = (id) => document.getElementById(id);
@@ -249,6 +249,12 @@ function renderMatches() {
   });
 }
 
+/** 화면 구석 이름표에 쓸 트레이너 정보 */
+function trainerLabel(t) {
+  const ag = t?.agencyId ? findAgency(game.league, t.agencyId) : null;
+  return { name: t?.name || '', agency: ag?.name || '' };
+}
+
 async function watchMatch(tournament, index) {
   if (watching) return;
   watching = true;
@@ -263,7 +269,7 @@ async function watchMatch(tournament, index) {
 
   /* 경기 시점의 스냅샷으로 재생한다 — 지금 상태로 다시 돌리면 브래킷과 다른 승자가 나온다 */
   const replay = replayMatch(m);
-  await playBattleLog(replay.log, { p1: a.name, p2: b.name });
+  await playBattleLog(replay.log, { p1: trainerLabel(a), p2: trainerLabel(b) });
   const w = findTrainer(game.league, replay.winnerId);
   say(`▶ ${w ? w.name : '무승부'} 승리! (${replay.turns}턴)`);
   watching = false;
@@ -393,6 +399,13 @@ export function initGame() {
   game = createGame({ seed: 20260905 });
   initTabs();
   $('btn-day').onclick = nextDay;
+  const pauseBtn = $('watch-pause');
+  if (pauseBtn) {
+    const paint = () => { pauseBtn.textContent = isPaused() ? '▶ 계속' : '⏸ 일시정지'; };
+    pauseBtn.onclick = () => { setPaused(!isPaused()); paint(); };
+    paint();
+  }
+
   $('watch-close').onclick = () => {
     stopPlayback();
     watching = false;

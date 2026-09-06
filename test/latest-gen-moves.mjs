@@ -9,7 +9,7 @@
  */
 import { Dex } from '@pkmn/dex';
 import { MOVE_KO, MOVE_TYPE } from '../src/data/ko.js';
-import { MOVE_ANIM, TYPE_DEFAULT_ANIM, animArchetype } from '../src/data/move-anim.js';
+import { ANIM_ALIAS, MOVE_ANIM, animArchetype } from '../src/data/move-anim.js';
 import { animJsonUrl } from '../src/data/battle-assets.js';
 
 /* 8·9세대 대표 기술 — 시그니처기·범용기·랭크업기를 섞었다 */
@@ -35,17 +35,22 @@ const rows = [];
 async function check(name, gen) {
   const mv = Dex.moves.get(name);
   const known = mv.exists;
-  let anim = false;
+  /* move-fx.js의 loadAnim과 같은 판정 — 배열/flat/keyed 세 형태를 다 받고,
+     graphic이 비어 있어도(스프라이트만 움직이는 연출) 정상 데이터로 본다 */
+  let anim = false, viaAlias = false;
+  const source = ANIM_ALIAS[name] || name;
+  viaAlias = source !== name;
   try {
-    const res = await fetch(animJsonUrl(name), { method: 'GET' });
+    const res = await fetch(animJsonUrl(source), { method: 'GET' });
     if (res.ok) {
       const raw = await res.json();
-      const node = Array.isArray(raw.frames) ? raw : raw['0'] || raw[Object.keys(raw)[0]];
-      anim = !!(node && Array.isArray(node.frames) && node.graphic);
+      const node = Array.isArray(raw) ? raw[0]
+        : Array.isArray(raw.frames) ? raw : raw['0'] || raw[Object.keys(raw)[0]];
+      anim = !!(node && Array.isArray(node.frames) && node.frames.length);
     }
   } catch { /* 네트워크 실패는 없음으로 본다 */ }
   rows.push({
-    gen, name, known,
+    gen, name, known, viaAlias,
     type: known ? mv.type.toLowerCase() : '-',
     ko: !!MOVE_KO[name],
     koType: !!MOVE_TYPE[name],
@@ -63,7 +68,7 @@ console.log(pad('기술', 22) + pad('세대', 5) + pad('엔진', 6) + pad('애�
 console.log('-'.repeat(58));
 for (const r of rows) {
   console.log(pad(r.name, 22) + pad(r.gen, 5) + pad(r.known ? 'O' : 'X', 6) +
-              pad(r.anim ? 'O' : 'X', 6) + pad(r.ko ? 'O' : '-', 6) +
+              pad(r.anim ? (r.viaAlias ? '△' : 'O') : 'X', 6) + pad(r.ko ? 'O' : '-', 6) +
               pad(r.archetype + (r.inTable ? '' : '*'), 10));
 }
 
@@ -72,7 +77,7 @@ const sum = (f) => rows.filter(f).length;
 console.log('\n' + '='.repeat(58));
 console.log(`총 ${n}종 (8세대 ${GEN8.length} / 9세대 ${GEN9.length})`);
 console.log(`  엔진이 아는 기술        ${sum((r) => r.known)}/${n}`);
-console.log(`  애니메이션 데이터 있음  ${sum((r) => r.anim)}/${n}`);
+console.log(`  애니메이션 데이터 있음  ${sum((r) => r.anim)}/${n}   (△ ${sum((r) => r.viaAlias && r.anim)}건은 비슷한 기술로 대체)`);
 console.log(`  한글 이름표 있음        ${sum((r) => r.ko)}/${n}   ← 없으면 자막이 영문`);
 console.log(`  원형 표에 등록됨        ${sum((r) => r.inTable)}/${n}   (* = 타입 기본값으로 떨어짐)`);
 

@@ -6,6 +6,8 @@
  * tier — 종족 자체의 강함. 소속사/트레이너 등급에 따라 어느 tier를 뽑을지가 갈린다.
  *   3 = 의사전설·최상위   2 = 준수한 주력   1 = 초반 도로 수준(로켓단 "조무래기 양성"용)
  *
+ * latest — 8·9세대 종. "최신 세대 위주" 프로필(team-builder의 latestOnly)이 이것만 골라 쓴다.
+ *
  * role — 노력치를 어디에 넣을지 결정한다. (SPEC §13-3 "노력치" 레버)
  *   phys 물리 어태커 / spec 특수 어태커 / wall 내구형
  *   소속사의 육성 노하우(evLevel)에 따라 같은 종족이라도 노력치가 다르게 박힌다 —
@@ -33,6 +35,48 @@ export const POKEMON_POOL = [
     moves: ['Earthquake', 'Stone Edge', 'U-turn', 'Swords Dance'] },
   { species: 'Gholdengo', tier: 3, role: 'spec', ability: 'Good as Gold', nature: 'Modest', item: 'Leftovers',
     moves: ['Shadow Ball', 'Make It Rain', 'Nasty Plot', 'Focus Blast'] },
+
+  /* ---------- tier 3: 최신 세대(8·9세대) ----------
+     `latest: true`는 "최신 세대 위주로 파티를 짜라"는 프로필이 골라 쓴다.
+     8·9세대 기술 연출을 실제 배틀에서 바로 확인하려고 넣었다. (team-builder의 latestOnly) */
+  { species: 'Great Tusk', tier: 3, latest: true, role: 'phys', ability: 'Protosynthesis', nature: 'Jolly', item: 'Leftovers',
+    moves: ['Headlong Rush', 'Close Combat', 'Ice Spinner', 'Rapid Spin'] },
+  { species: 'Iron Valiant', tier: 3, latest: true, role: 'phys', ability: 'Quark Drive', nature: 'Jolly', item: 'Life Orb',
+    moves: ['Moonblast', 'Close Combat', 'Knock Off', 'Swords Dance'] },
+  { species: 'Kingambit', tier: 3, latest: true, role: 'phys', ability: 'Supreme Overlord', nature: 'Adamant', item: 'Leftovers',
+    moves: ['Kowtow Cleave', 'Iron Head', 'Sucker Punch', 'Swords Dance'] },
+  { species: 'Baxcalibur', tier: 3, latest: true, role: 'phys', ability: 'Thermal Exchange', nature: 'Jolly', item: 'Leftovers',
+    moves: ['Glaive Rush', 'Icicle Crash', 'Dragon Dance', 'Earthquake'] },
+  { species: 'Annihilape', tier: 3, latest: true, role: 'phys', ability: 'Defiant', nature: 'Adamant', item: 'Leftovers',
+    moves: ['Rage Fist', 'Drain Punch', 'Bulk Up', 'Close Combat'] },
+  { species: 'Ursaluna-Bloodmoon', tier: 3, latest: true, role: 'spec', ability: "Mind's Eye", nature: 'Modest', item: 'Life Orb',
+    moves: ['Blood Moon', 'Earth Power', 'Vacuum Wave', 'Hyper Voice'] },
+
+  /* ---------- tier 2: 최신 세대 ---------- */
+  { species: 'Cinderace', tier: 2, latest: true, role: 'phys', ability: 'Libero', nature: 'Jolly', item: 'Life Orb',
+    moves: ['Pyro Ball', 'High Jump Kick', 'U-turn', 'Sucker Punch'] },
+  { species: 'Meowscarada', tier: 2, latest: true, role: 'phys', ability: 'Protean', nature: 'Jolly', item: 'Life Orb',
+    moves: ['Flower Trick', 'Knock Off', 'U-turn', 'Play Rough'] },
+  { species: 'Quaquaval', tier: 2, latest: true, role: 'phys', ability: 'Moxie', nature: 'Adamant', item: 'Life Orb',
+    moves: ['Aqua Step', 'Close Combat', 'Ice Spinner', 'Swords Dance'] },
+  { species: 'Skeledirge', tier: 2, latest: true, role: 'spec', ability: 'Unaware', nature: 'Bold', item: 'Leftovers',
+    moves: ['Torch Song', 'Shadow Ball', 'Slack Off', 'Hex'] },
+  { species: 'Ceruledge', tier: 2, latest: true, role: 'phys', ability: 'Flash Fire', nature: 'Adamant', item: 'Life Orb',
+    moves: ['Bitter Blade', 'Shadow Sneak', 'Swords Dance', 'Close Combat'] },
+  { species: 'Glimmora', tier: 2, latest: true, role: 'spec', ability: 'Toxic Debris', nature: 'Timid', item: 'Life Orb',
+    moves: ['Power Gem', 'Sludge Wave', 'Earth Power', 'Mortal Spin'] },
+  { species: 'Tinkaton', tier: 2, latest: true, role: 'phys', ability: 'Mold Breaker', nature: 'Jolly', item: 'Leftovers',
+    moves: ['Gigaton Hammer', 'Play Rough', 'Knock Off', 'Swords Dance'] },
+
+  /* ---------- tier 1: 최신 세대 ---------- */
+  { species: 'Lokix', tier: 1, latest: true, role: 'phys', ability: 'Tinted Lens', nature: 'Jolly', item: 'Life Orb',
+    moves: ['First Impression', 'Leech Life', 'Sucker Punch', 'U-turn'] },
+  { species: 'Pawmot', tier: 1, latest: true, role: 'phys', ability: 'Volt Absorb', nature: 'Jolly', item: 'Leftovers',
+    moves: ['Double Shock', 'Close Combat', 'Mach Punch', 'Nuzzle'] },
+  { species: 'Klawf', tier: 1, latest: true, role: 'phys', ability: 'Anger Shell', nature: 'Adamant', item: 'Leftovers',
+    moves: ['Stone Edge', 'Crabhammer', 'Swords Dance', 'X-Scissor'] },
+  { species: 'Bombirdier', tier: 1, latest: true, role: 'phys', ability: 'Big Pecks', nature: 'Adamant', item: 'Life Orb',
+    moves: ['Brave Bird', 'Knock Off', 'Rock Slide', 'U-turn'] },
 
   /* ---------- tier 2: 준수한 주력 ---------- */
   { species: 'Corviknight', tier: 2, role: 'wall', ability: 'Pressure', nature: 'Impish', item: 'Leftovers',

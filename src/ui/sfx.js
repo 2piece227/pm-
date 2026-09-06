@@ -31,7 +31,7 @@ export const SAMPLE_URLS = {
   statUp: seUrl('stat_up'),
   statDown: seUrl('stat_down'),
   heal: seUrl('restore'),
-  faint: seUrl('faint'),
+  faint: seUrl('faint'),          // 쓰러질 때 미끄러져 내려가는 소리 (울음소리 뒤에 깔린다)
   lowHp: seUrl('low_hp'),         // HP가 빨간 구간에 들어갈 때
   send: seUrl('pb_rel'),
   win: seUrl('level_up_fanfare'),
@@ -75,9 +75,17 @@ export function installUnlockHandler() {
 
 /* ---------------- 재생 ---------------- */
 
-const failed = new Set(); // 한 번 실패한 URL은 다시 시도하지 않는다
+const failed = new Set();   // 한 번 실패한 URL은 다시 시도하지 않는다
+const playing = new Map();  // key → 지금 울리고 있는 소스
 
-/** URL 하나를 받아 재생 */
+/**
+ * URL 하나를 받아 재생.
+ *
+ * **같은 소리가 이미 울리고 있으면 끊고 다시 튼다.** 원본 데이터는 한 기술 안에서
+ * 같은 음원을 음정만 바꿔 여러 번 부르는데(스톤샤워는 90/100/110으로 3번),
+ * 그냥 겹쳐 틀면 1.8초짜리가 3겹으로 쌓여 **바람 소리 같은 웅웅거림**이 된다.
+ * 끊고 다시 틀면 의도대로 "돌 세 개가 차례로 떨어지는" 소리가 된다.
+ */
 async function playUrl(key, url, { volume = 1, pitch = 1 } = {}) {
   if (failed.has(key)) return false;
   try {
@@ -86,18 +94,29 @@ async function playUrl(key, url, { volume = 1, pitch = 1 } = {}) {
       if (!res.ok) throw new Error(String(res.status));
       buffers.set(key, await ctx.decodeAudioData(await res.arrayBuffer()));
     }
+    const prev = playing.get(key);
+    if (prev) { try { prev.stop(); } catch { /* 이미 끝났으면 무시 */ } }
+
     const src = ctx.createBufferSource();
     src.buffer = buffers.get(key);
     src.playbackRate.value = pitch;
     const g = ctx.createGain();
     g.gain.value = volume;
     src.connect(g); g.connect(master);
+    src.onended = () => { if (playing.get(key) === src) playing.delete(key); };
+    playing.set(key, src);
     src.start();
     return true;
   } catch {
     failed.add(key);
     return false;
   }
+}
+
+/** 재생 중인 소리를 전부 끊는다 (배틀을 닫거나 다시 시작할 때) */
+export function stopAll() {
+  for (const src of playing.values()) { try { src.stop(); } catch { /* 무시 */ } }
+  playing.clear();
 }
 
 function ready() {

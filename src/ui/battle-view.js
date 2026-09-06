@@ -11,7 +11,7 @@
  */
 import { toKoreanLog } from './protocol-ko.js';
 import { spriteUrl, fallbackSvg, TYPE_FX, REFERENCE_WIDTH } from './sprites.js';
-import { ARCHETYPE_TRAITS } from '../data/move-anim.js';
+import { ANIM_ALIAS, ARCHETYPE_TRAITS } from '../data/move-anim.js';
 import * as sfx from './sfx.js';
 import { loadAnim, playMoveAnim, clearMoveAnim } from './move-fx.js';
 import { dexNumOf } from './sprites.js';
@@ -32,7 +32,27 @@ const spd = () => {
 
 /* 재생 중단 신호 (닫기/새 배틀) */
 let runToken = 0;
-export function stopPlayback() { runToken++; }
+export function stopPlayback() { runToken++; setPaused(false); }
+
+/* ---------------- 일시정지 ---------------- */
+
+let paused = false;
+let resumeWaiters = [];
+
+export function isPaused() { return paused; }
+
+/** 일시정지 토글. 푸는 순간 기다리던 지점들이 한꺼번에 깨어난다 */
+export function setPaused(v) {
+  paused = !!v;
+  if (!paused) { const w = resumeWaiters; resumeWaiters = []; for (const r of w) r(); }
+  return paused;
+}
+
+/** 멈춰 있으면 풀릴 때까지 기다린다. 재생이 중단되면 그냥 빠져나간다 */
+function gate(token) {
+  if (!paused || token !== runToken) return null;
+  return new Promise((r) => resumeWaiters.push(r));
+}
 
 /* ---------------- 스프라이트 ---------------- */
 
@@ -49,6 +69,8 @@ export function drawSprite(side, speciesName) {
   const { url, fallback } = spriteUrl(speciesName, side);
   const img = document.createElement('img');
   img.alt = speciesName;
+  /* 얼음 상태에서 현재 프레임을 캔버스에 떠야 해서 CORS가 필요하다 (raw.githubusercontent는 * 허용) */
+  img.crossOrigin = 'anonymous';
 
   /* BW 애니메이션 GIF는 내용에 맞게 잘려 있어 종마다 크기가 다르다.
      "픽셀당 배율"을 일정하게 유지해야 실제 덩치 차이가 살아난다. */
@@ -89,7 +111,8 @@ function buildHpBox(side, f) {
     '<div class="hpb-n"><span><b class="nm"></b><i class="st"></i></span><em class="lv"></em></div>' +
     '<div class="hpb-row"><span class="hplabel">HP</span>' +
     '<span class="hpb-bar"><i></i></span></div>' +
-    '<div class="hpb-num"></div><div class="hpb-boost"></div>';
+    '<div class="hpb-num"></div><div class="hpb-boost"></div>' +
+    '<div class="hpb-balls"></div>';
 
   const st = {
     key: null,
@@ -102,6 +125,8 @@ function buildHpBox(side, f) {
     bar: box.querySelector('.hpb-bar i'),
     num: box.querySelector('.hpb-num'),
     boost: box.querySelector('.hpb-boost'),
+    balls: box.querySelector('.hpb-balls'),
+    ballKey: '',
   };
   hpBox[side] = st;
   return st;
@@ -164,7 +189,32 @@ function drawHpBox(side, f) {
   st.boost.textContent = f.boosts || '';
   st.boost.style.display = f.boosts ? '' : 'none';
 
+  /* 남은 포켓몬 수 — 실기처럼 몬스터볼 줄로 보여준다 */
+  const total = f.total ?? 0;
+  const left = f.left ?? total;
+  const ballKey = `${left}/${total}`;
+  if (st.ballKey !== ballKey) {
+    st.ballKey = ballKey;
+    st.balls.innerHTML = Array.from({ length: total },
+      (_, i) => `<i class="${i < left ? '' : 'out'}"></i>`).join('');
+    st.balls.style.display = total ? '' : 'none';
+  }
+
+  applyStatusLook(side, f.statusCode || null);
   return tweenHp(side, st, f);
+}
+
+/** 화면 구석의 트레이너 이름표. 이게 있어야 어느 쪽이 누구 포켓몬인지 한눈에 잡힌다 */
+export function drawTrainers(names) {
+  for (const side of ['p1', 'p2']) {
+    const el = $(`tn-${side}`);
+    if (!el) continue;
+    const v = names?.[side];
+    const name = typeof v === 'string' ? v : v?.name || '';
+    const agency = typeof v === 'string' ? '' : v?.agency || '';
+    el.innerHTML = name ? `<b>${name}</b>${agency ? `<em>${agency}</em>` : ''}` : '';
+    el.style.display = name ? '' : 'none';
+  }
 }
 
 /** 화면을 갱신한다. HP 바가 다 깎일 때까지 기다리려면 반환값을 await하면 된다 */
@@ -386,6 +436,66 @@ export function writeLine(line) {
 
 export function clearLog() { $('log').innerHTML = ''; }
 
+/* ---------------- 상태이상 ---------------- */
+
+/**
+ * 상태이상 → 실제 게임의 공통 애니메이션. 전용 음원이 딸려 있다.
+ * 걸릴 때 한 번, 그리고 지속 피해가 들어올 때마다 매 턴 다시 돈다 (실기와 같다).
+ */
+const STATUS_ANIM = {
+  brn: 'common-burn',
+  psn: 'common-poison',
+  tox: 'common-poison',
+  par: 'common-paralysis',
+  slp: 'common-sleep',
+  frz: 'common-frozen',
+};
+
+/** 상태이상이 걸려 있는 동안 스프라이트에 계속 걸어두는 표시 */
+const STATUS_CLASS = ['st-brn', 'st-psn', 'st-tox', 'st-par', 'st-slp', 'st-frz'];
+
+function applyStatusLook(side, code) {
+  const el = $(`sp-${side}`);
+  if (!el) return;
+  el.classList.remove(...STATUS_CLASS);
+  if (code && STATUS_ANIM[code]) el.classList.add(`st-${code}`);
+  freezeSprite(el, code === 'frz');
+}
+
+/**
+ * 얼음 상태는 실기에서 **도트가 멈춘다.**
+ * 우리 스프라이트는 GIF라 재생을 멈출 방법이 없어서, 지금 프레임을 캔버스에 떠서 바꿔 끼운다.
+ * (CORS가 막히면 색 보정만 남는다 — 그래도 얼어붙은 티는 난다)
+ */
+function freezeSprite(el, on) {
+  const img = el.querySelector('img');
+  const frozen = el.querySelector('canvas.frozen');
+  if (!on) {
+    if (frozen) frozen.remove();
+    if (img) img.style.display = '';
+    return;
+  }
+  if (frozen || !img) return;
+  /* 아직 GIF가 안 내려왔으면 다 받은 뒤에 다시 시도한다 */
+  if (!img.naturalWidth) {
+    img.addEventListener('load', () => {
+      if (el.classList.contains('st-frz')) freezeSprite(el, true);
+    }, { once: true });
+    return;
+  }
+  try {
+    const cv = document.createElement('canvas');
+    cv.className = 'frozen';
+    cv.width = img.naturalWidth;
+    cv.height = img.naturalHeight;
+    cv.getContext('2d').drawImage(img, 0, 0);
+    cv.style.width = '100%';
+    cv.style.height = 'auto';
+    el.appendChild(cv);
+    img.style.display = 'none';
+  } catch { /* 캔버스가 오염됐으면 색 보정만으로 간다 */ }
+}
+
 /* ---------------- 연출 재생 ---------------- */
 
 /**
@@ -418,11 +528,13 @@ async function playAnim(anim, token, onImpact) {
       const color = TYPE_FX[anim.type] || '#fff';
 
       /* 실제 게임 기술 애니메이션이 있으면 그걸 쓴다. 없는 기술만 아래 CSS 연출로 떨어진다. */
-      const realAnim = anim.moveEn ? await loadAnim(anim.moveEn) : null;
+      const animName = anim.moveEn ? (ANIM_ALIAS[anim.moveEn] || anim.moveEn) : null;
+      const realAnim = animName ? await loadAnim(animName) : null;
       if (realAnim && anim.target) {
         const myToken = runToken;
-        /* 시전 모션은 그대로 두고(몸이 움직여야 자연스럽다) 그 위에 이펙트를 얹는다 */
-        const lunge = ARCHETYPE_TRAITS[anim.archetype]?.approach;
+        /* 시전 모션은 그대로 두고(몸이 움직여야 자연스럽다) 그 위에 이펙트를 얹는다.
+           단, 원본 데이터가 스프라이트를 직접 몰고 있으면(바디프레스처럼) 겹치면 안 된다 */
+        const lunge = realAnim.drivesUser ? null : ARCHETYPE_TRAITS[anim.archetype]?.approach;
         if (lunge === 'lunge') {
           el.classList.add(anim.side === 'p1' ? 'lunge-r' : 'lunge-l');
           setTimeout(() => el.classList.remove('lunge-r', 'lunge-l'), Math.max(90, unit * 0.4));
@@ -540,9 +652,25 @@ async function playAnim(anim, token, onImpact) {
 
     case 'faint': {
       const el = $(`sp-${anim.side}`);
-      sfx.play('faint');
+      /* 실기는 쓰러질 때 그 포켓몬이 운다. 미끄러져 내려가는 소리는 그 뒤에 깔린다 */
+      sfx.playCry(dexNumOf(anim.species));
+      setTimeout(() => sfx.play('faint'), Math.max(60, unit * 0.2));
+      applyStatusLook(anim.side, null);
       el.classList.add('dead');
       await wait(unit * 1.1);
+      break;
+    }
+
+    case 'status': {
+      const name = STATUS_ANIM[anim.status];
+      const common = name ? await loadAnim(name) : null;
+      if (common) {
+        const myToken = runToken;
+        await playMoveAnim(sceneEl(), common, anim.side, anim.side, Math.max(16, 46 / spd()), () => myToken === runToken);
+      } else {
+        fxText(anim.side, anim.text, '#d8a0e8');
+        await wait(unit * 0.5);
+      }
       break;
     }
 
@@ -556,11 +684,13 @@ export function resetScene() {
   clearMoveAnim($('scene'));
   shown.p1 = null;
   shown.p2 = null;
+  sfx.stopAll();
   for (const side of ['p1', 'p2']) {
     if (hpBox[side]) clearInterval(hpBox[side].raf);
     hpBox[side] = null;
     const b = $(`hp-${side}`);
     if (b) b.innerHTML = '';
+    applyStatusLook(side, null);
   }
   drawSprite('p1', null);
   drawSprite('p2', null);
@@ -574,10 +704,14 @@ export function resetScene() {
  */
 export async function playBattleLog(protocolLog, names, think = []) {
   const token = ++runToken;
+  setPaused(false);
+  drawTrainers(names);
   const lines = toKoreanLog(protocolLog, names, think);
 
   for (const line of lines) {
     if (token !== runToken) return; // 중단됨
+    await gate(token);              // 일시정지
+    if (token !== runToken) return;
     writeLine(line);
     if (line.cls === 'l-think') continue;
 

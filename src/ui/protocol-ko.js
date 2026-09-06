@@ -37,15 +37,24 @@ function parseIdent(raw) {
   return { slot: m[1] + (m[2] || 'a'), side: m[1], name: m[3] };
 }
 
-/** `43/183` | `0 fnt` | `120/183 brn` → { pct, cur, max, status } */
+/**
+ * `43/183` | `0 fnt` | `120/183 brn` → { pct, cur, max, status }
+ * 쓰러진 줄(`0 fnt`)에는 최대치가 안 실려 있다. 그대로 두면 HP 박스에 "0/null"이 뜬다.
+ */
 function parseCond(cond) {
   if (!cond) return null;
-  if (/\bfnt\b/.test(cond)) return { pct: 0, cur: 0, max: null, status: null };
+  if (/\bfnt\b/.test(cond)) return { pct: 0, cur: 0, max: undefined, status: null };
   const m = /^(\d+)\/(\d+)(?:\s+(\w+))?/.exec(cond);
   if (!m) return null;
   const cur = Number(m[1]);
   const max = Number(m[2]);
   return { pct: Math.max(0, Math.round((cur / max) * 100)), cur, max, status: m[3] || null };
+}
+
+/** 최대치가 안 실린 줄(쓰러짐)에서는 이전 값을 이어 쓴다 */
+function keepMax(cond, prev) {
+  if (!cond) return cond;
+  return cond.max == null ? { ...cond, max: prev?.max ?? null } : cond;
 }
 
 /** `Garchomp, L50, M` → { species, level, gender } */
@@ -84,6 +93,9 @@ function fromSource(parts) {
 
 /* ---------------- 본체 ---------------- */
 
+/** names는 `'한연우'`도 되고 `{ name, agency }`도 된다 */
+const trainerName = (v) => (typeof v === 'string' ? v : v?.name || '');
+
 export function toKoreanLog(protocolLog, names, think = []) {
   const lines = protocolLog.slice();
   const out = [];
@@ -92,6 +104,8 @@ export function toKoreanLog(protocolLog, names, think = []) {
   const hp = {};       // slot → { pct, cur, max }
   const status = {};   // slot → 'brn' | ...
   const boosts = {};   // slot → { atk: +2 }
+  const roster = { p1: 6, p2: 6 };   // |teamsize|로 채운다
+  const downed = { p1: 0, p2: 0 };   // 쓰러진 수 — 남은 몬스터볼 표시용
   let weather = null;
   let pending = null;  // 진행 중인 공격기
   let turn = 0;
@@ -126,7 +140,8 @@ export function toKoreanLog(protocolLog, names, think = []) {
       const m = mon[slot];
       const h = hp[slot];
       f[side] = {
-        name: m ? monKo(m.ident) : '—',
+        /* HP 박스는 실기처럼 종족명만 쓴다. 누구 것인지는 화면 구석 트레이너 이름표가 알려준다 */
+        name: m ? ko(SPECIES_KO, m.ident.name) : '—',
         species: m?.species || null,
         types: SPECIES_TYPES[m?.species] || '',
         level: m?.level ?? 50,
@@ -135,12 +150,17 @@ export function toKoreanLog(protocolLog, names, think = []) {
         cur: h?.cur ?? null,
         max: h?.max ?? null,
         status: STATUS_BADGE[status[slot]] || null,
+        statusCode: status[slot] || null,   // 지속 연출(화상 불꽃·독 거품·얼음)을 고르는 데 쓴다
         boosts: Object.entries(boosts[slot] || {})
           .filter(([, v]) => v !== 0)
           .map(([k, v]) => `${ko(BOOST_KO, k)}${v > 0 ? '+' : ''}${v}`)
           .join(' '),
       };
     }
+    f.p1.left = Math.max(0, roster.p1 - downed.p1);
+    f.p2.left = Math.max(0, roster.p2 - downed.p2);
+    f.p1.total = roster.p1;
+    f.p2.total = roster.p2;
     f.weather = weather;
     return f;
   };
@@ -159,6 +179,13 @@ export function toKoreanLog(protocolLog, names, think = []) {
     }
 
     switch (type) {
+      case 'teamsize': {
+        const side = parts[1];
+        const n = Number(parts[2]);
+        if ((side === 'p1' || side === 'p2') && n > 0) roster[side] = n;
+        break;
+      }
+
       case 'turn': {
         turn = Number(parts[1]);
         push('l-turn', `턴 ${turn}`);
@@ -174,12 +201,12 @@ export function toKoreanLog(protocolLog, names, think = []) {
         const det = parseDetails(parts[2]);
         const cond = parseCond(parts[3]);
         mon[id.slot] = { ident: id, ...det };
-        hp[id.slot] = cond || { pct: 100, cur: null, max: null };
+        hp[id.slot] = keepMax(cond, hp[id.slot]) || { pct: 100, cur: null, max: null };
         status[id.slot] = cond?.status || null;
         boosts[id.slot] = {};
 
         const name = ko(SPECIES_KO, id.name);
-        const trainer = names[id.side] || id.side;
+        const trainer = trainerName(names[id.side]) || id.side;
         /* 실제 게임 문구: 내 쪽은 "가랏!", 상대 쪽은 "○○은(는) ○○를 내보냈다!" */
         const msg = id.side === 'p1'
           ? `가랏! ${name}!`
@@ -223,7 +250,7 @@ export function toKoreanLog(protocolLog, names, think = []) {
         if (!id) break;
         const cond = parseCond(parts[2]);
         const before = hp[id.slot]?.pct ?? 100;
-        hp[id.slot] = cond || hp[id.slot];
+        hp[id.slot] = keepMax(cond, hp[id.slot]) || hp[id.slot];
         if (cond?.status !== undefined) status[id.slot] = cond.status ?? status[id.slot];
         const after = hp[id.slot]?.pct ?? before;
         const delta = after - before;
@@ -245,13 +272,17 @@ export function toKoreanLog(protocolLog, names, think = []) {
               : `${label}!\n${eunNeun(name)} 데미지를 입었다!`;
           }
           const label = ko(ABILITY_KO, ko(ITEM_KO, ko(MOVE_KO, src)));
+          /* 화상·독 같은 지속 피해는 실기처럼 **매 턴 그 상태이상 연출이 다시 돈다** */
+          const tick = STATUS_TICK[src] ? src : null;
           push('l-gold', `  ${label}: ${name}  ${before}% → ${after}%`, {
             msg,
-            anim: {
-              k: 'fx', side: id.side,
-              text: `${delta > 0 ? '+' : ''}${delta}%`,
-              color: delta > 0 ? '#5ad06a' : '#e8705a',
-            },
+            anim: tick
+              ? { k: 'status', side: id.side, status: tick, text: `${delta}%` }
+              : {
+                k: 'fx', side: id.side,
+                text: `${delta > 0 ? '+' : ''}${delta}%`,
+                color: delta > 0 ? '#5ad06a' : '#e8705a',
+              },
           });
           break;
         }
@@ -288,7 +319,7 @@ export function toKoreanLog(protocolLog, names, think = []) {
         const cond = parseCond(parts[2]);
         if (!id || !cond) break;
         const before = hp[id.slot]?.pct ?? 100;
-        hp[id.slot] = cond;
+        hp[id.slot] = keepMax(cond, hp[id.slot]);
         const delta = cond.pct - before;
         if (delta === 0) break;
         const name = monKo(id);
@@ -372,7 +403,7 @@ export function toKoreanLog(protocolLog, names, think = []) {
         push('l-gold', `  ${name} → ${ko(STATUS_KO, st)}`, {
           msg: STATUS_MSG[st] ? STATUS_MSG[st](eunNeun(name)) : `${eunNeun(name)}
 ${ko(STATUS_KO, st)} 상태가 되었다!`,
-          anim: { k: 'fx', side: id.side, text: ko(STATUS_KO, st), color: '#d8a0e8' },
+          anim: { k: 'status', side: id.side, status: st, text: ko(STATUS_KO, st) },
         });
         break;
       }
@@ -486,11 +517,14 @@ ${ko(STATUS_KO, st)} 상태가 되었다!`,
       case 'faint': {
         const id = parseIdent(parts[1]);
         if (hp[id.slot]) hp[id.slot] = { ...hp[id.slot], pct: 0, cur: 0 };
+        downed[id.side] = (downed[id.side] || 0) + 1;
         const name = monKo(id);
-        push('l-sub', `  ${name} 쓰러졌다!`, {
+        const line = push('l-sub', `  ${name} 쓰러졌다!`, {
           msg: `${eunNeun(name)}\n쓰러졌다!`,
-          anim: { k: 'faint', side: id.side },
+          /* 실기는 쓰러질 때 그 포켓몬의 울음소리가 난다 */
+          anim: { k: 'faint', side: id.side, species: mon[id.slot]?.species || null },
         });
+        line.field = snapshot();
         pending = null;
         break;
       }

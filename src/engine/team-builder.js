@@ -16,6 +16,8 @@ export const TEAM_SIZE = 6;
  */
 export const ROSTER_PROFILES = {
   elite: { weights: { 3: 6, 2: 3, 1: 0 }, evLevel: 1.0 },
+  /* 최신 세대만 뽑는다 — 8·9세대 기술 연출을 실제 배틀에서 바로 확인하려고 둔 프로필 */
+  modern: { weights: { 3: 2, 2: 5, 1: 3 }, evLevel: 0.5, latestOnly: true },
   strong: { weights: { 3: 4, 2: 4, 1: 1 }, evLevel: 0.85 },
   mid: { weights: { 3: 2, 2: 5, 1: 2 }, evLevel: 0.6 },
   weak: { weights: { 3: 1, 2: 3, 1: 5 }, evLevel: 0.35 },
@@ -41,13 +43,14 @@ function pickTier(rng, weights) {
  */
 export function buildTeam(rng, profileName = 'mid') {
   const profile = ROSTER_PROFILES[profileName] || ROSTER_PROFILES.mid;
+  const pool = profile.latestOnly ? POKEMON_POOL.filter((p) => p.latest) : POKEMON_POOL;
   const used = new Set();
   const picks = [];
 
   let guard = 0;
   while (picks.length < TEAM_SIZE && guard++ < 400) {
     const tier = pickTier(rng, profile.weights);
-    const candidates = POKEMON_POOL.filter((p) => p.tier === tier && !used.has(p.species));
+    const candidates = pool.filter((p) => p.tier === tier && !used.has(p.species));
     if (!candidates.length) continue;
     const pick = candidates[Math.floor(rng() * candidates.length)];
     used.add(pick.species);
@@ -56,7 +59,7 @@ export function buildTeam(rng, profileName = 'mid') {
 
   /* 가중치가 치우쳐서 6마리를 못 채웠으면 남은 아무 종으로 채운다 */
   while (picks.length < TEAM_SIZE) {
-    const rest = POKEMON_POOL.filter((p) => !used.has(p.species));
+    const rest = pool.filter((p) => !used.has(p.species));
     if (!rest.length) break;
     const pick = rest[Math.floor(rng() * rest.length)];
     used.add(pick.species);

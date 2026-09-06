@@ -44,23 +44,44 @@ const GRAPHIC = 2;
 const FOCUS_TARGET = 1;
 
 /** 기술 애니메이션 정의를 받아온다. 없으면 null (호출부가 CSS 연출로 떨어진다) */
-export async function loadAnim(moveName) {
-  const key = toKebab(moveName);
+export async function loadAnim(name) {
+  const key = toKebab(name);
   if (jsonCache.has(key)) return jsonCache.get(key);
 
   let result = null;
   try {
-    const res = await fetch(animJsonUrl(moveName));
+    const res = await fetch(animJsonUrl(name));
     if (res.ok) {
       const raw = await res.json();
-      /* flat / keyed 두 형태를 모두 받는다 */
-      const node = Array.isArray(raw.frames) ? raw : raw['0'] || raw[Object.keys(raw)[0]];
-      if (node && Array.isArray(node.frames) && node.graphic) result = node;
+      /* 배열 / flat / keyed 세 형태가 다 온다 */
+      const node = Array.isArray(raw) ? raw[0]
+        : Array.isArray(raw.frames) ? raw
+          : raw['0'] || raw[Object.keys(raw)[0]];
+      /* graphic이 빈 문자열인 정의도 있다 — 시트 없이 **포켓몬 스프라이트만 움직이는** 연출이다
+         (바디프레스·그래스슬라이더·뛰어오르다가 그렇다). 이것도 정상 데이터다. */
+      if (node && Array.isArray(node.frames) && node.frames.length) result = annotate(node);
     }
   } catch { /* 네트워크 실패는 조용히 폴백 */ }
 
   jsonCache.set(key, result);
   return result;
+}
+
+/**
+ * 앵커 조각이 실제로 움직이는지 미리 재둔다.
+ * 움직인다면 호출부가 CSS 돌진 모션을 얹으면 안 된다 — 둘이 겹쳐 이상해진다.
+ */
+function annotate(node) {
+  const base = anchorsOf(node.frames[0]);
+  const moved = (anchor, ref) => (
+    (anchor.x ?? 0) !== (ref.x ?? 0) || (anchor.y ?? 0) !== (ref.y ?? 0) ||
+    (anchor.zoomX ?? 100) !== 100 || (anchor.zoomY ?? 100) !== 100 ||
+    (anchor.opacity ?? 255) !== 255 || (anchor.visible === false) || !!anchor.tone
+  );
+  node.drivesUser = node.frames.some((f) => f.some((p) => p.target === ANCHOR_USER && moved(p, base.user)));
+  node.drivesTarget = node.frames.some((f) => f.some((p) => p.target === ANCHOR_TARGET && moved(p, base.target)));
+  node.hasGraphic = !!node.graphic;
+  return node;
 }
 
 /** 스프라이트시트를 받아온다 */
@@ -131,14 +152,14 @@ function anchorsOf(frame) {
  * @param {() => boolean} alive  재생 도중 중단 여부 (배틀이 바뀌면 멈춘다)
  */
 export async function playMoveAnim(scene, anim, userSide, targetSide, frameMs, alive = () => true) {
-  const sheet = await loadSheet(anim.graphic);
-  if (!sheet || !alive()) return false;
+  const sheet = anim.graphic ? await loadSheet(anim.graphic) : null;
+  if ((anim.graphic && !sheet) || !alive()) return false;
 
   const cv = ensureCanvas(scene);
   const ctx = cv.getContext('2d');
   ctx.imageSmoothingEnabled = false;
 
-  const cell = cellSize(sheet.width);
+  const cell = sheet ? cellSize(sheet.width) : 0;
   const rect = scene.getBoundingClientRect();
   const dpr = cv.width / Math.max(1, rect.width);
 
@@ -160,8 +181,40 @@ export async function playMoveAnim(scene, anim, userSide, targetSide, frameMs, a
 
   const events = anim.frameTimedEvents || {};
 
+  /* 앵커(target 0/1)에는 **포켓몬 스프라이트 자체의 움직임**이 들어 있다.
+     지진의 시전자가 −36까지 뛰어오르고, 바디프레스는 아예 이 움직임만으로 이뤄져 있다.
+     시트가 없는 정의(graphic:"")는 이게 연출의 전부다. */
+  const driven = [];
+  if (anim.drivesUser) driven.push([userSide, ANCHOR_USER, base.user]);
+  if (anim.drivesTarget && targetSide !== userSide) driven.push([targetSide, ANCHOR_TARGET, base.target]);
+  const sprites = new Map(driven.map(([side]) => [side, scene.querySelector(`#sp-${side}`)]));
+
+  const restore = () => {
+    for (const el of sprites.values()) {
+      if (!el) continue;
+      el.style.transform = '';
+      el.style.opacity = '';
+      el.style.filter = '';
+    }
+  };
+
   for (let i = 0; i < anim.frames.length; i++) {
     if (!alive()) break;
+
+    /* 스프라이트를 앵커대로 옮긴다 */
+    for (const [side, kind, ref] of driven) {
+      const el = sprites.get(side);
+      if (!el) continue;
+      const a = anim.frames[i].find((p) => p.target === kind);
+      if (!a) continue;
+      const dx = ((a.x ?? 0) - (ref.x ?? 0)) * sx;
+      const dy = ((a.y ?? 0) - (ref.y ?? 0)) * sy;
+      const zx = (a.zoomX ?? 100) / 100;
+      const zy = (a.zoomY ?? 100) / 100;
+      el.style.transform = `translate(${dx}px, ${dy}px) scale(${zx}, ${zy})`;
+      el.style.opacity = a.visible === false ? '0' : String(Math.max(0, Math.min(1, (a.opacity ?? 255) / 255)));
+      el.style.filter = toneFilter(a.tone);
+    }
 
     /* 이 프레임에 걸린 소리 */
     for (const ev of events[i] || []) {
@@ -173,7 +226,7 @@ export async function playMoveAnim(scene, anim, userSide, targetSide, frameMs, a
     ctx.clearRect(0, 0, cv.width, cv.height);
 
     /* 앵커(0/1)는 포켓몬 자리 표시일 뿐이니 그리지 않는다. priority 낮은 것부터 깔린다 */
-    const pieces = anim.frames[i]
+    const pieces = !sheet ? [] : anim.frames[i]
       .filter((p) => p.target === GRAPHIC && p.visible !== false)
       .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
 
@@ -213,11 +266,31 @@ export async function playMoveAnim(scene, anim, userSide, targetSide, frameMs, a
   }
 
   ctx.clearRect(0, 0, cv.width, cv.height);
+  restore();
   return true;
 }
 
-/** 화면에 남은 이펙트를 지운다 */
+/**
+ * RMXP의 tone([r, g, b, gray])을 CSS 필터로 근사한다.
+ * 정확한 색 보정은 아니지만 "초록으로 물든다/ 하얗게 뜬다" 정도는 그대로 읽힌다.
+ */
+function toneFilter(tone) {
+  if (!Array.isArray(tone)) return '';
+  const [r = 0, g = 0, b = 0, gray = 0] = tone;
+  if (!r && !g && !b && !gray) return '';
+  const glow = `drop-shadow(0 0 ${Math.round(Math.max(Math.abs(r), Math.abs(g), Math.abs(b)) / 20)}px rgb(${clamp8(128 + r)},${clamp8(128 + g)},${clamp8(128 + b)}))`;
+  const sat = gray ? ` saturate(${Math.max(0, 1 - gray / 255).toFixed(2)})` : '';
+  const bright = `brightness(${(1 + (r + g + b) / 1200).toFixed(3)})`;
+  return `${glow} ${bright}${sat}`;
+}
+const clamp8 = (v) => Math.max(0, Math.min(255, Math.round(v)));
+
+/** 화면에 남은 이펙트를 지운다. 재생이 중간에 끊겼을 때 스프라이트도 원위치시킨다 */
 export function clearMoveAnim(scene) {
   const cv = scene?.querySelector('canvas.fxcanvas');
   if (cv) cv.getContext('2d').clearRect(0, 0, cv.width, cv.height);
+  for (const side of ['p1', 'p2']) {
+    const el = scene?.querySelector(`#sp-${side}`);
+    if (el) { el.style.transform = ''; el.style.opacity = ''; el.style.filter = ''; }
+  }
 }

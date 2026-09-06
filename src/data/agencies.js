@@ -70,7 +70,8 @@ export const KANTO_JOHTO_AGENCIES = [
     name: '신생 소속사',
     tier: 'indie',
     concept: '모기업 없음. 코치 0명, 실패 시 파산. (§3.3 자체)',
-    rosterProfile: 'weak',
+    /* 최신 세대 위주로 파티를 짠다 — 8·9세대 기술 연출을 내 트레이너 경기에서 바로 확인하려고 */
+    rosterProfile: 'modern',
     statRange: [10, 16],
     policy: { aggression: 0.5 },
     funds: 3000,

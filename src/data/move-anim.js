@@ -73,6 +73,18 @@ export const MOVE_ANIM = {
   'Leech Seed': 'status', Protect: 'selfBuff',
 };
 
+/**
+ * 애니메이션 데이터가 아예 없는 기술 → 대신 쓸 기술.
+ *
+ * 포켓로그에 프레임 데이터가 없는 몇 종만 여기서 비슷한 연출로 돌린다.
+ * (바디프레스·그래스슬라이더·뛰어오르다는 "스프라이트만 움직이는" 정의가 실제로 있어서
+ *  대역이 필요 없다 — 데이터가 통째로 없는 것만 여기 적는다.)
+ */
+export const ANIM_ALIAS = {
+  'Tera Blast': 'Techno Blast',   // 테라스탈 색을 두른 광선 — 테크노버스터가 가장 가깝다
+  'Blood Moon': 'Hyper Beam',     // 거대한 노말 특수 광선
+};
+
 /** 기술 → 원형 (표 → 타입 기본값 → contact 순으로 떨어진다) */
 export function animArchetype(moveName, type) {
   return MOVE_ANIM[moveName] || TYPE_DEFAULT_ANIM[type] || 'contact';
