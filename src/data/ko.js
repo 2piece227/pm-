@@ -1,9 +1,13 @@
 /**
  * 한글 이름 테이블.
  * @pkmn 데이터는 영문만 제공하므로 표시 레이어에서만 매핑한다.
- * 새 포켓몬/기술을 늘리려면 여기 한 줄만 추가하면 된다 — 로직은 영문 id로만 돈다. (SPEC §1-2)
+ * 새 포켓몬을 늘리려면 여기 한 줄만 추가하면 된다 — 로직은 영문 id로만 돈다. (SPEC §1-2)
  * 없는 항목은 영문 그대로 떨어지므로 누락돼도 게임이 멈추지 않는다.
+ *
+ * 기술 이름·타입만 예외로 **생성표**를 쓴다 (아래 MOVE_KO 주석 참고).
  */
+import { MOVE_KO_ALL, MOVE_TYPE_ALL } from './move-ko.gen.js';
+
 export const SPECIES_KO = {
   Spiritomb: '화강돌',
   Garchomp: '한카리아스',
@@ -85,158 +89,22 @@ export const SPECIES_TYPES = {
   'Tauros': '노말',
 };
 
-export const MOVE_KO = {
-  'Shadow Ball': '섀도볼',
-  'Dark Pulse': '악의파동',
-  Psychic: '사이코키네시스',
-  Curse: '저주',
-  Earthquake: '지진',
-  'Scale Shot': '스케일샷',
-  'Swords Dance': '칼춤',
-  'Rock Tomb': '암석봉인',
-  'Shadow Claw': '섀도클로',
-  'Dragon Darts': '드래곤애로',
-  'Draco Meteor': '용성군',
-  Flamethrower: '화염방사',
-  'Air Slash': '에어슬래시',
-  'Ancient Power': '원시의힘',
-  'Dragon Claw': '드래곤클로',
-  'Rock Slide': '스톤샤워',
-  'Outrage': '역린',
-  'Extreme Speed': '신속',
-  'Dragon Dance': '용의춤',
-  'Stone Edge': '스톤에지',
-  'Crunch': '깨물어부수기',
-  'Thunderbolt': '10만볼트',
-  'Iron Head': '아이언헤드',
-  'Zen Headbutt': '제트헤드',
-  'Bullet Punch': '불릿펀치',
-  'Nasty Plot': '나쁜음모',
-  'Fire Blast': '불대문자',
-  'Bug Buzz': '벌레의야단법석',
-  'Quiver Dance': '나비춤',
-  'Giga Drain': '기가드레인',
-  'U-turn': '유턴',
-  'Make It Rain': '골드러시',
-  'Focus Blast': '기합구슬',
-  'Body Press': '바디프레스',
-  'Roost': '날개쉬기',
-  'Bulk Up': '벌크업',
-  'Scald': '열탕',
-  'Toxic': '맹독',
-  'Recover': '자기재생',
-  'Sludge Bomb': '오물폭탄',
-  'Dragon Pulse': '용의파동',
-  'Solar Beam': '솔라빔',
-  'Seismic Toss': '지구던지기',
-  'Soft-Boiled': '알낳기',
-  'Power Whip': '파워휩',
-  'Gyro Ball': '자이로볼',
-  'Leech Seed': '씨뿌리기',
-  'Protect': '방어',
-  'Waterfall': '폭포오르기',
-  'Flare Blitz': '플레어드라이브',
-  'Wild Charge': '와일드볼트',
-  'Close Combat': '인파이트',
-  'Meteor Mash': '코멧펀치',
-  'Ice Beam': '냉동빔',
-  'Body Slam': '누르기',
-  'Knock Off': '손버릇',
-  'Hydro Pump': '하이드로펌프',
-  'Volt Switch': '볼트체인지',
-  'Will-O-Wisp': '도깨비불',
-  'Sucker Punch': '놓치지않기',
-  'Drill Peck': '회전부리',
-  'Drill Run': '드릴라이너',
-  'Steel Wing': '강철날개',
-  'Double-Edge': '이판사판태클',
-  'Play Rough': '치근거리기',
-  'Poison Jab': '독찌르기',
-  'Coil': '사리기',
-  'Brave Bird': '브레이브버드',
-  'Quick Attack': '전광석화',
-  'Thunder Wave': '전기자석파',
-  'Pain Split': '고통나누기',
-  'Crabhammer': '크랩해머',
-  'X-Scissor': '시저크로스',
-};
+/**
+ * 기술 한글 이름 · 타입.
+ *
+ * 손으로 적던 73개짜리 표는 8·9세대 기술이 통째로 비어 있었고(자막에 영문이 떴다)
+ * 그나마도 7개가 틀려 있었다(제트헤드 → 사념의박치기, 놓치지않기 → 기습 …).
+ * 지금은 916종을 생성해서 쓴다 — `node tools/gen-move-ko.mjs`로 다시 만든다.
+ *
+ * 고칠 게 생기면 아래 OVERRIDE에 적는다. 생성표를 덮어쓴다.
+ */
+export const MOVE_KO_OVERRIDE = {};
+export const MOVE_TYPE_OVERRIDE = {};
 
-/** 기술 → 타입. 이펙트 색을 고르기 위한 표시용 테이블 (프로토콜 로그에는 타입이 안 실린다) */
-export const MOVE_TYPE = {
-  'Shadow Ball': 'ghost',
-  'Dark Pulse': 'dark',
-  Psychic: 'psychic',
-  Curse: 'ghost',
-  Earthquake: 'ground',
-  'Scale Shot': 'dragon',
-  'Swords Dance': 'normal',
-  'Rock Tomb': 'rock',
-  'Shadow Claw': 'ghost',
-  'Dragon Darts': 'dragon',
-  'Draco Meteor': 'dragon',
-  Flamethrower: 'fire',
-  'Air Slash': 'flying',
-  'Ancient Power': 'rock',
-  'Dragon Claw': 'dragon',
-  'Rock Slide': 'rock',
-  'Outrage': 'dragon',
-  'Extreme Speed': 'normal',
-  'Dragon Dance': 'dragon',
-  'Stone Edge': 'rock',
-  'Crunch': 'dark',
-  'Thunderbolt': 'electric',
-  'Iron Head': 'steel',
-  'Zen Headbutt': 'psychic',
-  'Bullet Punch': 'steel',
-  'Nasty Plot': 'dark',
-  'Fire Blast': 'fire',
-  'Bug Buzz': 'bug',
-  'Quiver Dance': 'bug',
-  'Giga Drain': 'grass',
-  'U-turn': 'bug',
-  'Make It Rain': 'steel',
-  'Focus Blast': 'fighting',
-  'Body Press': 'fighting',
-  'Roost': 'flying',
-  'Bulk Up': 'fighting',
-  'Scald': 'water',
-  'Toxic': 'poison',
-  'Recover': 'normal',
-  'Sludge Bomb': 'poison',
-  'Dragon Pulse': 'dragon',
-  'Solar Beam': 'grass',
-  'Seismic Toss': 'fighting',
-  'Soft-Boiled': 'normal',
-  'Power Whip': 'grass',
-  'Gyro Ball': 'steel',
-  'Leech Seed': 'grass',
-  'Protect': 'normal',
-  'Waterfall': 'water',
-  'Flare Blitz': 'fire',
-  'Wild Charge': 'electric',
-  'Close Combat': 'fighting',
-  'Meteor Mash': 'steel',
-  'Ice Beam': 'ice',
-  'Body Slam': 'normal',
-  'Knock Off': 'dark',
-  'Hydro Pump': 'water',
-  'Volt Switch': 'electric',
-  'Will-O-Wisp': 'fire',
-  'Sucker Punch': 'dark',
-  'Drill Peck': 'flying',
-  'Drill Run': 'ground',
-  'Steel Wing': 'steel',
-  'Double-Edge': 'normal',
-  'Play Rough': 'fairy',
-  'Poison Jab': 'poison',
-  'Coil': 'poison',
-  'Brave Bird': 'flying',
-  'Quick Attack': 'normal',
-  'Thunder Wave': 'electric',
-  'Pain Split': 'normal',
-  'Crabhammer': 'water',
-  'X-Scissor': 'bug',
-};
+export const MOVE_KO = { ...MOVE_KO_ALL, ...MOVE_KO_OVERRIDE };
+
+/** 기술 → 타입. 이펙트 색을 고르기 위한 표시용 (프로토콜 로그에는 타입이 안 실린다) */
+export const MOVE_TYPE = { ...MOVE_TYPE_ALL, ...MOVE_TYPE_OVERRIDE };
 
 export const ABILITY_KO = {
   Pressure: '프레셔',

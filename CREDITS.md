@@ -48,6 +48,14 @@
 이 프로젝트는 **비영리 팬 프로젝트**이고 소스 전체를 공개하며, 에셋을 재배포하지 않고
 원 저장소를 링크로만 참조한다는 전제로 사용한다.
 
+## 기술 한글 이름
+
+**출처: [pagefaultgames/pokerogue-locales](https://github.com/pagefaultgames/pokerogue-locales)** (`ko/move.json`)
+
+손으로 적던 표는 73개뿐이라 8·9세대 기술이 자막에 영문으로 떴고 몇 개는 틀려 있었다.
+지금은 916종을 `node tools/gen-move-ko.mjs`로 생성한다 (`src/data/move-ko.gen.js`).
+기술명 자체의 지식재산권은 Nintendo / Creatures Inc. / GAME FREAK Inc.에 있다.
+
 ## 포켓몬 울음소리
 
 **출처: [PokeAPI/cries](https://github.com/PokeAPI/cries)** — 링크 참조.

@@ -1,4 +1,5 @@
 import { Dex, Teams } from '@pkmn/sim';
+import { MOVE_KO, SPECIES_KO, ABILITY_KO } from '../src/data/ko.js';
 import { POKEMON_POOL, toShowdownBlock } from '../src/data/pokemon-pool.js';
 
 const GEN = Dex.forGen(9);
@@ -29,3 +30,16 @@ for (const e of POKEMON_POOL) {
   if (problems.length) { bad++; console.log(`❌ ${e.species}: ${problems.join(' / ')}`); }
 }
 console.log(bad === 0 ? `✅ 풀 ${POKEMON_POOL.length}종 전부 유효` : `\n총 ${bad}종 문제 있음`);
+
+
+/* 표시 계층 — 이름표가 비면 자막에 영문이 뜬다 */
+const missKo = [];
+for (const e of POKEMON_POOL) {
+  if (!SPECIES_KO[e.species]) missKo.push(`종족 ${e.species}`);
+  if (!ABILITY_KO[e.ability]) missKo.push(`특성 ${e.ability}`);
+  for (const mv of e.moves) if (!MOVE_KO[mv]) missKo.push(`기술 ${mv}`);
+}
+const uniq = [...new Set(missKo)];
+console.log(uniq.length === 0
+  ? '✅ 한글 이름표도 전부 채워져 있음'
+  : [`⚠️ 한글 이름표 누락 ${uniq.length}건 (자막에 영문이 뜬다):`, ...uniq.map((x) => `   ${x}`)].join(String.fromCharCode(10)));

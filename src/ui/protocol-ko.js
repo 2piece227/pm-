@@ -496,7 +496,7 @@ ${ko(STATUS_KO, st)} 상태가 되었다!`,
       }
 
       case 'win':
-        push('l-win', `▶ ${parts[1]} 승리! (${turn}턴)`, { msg: `${parts[1]}의 승리!` });
+        push('l-win', `▶ ${parts[1]} 승리! (${turn}턴)`, { msg: `${parts[1]}의 승리!`, anim: { k: 'win' } });
         break;
 
       case 'tie':

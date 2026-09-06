@@ -72,30 +72,113 @@ export function drawSprite(side, speciesName) {
 
 const GENDER = { M: '<i class="g-m">♂</i>', F: '<i class="g-f">♀</i>' };
 
-function drawHpBox(side, f) {
-  const gender = f.gender ? GENDER[f.gender] : '';
-  const status = f.status ? `<i class="st">${f.status}</i>` : '';
-  /* 실기는 내 포켓몬만 실수치를 보여준다 */
-  const numbers = side === 'p1' && f.cur != null
-    ? `<div class="hpb-num">${f.cur}/${f.max}</div>` : '';
+/**
+ * 박스를 매번 innerHTML로 새로 그리면 바가 **지워졌다 다시 나타난다.**
+ * 그래서 개체가 바뀔 때만 뼈대를 만들고, 그 뒤로는 폭만 굴려서 실기처럼 깎아 내린다.
+ */
+const hpBox = { p1: null, p2: null };
 
-  $(`hp-${side}`).innerHTML =
-    `<div class="hpb-n"><span>${f.name}${gender}${status}</span><em>Lv${f.level}</em></div>` +
-    `<div class="hpb-row"><span class="hplabel">HP</span>` +
-    `<span class="hpb-bar"><i style="width:${f.pct}%;background:${hpColor(f.pct)}"></i></span></div>` +
-    numbers +
-    (f.boosts ? `<div class="hpb-boost">${f.boosts}</div>` : '');
+/** 실기의 바 감소 속도 — 가득 찬 바가 다 빠지는 데 걸리는 시간 */
+const HP_DRAIN_FULL_MS = 1500;
+const HP_DRAIN_MIN_MS = 140;
+const HP_DRAIN_MAX_MS = 1300;
+
+function buildHpBox(side, f) {
+  const box = $(`hp-${side}`);
+  box.innerHTML =
+    '<div class="hpb-n"><span><b class="nm"></b><i class="st"></i></span><em class="lv"></em></div>' +
+    '<div class="hpb-row"><span class="hplabel">HP</span>' +
+    '<span class="hpb-bar"><i></i></span></div>' +
+    '<div class="hpb-num"></div><div class="hpb-boost"></div>';
+
+  const st = {
+    key: null,
+    pct: f.pct ?? 100,
+    cur: f.cur ?? null,
+    raf: 0,
+    nm: box.querySelector('.nm'),
+    stat: box.querySelector('.st'),
+    lv: box.querySelector('.lv'),
+    bar: box.querySelector('.hpb-bar i'),
+    num: box.querySelector('.hpb-num'),
+    boost: box.querySelector('.hpb-boost'),
+  };
+  hpBox[side] = st;
+  return st;
 }
 
+/** 바를 목표치까지 굴린다. 끝나면 resolve */
+function tweenHp(side, st, f) {
+  const from = st.pct;
+  const to = Math.max(0, Math.min(100, f.pct ?? 0));
+  const curFrom = st.cur;
+  const curTo = f.cur ?? null;
+  st.pct = to;
+  st.cur = curTo;
+
+  const paint = (pct, cur) => {
+    st.bar.style.width = `${pct}%`;
+    st.bar.style.background = hpColor(pct);
+    /* 실기는 내 포켓몬만 실수치를 보여준다 */
+    st.num.textContent = side === 'p1' && cur != null ? `${Math.round(cur)}/${f.max}` : '';
+    st.num.style.display = st.num.textContent ? '' : 'none';
+  };
+
+  /* HP가 빨간 구간에 들어가는 순간 경고음 (실기의 삐- 소리) */
+  if (from > 20 && to <= 20 && to > 0) sfx.play('lowHp');
+
+  clearInterval(st.raf);
+  const s = spd();
+  const delta = Math.abs(to - from);
+  const ms = s ? Math.min(HP_DRAIN_MAX_MS, Math.max(HP_DRAIN_MIN_MS, (delta / 100) * HP_DRAIN_FULL_MS)) / s : 0;
+  if (!ms || delta < 0.4) { paint(to, curTo); return Promise.resolve(); }
+
+  /* requestAnimationFrame은 탭이 가려지면 아예 안 돈다 — 재생이 통째로 멈춘다.
+     타이머로 굴리면 백그라운드에서 느려질 뿐 멈추지는 않는다. */
+  return new Promise((resolve) => {
+    const t0 = performance.now();
+    const done = () => { clearInterval(st.raf); st.raf = 0; resolve(); };
+    st.raf = setInterval(() => {
+      const k = Math.min(1, (performance.now() - t0) / ms);
+      const pct = from + (to - from) * k;
+      const cur = curFrom != null && curTo != null ? curFrom + (curTo - curFrom) * k : curTo;
+      paint(pct, cur);
+      if (k >= 1) done();
+    }, 16);
+  });
+}
+
+function drawHpBox(side, f) {
+  /* 이름·레벨·성별이 바뀌면 다른 개체다 — 뼈대부터 다시 만들고 바는 즉시 반영 */
+  const key = `${f.name}|${f.level}|${f.gender || ''}`;
+  let st = hpBox[side];
+  if (!st || st.key !== key || !$(`hp-${side}`).querySelector('.hpb-bar i')) {
+    st = buildHpBox(side, f);
+    st.key = key;
+    st.nm.innerHTML = `${f.name}${f.gender ? GENDER[f.gender] : ''}`;
+    st.lv.textContent = `Lv${f.level}`;
+  }
+
+  st.stat.textContent = f.status || '';
+  st.stat.style.display = f.status ? '' : 'none';
+  st.boost.textContent = f.boosts || '';
+  st.boost.style.display = f.boosts ? '' : 'none';
+
+  return tweenHp(side, st, f);
+}
+
+/** 화면을 갱신한다. HP 바가 다 깎일 때까지 기다리려면 반환값을 await하면 된다 */
 export function drawField(field, names) {
+  const pending = [];
   for (const side of ['p1', 'p2']) {
     const f = field?.[side] || { name: '—', species: null, types: '', pct: 100, level: 50 };
     if (f.species !== shown[side]) drawSprite(side, f.species);
-    drawHpBox(side, f);
+    pending.push(drawHpBox(side, f));
   }
   const w = field?.weather;
   const scene = $('scene');
   if (scene) scene.dataset.weather = w || '';
+  return Promise.all(pending);
 }
 
 /* ---------------- 자막 박스 ---------------- */
@@ -305,10 +388,18 @@ export function clearLog() { $('log').innerHTML = ''; }
 
 /* ---------------- 연출 재생 ---------------- */
 
-async function playAnim(anim, token) {
+/**
+ * @param {object} anim  표시 지시
+ * @param {number} token 재생 세대 (중단 감지)
+ * @param {() => Promise<any>} [onImpact]
+ *   **피격 순간**에 부를 화면 갱신. 데미지 줄은 이걸로 늦춰서, 이펙트가 맞는 시점과
+ *   HP가 깎이는 시점을 맞춘다. (예전엔 자막 전에 이미 바가 줄어 있었다)
+ */
+async function playAnim(anim, token, onImpact) {
   const s = spd();
-  if (!anim || !s) return;
+  if (!anim || !s) { await onImpact?.(); return; }
   const unit = 340 / s; // 1배속 기준 340ms
+  let hpDone = null;
 
   switch (anim.k) {
     case 'send': {
@@ -340,19 +431,18 @@ async function playAnim(anim, token) {
           setTimeout(() => el.classList.remove('cast'), Math.max(90, unit * 0.4));
         }
         await playMoveAnim(sceneEl(), realAnim, anim.side, anim.target, Math.max(16, 46 / spd()), () => myToken === runToken);
-        if (anim.missed) { sfx.play('miss'); break; }
+        if (anim.missed) break;
         if (anim.hit) {
           const t = $(`sp-${anim.hit}`);
-          if (anim.crit) sfx.play('crit');
-          sfx.play(sfx.impactSoundFor(anim.archetype, anim.eff));
+          sfx.play(sfx.impactSoundFor(anim.eff, anim.crit));
+          hpDone = onImpact?.();      // 맞는 순간부터 바가 깎이기 시작한다
           t.classList.add('hit', 'hurt');
           await wait(Math.max(80, unit * 0.3));
           t.classList.remove('hurt');
           await wait(Math.max(70, unit * 0.24));
           t.classList.remove('hit');
-          if (anim.eff === 'super') sfx.play('superEffective');
-          else if (anim.eff === 'resisted') sfx.play('resisted');
         }
+        await hpDone;                 // 바가 다 내려간 뒤에 다음 줄로 넘어간다
         break;
       }
 
@@ -392,14 +482,14 @@ async function playAnim(anim, token) {
         else if (tr.ring) await ring(anim.target, fx, unit * 0.6);
       }
 
-      if (anim.missed) { sfx.play('miss'); break; }
+      if (anim.missed) break;
 
       /* --- 피격 --- */
       if (anim.hit) {
         const t = $(`sp-${anim.hit}`);
         const times = tr.repeat || 1;
-        if (anim.crit) sfx.play('crit');
-        sfx.play(sfx.impactSoundFor(anim.archetype, anim.eff));
+        sfx.play(sfx.impactSoundFor(anim.eff, anim.crit));
+        hpDone = onImpact?.();        // 맞는 순간부터 바가 깎이기 시작한다
 
         for (let i = 0; i < times; i++) {
           burst(anim.hit, fx);
@@ -415,10 +505,9 @@ async function playAnim(anim, token) {
           t.classList.remove('hit');
           if (i < times - 1) await wait(Math.max(60, unit * 0.18));
         }
-        if (anim.eff === 'super') sfx.play('superEffective');
-        else if (anim.eff === 'resisted') sfx.play('resisted');
         if (tr.siphon) { rising(anim.side, '#5ad06a'); sfx.play('heal'); }
       }
+      await hpDone;                   // 바가 다 내려간 뒤에 다음 줄로 넘어간다
       break;
     }
 
@@ -431,9 +520,8 @@ async function playAnim(anim, token) {
       break;
 
     case 'ability': {
-      /* 실기는 자막으로 알리므로 화면에선 가볍게 반짝이기만 한다 */
+      /* 실기는 자막으로 알리므로 화면에선 가볍게 반짝이기만 한다 (전용 효과음 없음) */
       const el = $(`sp-${anim.side}`);
-      sfx.play('ability');
       el.classList.add('glow');
       await wait(unit * 0.8);
       el.classList.remove('glow');
@@ -441,9 +529,13 @@ async function playAnim(anim, token) {
     }
 
     case 'weather':
-      sfx.play('weather');
       screenFlash('rgba(200,180,120,.35)', unit * 0.6);
       await wait(unit * 0.5);
+      break;
+
+    case 'win':
+      sfx.play('win');
+      await wait(unit * 0.6);
       break;
 
     case 'faint': {
@@ -464,6 +556,12 @@ export function resetScene() {
   clearMoveAnim($('scene'));
   shown.p1 = null;
   shown.p2 = null;
+  for (const side of ['p1', 'p2']) {
+    if (hpBox[side]) clearInterval(hpBox[side].raf);
+    hpBox[side] = null;
+    const b = $(`hp-${side}`);
+    if (b) b.innerHTML = '';
+  }
   drawSprite('p1', null);
   drawSprite('p2', null);
   clearLog();
@@ -482,11 +580,18 @@ export async function playBattleLog(protocolLog, names, think = []) {
     if (token !== runToken) return; // 중단됨
     writeLine(line);
     if (line.cls === 'l-think') continue;
-    if (line.field) drawField(line.field, names);
+
+    /* 데미지가 들어가는 줄은 **이펙트가 맞는 순간**에 화면을 갱신한다.
+       예전엔 자막이 뜨기도 전에 HP가 줄어 있어서 순서가 어긋나 보였다. */
+    let applied = false;
+    const apply = line.field ? () => { applied = true; return drawField(line.field, names); } : null;
+    const deferred = !!(apply && line.anim?.k === 'move' && line.anim.hit);
+    if (apply && !deferred) apply();
 
     const s = spd();
     if (line.msg) await typeMessage(line.msg, token);
-    await playAnim(line.anim, token);
+    await playAnim(line.anim, token, deferred ? apply : null);
+    if (apply && !applied) await apply(); // 연출이 없거나 중단된 경우의 안전망
 
     if (s) {
       /* 다 찍힌 자막을 읽을 시간. 실기의 "다음으로 넘기기" 대기에 해당 */
