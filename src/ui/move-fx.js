@@ -37,11 +37,74 @@ const ANCHOR_TARGET = 1;
 const GRAPHIC = 2;
 
 /**
- * 조각의 `focus` — 어느 앵커에 붙어 있는 그림인지. (anim.position이 기본값)
- * 좌표 자체는 어차피 같은 공간의 절대값이라, 두 앵커가 겹치는 자신 대상 기술에서만
- * 대상 기준 그림을 시전자 쪽으로 당겨줘야 한다. (예: 용의춤은 x가 128 근처다)
+ * 조각의 `focus` — **어느 기준점에 붙어 있는 그림인지.** (anim.position이 기본값)
+ *
+ * 이걸 무시하고 좌표계를 통째로 180° 돌렸더니, 상대가 쓸 때 중력 방향이 뒤집혔다 —
+ * 스톤샤워의 돌이 아래에서 위로 솟고 대지의힘이 위에서 아래로 꽂혔다.
+ * 좌우는 뒤집는 게 맞지만 **위아래는 세상 기준이라 안 뒤집힌다.**
+ *
+ *   1 TARGET      대상 스프라이트 기준 (스톤샤워의 낙석, 대지의힘의 분출, 치근거리기)
+ *   2 USER        시전자 기준 (칼춤)
+ *   3 USER_TARGET 둘을 잇는 축 위 (화염방사, 섀도볼) — 이것만 통째로 뒤집는 게 맞다
+ *   4 SCREEN      화면(필드) 기준 (지진)
  */
 const FOCUS_TARGET = 1;
+const FOCUS_USER = 2;
+const FOCUS_USER_TARGET = 3;
+const FOCUS_SCREEN = 4;
+
+/**
+ * 애니메이션 좌표 → 화면 좌표 변환기. focus마다 기준점과 배율이 다르다.
+ *
+ * @param {{x,y}} userPos    시전자 스프라이트 위치
+ * @param {{x,y}} targetPos  대상 스프라이트 위치 (자기 대상 기술이면 시전자와 같다)
+ * @param {{x,y}} refPos     방향·축 배율을 뽑을 반대편 위치 (보통 targetPos와 같다)
+ * @param {{user,target}} base 원본이 가정하는 앵커 (보통 (0,0)과 (128,-64))
+ * @param {number} mag       그림 크기 배율 — 축과 무관한 focus는 이걸 쓴다 (모양이 안 찌그러진다)
+ */
+export function makePlacement({ userPos, targetPos, refPos, base, mag }) {
+  const bu = { x: base.user.x ?? 0, y: base.user.y ?? 0 };
+  const bt = { x: base.target.x ?? 128, y: base.target.y ?? -64 };
+  const adx = bt.x - bu.x;
+  const ady = bt.y - bu.y;
+
+  /* 축 배율 — 시전자가 상대면 부호가 뒤집힌다 (화염방사가 반대로 뻗어야 하니까) */
+  const sx = adx ? (refPos.x - userPos.x) / adx : 1;
+  const sy = ady ? (refPos.y - userPos.y) / ady : 1;
+
+  const dirX = sx < 0 ? -1 : 1;        // 좌우만 뒤집는다
+  const upY = Math.abs(sy);            // 위아래는 세상 기준 — 중력은 안 뒤집힌다
+  const selfCast = targetPos === userPos
+    || (targetPos.x === userPos.x && targetPos.y === userPos.y);
+
+  const mid = { x: (userPos.x + targetPos.x) / 2, y: (userPos.y + targetPos.y) / 2 };
+  const mid0 = { x: (bu.x + bt.x) / 2, y: (bu.y + bt.y) / 2 };
+
+  const around = (org, ref, px, py) => ({
+    x: org.x + (px - ref.x) * dirX * mag,
+    y: org.y + (py - ref.y) * mag,
+  });
+
+  return {
+    sx, sy, dirX, upY,
+
+    /** 그림 조각 하나의 화면상 중심 */
+    place(px, py, focus) {
+      switch (focus) {
+        case FOCUS_USER: return around(userPos, bu, px, py);
+        case FOCUS_TARGET: return around(targetPos, bt, px, py);
+        case FOCUS_SCREEN: return around(mid, mid0, px, py);
+        default:
+          /* 축을 잇는 그림. 자기 대상 기술은 축이 없으니 시전자 기준으로 둔다 */
+          if (selfCast) return around(userPos, bu, px, py);
+          return { x: userPos.x + (px - bu.x) * sx, y: userPos.y + (py - bu.y) * sy };
+      }
+    },
+
+    /** 포켓몬 스프라이트를 옮기는 양 (앞으로 파고드는 건 축, 뛰어오르는 건 세상 기준) */
+    sprite(dx, dy) { return { x: dx * sx, y: dy * upY }; },
+  };
+}
 
 /** 기술 애니메이션 정의를 받아온다. 없으면 null (호출부가 CSS 연출로 떨어진다) */
 export async function loadAnim(name) {
@@ -163,21 +226,17 @@ export async function playMoveAnim(scene, anim, userSide, targetSide, frameMs, a
   const rect = scene.getBoundingClientRect();
   const dpr = cv.width / Math.max(1, rect.width);
 
-  /* 두 앵커를 실제 스프라이트 위치로 옮기는 배율. 시전자가 상대면 부호가 뒤집힌다.
-     자신에게 쓰는 기술은 두 앵커가 겹쳐 배율이 0이 되므로, 방향만 반대편에서 빌려온다. */
+  /* 자신에게 쓰는 기술은 두 앵커가 겹쳐 축이 안 잡히므로, 방향만 반대편에서 빌려온다 */
   const other = userSide === 'p1' ? 'p2' : 'p1';
   const userPos = spriteCenter(scene, userSide, rect);
-  const refPos = spriteCenter(scene, targetSide === userSide ? other : targetSide, rect);
+  const targetPos = targetSide === userSide ? userPos : spriteCenter(scene, targetSide, rect);
+  const refPos = targetSide === userSide ? spriteCenter(scene, other, rect) : targetPos;
   const base = anchorsOf(anim.frames[0] || []);
-  const adx = (base.target.x ?? 128) - (base.user.x ?? 0);
-  const ady = (base.target.y ?? -64) - (base.user.y ?? 0);
-  const sx = adx ? (refPos.x - userPos.x) / adx : 1;
-  const sy = ady ? (refPos.y - userPos.y) / ady : 1;
 
-  /* 그림 자체의 크기는 화면 비율로 정한다 — 앵커 배율을 그대로 쓰면 가로로 늘어난다 */
+  /* 그림 자체의 크기는 화면 비율로 정한다 — 축 배율을 그대로 쓰면 가로로 늘어난다 */
   const mag = Math.min(rect.width / ANIM_SPACE.w, rect.height / ANIM_SPACE.h);
-  const flip = sx < 0 ? -1 : 1;   // 상대가 시전자면 통째로 180° 돌린다
-  const selfCast = targetSide === userSide;
+  const place = makePlacement({ userPos, targetPos, refPos, base, mag });
+  const flip = place.dirX;   // 그림 자체는 좌우만 뒤집는다
 
   const events = anim.frameTimedEvents || {};
 
@@ -207,8 +266,9 @@ export async function playMoveAnim(scene, anim, userSide, targetSide, frameMs, a
       if (!el) continue;
       const a = anim.frames[i].find((p) => p.target === kind);
       if (!a) continue;
-      const dx = ((a.x ?? 0) - (ref.x ?? 0)) * sx;
-      const dy = ((a.y ?? 0) - (ref.y ?? 0)) * sy;
+      const d = place.sprite((a.x ?? 0) - (ref.x ?? 0), (a.y ?? 0) - (ref.y ?? 0));
+      const dx = d.x;
+      const dy = d.y;
       const zx = (a.zoomX ?? 100) / 100;
       const zy = (a.zoomY ?? 100) / 100;
       el.style.transform = `translate(${dx}px, ${dy}px) scale(${zx}, ${zy})`;
@@ -230,10 +290,6 @@ export async function playMoveAnim(scene, anim, userSide, targetSide, frameMs, a
       .filter((p) => p.target === GRAPHIC && p.visible !== false)
       .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
 
-    const anchor = anchorsOf(anim.frames[i]);
-    const ox = userPos.x - (anchor.user.x ?? 0) * sx;
-    const oy = userPos.y - (anchor.user.y ?? 0) * sy;
-
     for (const piece of pieces) {
       const gf = piece.graphicFrame ?? 0;
       const col = gf % SHEET_COLUMNS;
@@ -243,13 +299,11 @@ export async function playMoveAnim(scene, anim, userSide, targetSide, frameMs, a
       const w = cell * mag * ((piece.zoomX ?? 100) / 100);
       const h = cell * mag * ((piece.zoomY ?? 100) / 100);
 
-      /* 자신에게 쓰는 기술은 대상 앵커가 시전자와 겹치므로 그만큼 당긴다 */
-      const focus = piece.focus ?? anim.position ?? 0;
-      const pull = selfCast && focus === FOCUS_TARGET;
-      const px = (piece.x ?? 0) - (pull ? adx : 0);
-      const py = (piece.y ?? 0) - (pull ? ady : 0);
-      const cx = ox + px * sx;
-      const cy = oy + py * sy;
+      /* 기준점은 focus가 정한다. 여길 무시하면 상대가 쓸 때 중력이 뒤집힌다 */
+      const focus = piece.focus ?? anim.position ?? FOCUS_USER_TARGET;
+      const at = place.place(piece.x ?? 0, piece.y ?? 0, focus);
+      const cx = at.x;
+      const cy = at.y;
 
       ctx.save();
       ctx.globalAlpha = Math.max(0, Math.min(1, (piece.opacity ?? 255) / 255));
