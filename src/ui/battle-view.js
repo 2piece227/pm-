@@ -16,6 +16,7 @@ import {
 import { ANIM_ALIAS, ARCHETYPE_TRAITS } from '../data/move-anim.js';
 import * as sfx from './sfx.js';
 import { loadAnim, playMoveAnim, clearMoveAnim } from './move-fx.js';
+import { createSheetSprite, loadPokemonSheet, preloadSheets } from './sprite-anim.js';
 import { dexNumOf } from './sprites.js';
 
 const $ = (id) => document.getElementById(id);
@@ -60,22 +61,41 @@ function gate(token) {
 
 /* 늦게 도착한 로드 결과가 이미 바뀐 포켓몬을 덮어쓰지 않도록 세대를 센다 */
 const spriteToken = { p1: 0, p2: 0 };
+/* 돌아가고 있는 시트 재생기 (교체할 때 멈춰야 한다) */
+const sheetSprite = { p1: null, p2: null };
 
 export function drawSprite(side, speciesName) {
   const el = $(`sp-${side}`);
   el.className = `spr ${side === 'p1' ? 'me' : 'foe'}`;
   shown[side] = speciesName;
+
+  /* 이전 포켓몬을 **즉시** 치운다. 새 그림을 기다리는 동안 남겨두면
+     교체할 때 옛 도트가 잠깐 섞여 깜박이는 것처럼 보인다. */
+  sheetSprite[side]?.stop();
+  sheetSprite[side] = null;
+  el.innerHTML = '';
+  el.style.width = '';
+
   const myToken = ++spriteToken[side];
-  if (!speciesName) {
-    el.innerHTML = '';
-    el.style.width = '';
-    return;
-  }
+  if (!speciesName) return;
 
   /* BW 스프라이트는 종마다 덩치가 다르다. "픽셀당 배율"을 일정하게 유지해야
      실제 덩치 차이가 살아난다 (sprites.js의 REFERENCE_WIDTH 주석 참고) */
   const basePct = side === 'p1' ? 30 : 24;
-  tryCandidates(el, side, myToken, speciesName, spriteCandidates(speciesName, side), 0, basePct);
+
+  loadPokemonSheet(speciesName, side).then((sheet) => {
+    if (myToken !== spriteToken[side]) return;
+    if (sheet) {
+      const player = createSheetSprite(sheet);
+      sheetSprite[side] = player;
+      el.innerHTML = '';
+      el.appendChild(player.canvas);
+      el.style.width = `${(basePct * sheet.w) / REFERENCE_WIDTH}%`;
+      return;
+    }
+    /* 시트가 없는 종만 예전 GIF/PNG 경로로 떨어진다 */
+    tryCandidates(el, side, myToken, speciesName, spriteCandidates(speciesName, side), 0, basePct);
+  });
 }
 
 /** 후보를 위에서부터 하나씩 시도한다. 다 실패하면 실루엣 */
@@ -485,10 +505,13 @@ function applyStatusLook(side, code) {
 
 /**
  * 얼음 상태는 실기에서 **도트가 멈춘다.**
- * 우리 스프라이트는 GIF라 재생을 멈출 방법이 없어서, 지금 프레임을 캔버스에 떠서 바꿔 끼운다.
+ * 시트 재생기는 그냥 세우면 되고, GIF는 재생을 못 세워서 지금 프레임을 캔버스에 떠서 바꿔 낀다.
  * (CORS가 막히면 색 보정만 남는다 — 그래도 얼어붙은 티는 난다)
  */
 function freezeSprite(el, on) {
+  const side = el.id === 'sp-p1' ? 'p1' : 'p2';
+  if (sheetSprite[side]) { sheetSprite[side].setPaused(on); return; }
+
   const img = el.querySelector('img');
   const frozen = el.querySelector('canvas.frozen');
   if (!on) {
@@ -496,7 +519,6 @@ function freezeSprite(el, on) {
     if (img) img.style.display = '';
     return;
   }
-  /* 정지 스프라이트(캔버스)는 애초에 안 움직이니 그대로 두면 된다 */
   if (frozen || !img) return;
   /* 아직 GIF가 안 내려왔으면 다 받은 뒤에 다시 시도한다 */
   if (!img.naturalWidth) {
@@ -708,6 +730,8 @@ export function resetScene() {
   shown.p2 = null;
   sfx.stopAll();
   for (const side of ['p1', 'p2']) {
+    sheetSprite[side]?.stop();
+    sheetSprite[side] = null;
     if (hpBox[side]) clearInterval(hpBox[side].raf);
     hpBox[side] = null;
     const b = $(`hp-${side}`);
@@ -728,6 +752,14 @@ export async function playBattleLog(protocolLog, names, think = []) {
   const token = ++runToken;
   setPaused(false);
   drawTrainers(names);
+
+  /* 프로토콜 앞머리의 |poke| 줄로 양 팀 전원을 미리 받아둔다.
+     안 그러면 첫 교체 때마다 그림이 늦게 붙어 빈 칸이 보인다 */
+  preloadSheets([...new Set(protocolLog
+    .filter((l) => typeof l === 'string' && l.startsWith('|poke|'))
+    .map((l) => (l.split('|')[3] || '').split(',')[0].trim())
+    .filter(Boolean))]);
+
   const lines = toKoreanLog(protocolLog, names, think);
 
   for (const line of lines) {

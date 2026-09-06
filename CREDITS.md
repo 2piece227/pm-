@@ -8,24 +8,38 @@
 | [@pkmn/dex](https://github.com/pkmn/ps) | 종족·기술·특성 데이터 | MIT |
 | [Vite](https://vite.dev) | 번들러 | MIT |
 
-## 스프라이트
+## 포켓몬 스프라이트
 
-**전부 5세대(블랙·화이트) 도트로 통일한다.** 링크로만 참조하며 이 저장소에 복제하지 않는다.
-후보 순서와 URL은 [`src/ui/sprites.js`](src/ui/sprites.js) 한 곳에 모여 있다.
+**전부 5세대(블랙·화이트) 도트로 통일하고, 가능한 한 움직이게 한다.**
+링크로만 참조하며 이 저장소에 복제하지 않는다. URL과 후보 순서는
+[`src/ui/sprite-anim.js`](src/ui/sprite-anim.js)와 [`src/ui/sprites.js`](src/ui/sprites.js)에 모여 있다.
+
+**주 소스: [pagefaultgames/pokerogue-assets](https://github.com/pagefaultgames/pokerogue-assets)** (`beta`)
+
+| 경로 | 내용 |
+|---|---|
+| `images/pokemon/{도감번호}.png` + `.json` | 5세대 원본 BW 애니메이션 시트 (아틀라스) |
+| `images/pokemon/back/…` | 뒷모습 |
+| `images/pokemon/exp/…` | **커뮤니티가 BW 그림체로 그린 6세대 이후** 애니메이션 시트 |
+
+5세대 이후 종은 공식 BW 도트가 존재하지 않는다. `exp/` 폴더의 그림은 팬 제작물이며,
+PokéRogue 저장소가 기여자를 정리해 두고 있다 — 개별 제작자 명단은
+[PokéRogue의 CREDITS](https://github.com/pagefaultgames/pokerogue/blob/main/CREDITS.md)를 따른다.
+원본 소재의 지식재산권은 Nintendo / Creatures Inc. / GAME FREAK Inc.에 있다.
+
+**보조 소스** (시트가 없는 종만 여기로 떨어진다)
 
 | 순서 | 출처 | 경로 |
 |---|---|---|
-| 1 | [PokeAPI/sprites](https://github.com/PokeAPI/sprites) | `versions/generation-v/black-white/animated/` (애니메이션) |
-| 2 | [Pokémon Showdown](https://play.pokemonshowdown.com) | `sprites/gen5ani/`, `gen5ani-back/` (같은 그림체, 미러보다 최신) |
+| 1 | [PokeAPI/sprites](https://github.com/PokeAPI/sprites) | `versions/generation-v/black-white/animated/` |
+| 2 | [Pokémon Showdown](https://play.pokemonshowdown.com) | `sprites/gen5ani/`, `gen5ani-back/` |
 | 3 | PokeAPI/sprites | `versions/generation-v/black-white/` (정지컷) |
-| 4 | Pokémon Showdown | `sprites/gen5/`, `gen5-back/` (정지컷 — 뒷모습 커버리지가 여기만 완전하다) |
+| 4 | Pokémon Showdown | `sprites/gen5/`, `gen5-back/` (정지컷) |
 
 `other/showdown/` 폴더는 **쓰지 않는다.** 이름과 달리 BW 도트가 아니라 최신 고해상도
 스프라이트라서, 같은 칸에 넣으면 "고해상도를 축소한 것"처럼 보인다.
 
-> 스프라이트 원본의 지식재산권은 Nintendo / Creatures Inc. / GAME FREAK Inc.에 있다.
-> 5세대 이후 종의 BW 도트는 커뮤니티(Smogon 스프라이트 프로젝트) 제작물이다.
-> 이 프로젝트는 비영리 팬 프로젝트이며 위 회사들과 아무 관련이 없다.
+> 이 프로젝트는 **비영리 팬 프로젝트**이며 위 회사들과 아무 관련이 없다.
 
 ## 기술 이펙트 애니메이션 · 배틀 효과음
 
