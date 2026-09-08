@@ -27,7 +27,7 @@ function autoPlay(game) {
   }
 }
 
-const game = createGame({ seed: 20260905 });
+const game = await createGame({ seed: 20260905 });
 const p = playerAgency(game);
 console.log(`=== ${p.name} (${p.tierLabel}) ===`);
 console.log(`시작 자금 ${p.funds} · 일일 경비 ${dailyUpkeep(game)} · 트레이너 ${p.roster.length}명\n`);
@@ -48,7 +48,7 @@ console.log(`\n=== ${DAYS}일 진행 ===`);
 let entries = 0, titles = 0;
 for (let i = 0; i < DAYS; i++) {
   autoPlay(game);
-  const r = advanceDay(game);
+  const r = await advanceDay(game);
   if (r.tournament) {
     const mine = r.myResults;
     entries += mine.length;

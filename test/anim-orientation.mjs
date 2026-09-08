@@ -12,7 +12,7 @@
  *   · focus 3(축)만 통째로 뒤집힌다 — 화염방사가 반대로 뻗어야 하니까.
  */
 import { makePlacement, loadAnim } from '../src/ui/move-fx.js';
-import { POKEMON_POOL } from '../src/data/pokemon-pool.js';
+import { SPECIES_POOL } from '../src/data/species-pool.js';
 
 /* 실제 배틀 화면과 같은 배치 (p1 좌하단 / p2 우상단) */
 const P1 = { x: 185, y: 326 };
@@ -30,7 +30,16 @@ const A = forCaster('p1');
 const B = forCaster('p2');
 
 /** 풀에 실제로 쓰이는 기술 전부 + 상태이상 공통 연출 */
-const moves = [...new Set(POKEMON_POOL.flatMap((e) => e.moves))].sort();
+/* 풀에서 기술을 지운 뒤로는(레벨업으로 배운다) 대표 기술을 직접 나열한다.
+   focus 종류(대상/시전자/축/화면)를 골고루 덮는 게 목적이다. */
+const moves = [
+  'Flamethrower', 'Thunderbolt', 'Ice Beam', 'Shadow Ball', 'Dark Pulse', 'Sludge Bomb',
+  'Earthquake', 'Rock Slide', 'Stone Edge', 'Earth Power', 'Play Rough', 'Close Combat',
+  'Swords Dance', 'Dragon Dance', 'Nasty Plot', 'Calm Mind', 'Recover', 'Roost',
+  'Draco Meteor', 'Air Slash', 'Crunch', 'Iron Head', 'Body Slam', 'Brave Bird',
+  'Gigaton Hammer', 'Meteor Mash', 'Pyro Ball', 'Aqua Step', 'Ivy Cudgel', 'Bitter Blade',
+  'Toxic', 'Will-O-Wisp', 'Thunder Wave', 'Leech Seed', 'Giga Drain', 'U-turn',
+];
 const commons = ['common-burn', 'common-poison', 'common-paralysis', 'common-sleep', 'common-frozen'];
 
 let checked = 0;

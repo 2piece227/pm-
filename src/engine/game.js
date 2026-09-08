@@ -16,6 +16,8 @@ import {
   LOCAL_TOURNAMENT_TIERS,
 } from './league.js';
 import { STAT_KEYS } from '../data/agencies.js';
+import { gainExp } from '../data/pokemon.js';
+import { SPECIES_KO, ko, iGa } from '../data/ko.js';
 
 export const GAME_CONFIG = {
   /* 대회 일정 — 등급마다 7일 주기, 요일을 어긋나게 둬서 매주 세 번 기회가 온다 */
@@ -35,7 +37,12 @@ export const GAME_CONFIG = {
   growth: {
     trainRate: 0.10,   // 지정 훈련한 스탯
     battleRate: 0.02,  // 배틀은 전 스탯에 소량
+    trainExp: 900,     // 훈련한 날 파티가 받는 경험치
+    battleExp: 2600,   // 대회를 뛴 날
   },
+
+  /* 포켓몬 경험치 (§6.2) — 훈련보다 실전이 훨씬 크다 */
+  monExp: { train: 900, battle: 2600 },
 
   market: {
     refreshDays: 7,
@@ -49,13 +56,13 @@ export const GAME_CONFIG = {
 
 /* ---------------- 게임 생성 ---------------- */
 
-export function createGame({
+export async function createGame({
   seed = Date.now() & 0x7fffffff,
   playerName = null,
   agencyChoiceId = null,
   startEmpty = false,   // 오프닝을 거치면 로스터를 비운 채 시작한다 (§3.10)
 } = {}) {
-  const league = createLeague({ seed, playerAgencyId: agencyChoiceId });
+  const league = await createLeague({ seed, playerAgencyId: agencyChoiceId });
   const player = league.agencies.find((a) => a.isPlayer);
   if (startEmpty) player.roster = [];
 
@@ -85,7 +92,7 @@ export function createGame({
     },
   };
 
-  refreshMarket(game);
+  await refreshMarket(game);
   return game;
 }
 
@@ -95,6 +102,8 @@ export const BADGES_TO_UNLOCK = 8;
 /** 지금 시장에서 계약할 수 있나 — 오프닝이 안 끝났으면 잠긴다 (§3.10) */
 export function rosterLock(game) {
   if (game.opening?.done) return null;
+  /* 아직 한 명도 없으면 잠글 게 없다 — 첫 계약은 해야 시작이 된다 */
+  if (!playerAgency(game).roster.length) return null;
   const t = game.opening?.firstTrainerId
     ? findTrainer(game.league, game.opening.firstTrainerId) : null;
   const badges = t?.badges?.length ?? 0;
@@ -203,19 +212,42 @@ function growStat(trainer, key, rate) {
   return gain;
 }
 
+/**
+ * 파티에 경험치를 넣는다. 레벨이 오르면 리포트에 남겨 알림으로 띄운다.
+ * 레벨이 높을수록 같은 경험치로 덜 오르는 건 곡선(레벨^3)이 알아서 해준다.
+ */
+async function trainParty(game, trainer, amount, report) {
+  for (const mon of trainer.party || []) {
+    const r = await gainExp(mon, amount);
+    if (r.levels) {
+      report.levelUps.push({
+        trainer: trainer.name, species: mon.species, level: mon.level, learned: r.learned,
+      });
+      /* 받은 메시지함은 뉴스피드를 읽는다 — 하루치 리포트에만 담으면 다음 날 사라진다 */
+      /* 받은 메시지함은 뉴스피드를 읽는다 — 하루치 리포트에만 담으면 다음 날 사라진다 */
+      game.league.newsFeed.push({
+        day: game.day,
+        text: `${trainer.name}의 ${iGa(ko(SPECIES_KO, mon.species))} 레벨 ${mon.level}`
+          + (r.learned.length ? ` — ${r.learned.join(', ')} 습득` : ''),
+      });
+    }
+  }
+}
+
 /* ---------------- 하루 진행 ---------------- */
 
 /**
  * 하루를 넘긴다. 이 함수 하나가 게임의 심장.
  * @returns 그날 리포트 (UI가 그대로 보여준다)
  */
-export function advanceDay(game) {
+export async function advanceDay(game) {
   if (game.gameOver) return game.lastReport;
 
   const report = {
     day: game.day,
     trained: [],
     rested: [],
+    levelUps: [],   // 포켓몬이 레벨업하면 여기 쌓인다
     tournament: null,
     myResults: [],
     income: 0,
@@ -253,6 +285,8 @@ export function advanceDay(game) {
       const key = action.split(':')[1];
       const gain = growStat(t, key, GAME_CONFIG.growth.trainRate);
       t.condition = Math.max(0, t.condition + GAME_CONFIG.condition.train);
+      /* 트레이너만 크는 게 아니다 — 포켓몬도 같이 큰다 (§6.2) */
+      await trainParty(game, t, GAME_CONFIG.growth.trainExp, report);
       report.trained.push({ name: t.name, key, gain });
       continue;
     }
@@ -283,12 +317,13 @@ export function advanceDay(game) {
       if (t) t.condition = Math.max(0, t.condition + GAME_CONFIG.condition.tournament);
     }
 
-    /* 배틀을 뛰면 전 스탯이 조금씩 는다 */
+    /* 배틀을 뛰면 전 스탯이 조금씩 늘고, 포켓몬은 경험치를 받는다 */
     for (const m of tournament.matches) {
       for (const id of [m.aId, m.bId]) {
         const t = findTrainer(league, id);
         if (!t) continue;
         for (const k of STAT_KEYS) growStat(t, k, GAME_CONFIG.growth.battleRate);
+        if (t.agencyId === player.id) await trainParty(game, t, GAME_CONFIG.growth.battleExp, report);
       }
     }
 
@@ -320,7 +355,7 @@ export function advanceDay(game) {
   report.prize = report.net + upkeep;            // 경비를 빼기 전 = 대회에서 번 돈(참가비 차감 후)
 
   /* --- 5. 시장 갱신 --- */
-  if (game.day % GAME_CONFIG.market.refreshDays === 0) refreshMarket(game);
+  if (game.day % GAME_CONFIG.market.refreshDays === 0) refreshMarket(game);   // 비동기지만 결과를 기다릴 필요 없다
 
   /* --- 6. 뉴스 — 이번 하루 동안 새로 생긴 것만 (league 쪽은 day를 안 찍으므로 여기서 찍는다) */
   const fresh = league.newsFeed.length - newsAtStart;
@@ -359,7 +394,7 @@ export function marketFeeFor(rating) {
   return Math.round(rating * rating * GAME_CONFIG.market.feeCoef);
 }
 
-export function refreshMarket(game) {
+export async function refreshMarket(game) {
   const league = game.league;
   const player = playerAgency(game);
   game.market = [];
@@ -373,7 +408,7 @@ export function refreshMarket(game) {
       statRange: profile === 'strong' ? [15, 20] : profile === 'mid' ? [11, 17] : [8, 14],
       rosterProfile: profile,
     };
-    const t = makeTrainerFor(fakeAgency, `m${game.marketSeq++}`, game.rng);
+    const t = await makeTrainerFor(fakeAgency, `m${game.marketSeq++}`, game.rng);
     t.agencyId = null;
     game.market.push({ trainer: t, fee: marketFeeFor(trainerRating(t)) });
   }

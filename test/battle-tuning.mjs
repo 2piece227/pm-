@@ -8,7 +8,7 @@
  *   node test/battle-tuning.mjs [횟수]
  */
 import { createTrainerAI, runBattle, makeRng } from '../src/engine/run-battle.js';
-import { buildTeam, ROSTER_PROFILES } from '../src/engine/team-builder.js';
+import { buildParty, teamTextOf, ROSTER_PROFILES } from '../src/engine/team-builder.js';
 import { TrainerAI } from '../src/ai/trainer-ai.js';
 
 const N = Number(process.argv[2] || 100);
@@ -26,7 +26,7 @@ TrainerAI.prototype.temperature = function (turn) {
   return origTemp.call(this, turn);
 };
 
-function trial(label, profA, profB, statsA = FULL, statsB = FULL) {
+async function trial(label, profA, profB, statsA = FULL, statsB = FULL) {
   Object.assign(fired, { focus: 0, mental: 0, calls: 0 });
   const A = createTrainerAI({ name: 'A', stats: statsA }, '균형형', makeRng(11));
   const B = createTrainerAI({ name: 'B', stats: statsB }, '균형형', makeRng(22));
@@ -34,8 +34,8 @@ function trial(label, profA, profB, statsA = FULL, statsB = FULL) {
 
   let winA = 0, turns = 0, setup = 0, switches = 0, battlesWithSetup = 0, maxTurns = 0;
   for (let i = 0; i < N; i++) {
-    const teamA = buildTeam(teamRng, profA);
-    const teamB = buildTeam(teamRng, profB);
+    const teamA = teamTextOf(await buildParty(teamRng, profA));
+    const teamB = teamTextOf(await buildParty(teamRng, profB));
     const r = runBattle({ trainerA: A, trainerB: B, teamA, teamB, seed: 1000 + i * 7919 });
     if (r.winner === 'p1') winA++;
     turns += r.turns;
@@ -57,17 +57,17 @@ function trial(label, profA, profB, statsA = FULL, statsB = FULL) {
 
 console.log(`\n=== §13-3단계 배틀 튜닝 확인 · 조건당 ${N}회 ===\n`);
 console.log('--- 등급별 팀으로 배틀이 성립하는가 ---');
-for (const prof of Object.keys(ROSTER_PROFILES)) trial(`${prof} vs ${prof}`, prof, prof);
+for (const prof of Object.keys(ROSTER_PROFILES)) await trial(`${prof} vs ${prof}`, prof, prof);
 
 console.log('\n--- 등급 차이가 승률로 나타나는가 (팀 전력 축) ---');
-trial('elite vs grunt', 'elite', 'grunt');
-trial('elite vs mid', 'elite', 'mid');
-trial('mid vs weak', 'mid', 'weak');
+await trial('elite vs grunt', 'elite', 'grunt');
+await trial('elite vs mid', 'elite', 'mid');
+await trial('mid vs weak', 'mid', 'weak');
 
 console.log('\n--- 같은 팀 등급에서 트레이너 실력이 승률을 움직이는가 (AI 축) ---');
 const WEAK_T = { judge: 7, ops: 7, focus: 7, know: 7, mental: 7 };
 const MID_T = { judge: 14, ops: 14, focus: 14, know: 14, mental: 14 };
-trial('만점 vs 약체(7)  [mid팀]', 'mid', 'mid', FULL, WEAK_T);
-trial('만점 vs 중간(14) [mid팀]', 'mid', 'mid', FULL, MID_T);
-trial('만점 vs 만점     [mid팀]', 'mid', 'mid', FULL, FULL);
+await trial('만점 vs 약체(7)  [mid팀]', 'mid', 'mid', FULL, WEAK_T);
+await trial('만점 vs 중간(14) [mid팀]', 'mid', 'mid', FULL, MID_T);
+await trial('만점 vs 만점     [mid팀]', 'mid', 'mid', FULL, FULL);
 console.log('');

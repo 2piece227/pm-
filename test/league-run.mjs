@@ -10,7 +10,7 @@ import {
 const WEEKS = Number(process.argv[2] || LEAGUE_CONFIG.seasonWeeks);
 
 console.log('=== 리그 생성 ===');
-const league = createLeague({ seed: 20260904 });
+const league = await createLeague({ seed: 20260904 });
 console.log(`${league.name} · 소속사 ${league.agencies.length}개 · 트레이너 ${allTrainers(league).length}명\n`);
 
 for (const a of league.agencies) {

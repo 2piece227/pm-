@@ -11,12 +11,12 @@
  * 다시 볼 때 로그를 통째로 들고 있을 필요가 없다.
  */
 import { createTrainerAI, runBattle, makeRng, GEN } from './run-battle.js';
-import { buildTeam } from './team-builder.js';
+import { buildParty, teamTextOf } from './team-builder.js';
 import {
   KANTO_JOHTO_AGENCIES, createAgency, createTrainer, makeName, playerAgencyDef, effectiveStats, STAT_KEYS,
 } from '../data/agencies.js';
 import { curve } from '../ai/estimate.js';
-import { POKEMON_POOL } from '../data/pokemon-pool.js';
+import { SPECIES_POOL } from '../data/species-pool.js';
 
 /* ---------------- 설정값 (PROGRESS.md Q2~Q4의 기본값) ---------------- */
 export const LEAGUE_CONFIG = {
@@ -69,20 +69,20 @@ export const LOCAL_TOURNAMENT_TIERS = [
 
 /* ---------------- 트레이너 능력 평가 ---------------- */
 
-/** 팀 전력 — 풀의 tier와 노력치 투자량을 반영한 근사치 */
-export function teamPower(teamText) {
-  const blocks = teamText.split(/\n\n+/).filter((b) => b.trim());
+/**
+ * 팀 전력 — 종족 tier와 **실제로 키운 정도(레벨·노력치)**를 본다.
+ * 완성품을 찍어내던 시절엔 tier만 봐도 됐지만, 이제 같은 종이라도 레벨이 다르다.
+ */
+export function teamPower(party) {
+  if (!party?.length) return 0;
   let sum = 0;
-  let evBonus = 0;
-  for (const block of blocks) {
-    const species = block.trim().split('\n')[0].split(' @')[0].trim();
-    const entry = POKEMON_POOL.find((p) => p.species === species);
-    sum += entry ? entry.tier : 2;
-    const m = /EVs:\s*(\d+)/.exec(block);
-    if (m) evBonus += Number(m[1]) / 252;
+  for (const mon of party) {
+    const entry = SPECIES_POOL.find((p) => p.species === mon.species);
+    const tier = entry ? entry.tier : 2;
+    const ev = Object.values(mon.evs || {}).reduce((a, b) => a + b, 0) / 510;
+    sum += tier * 4 + (mon.level / 50) * 12 + ev * 6;
   }
-  const n = blocks.length || 1;
-  return (sum / n) * 10 + (evBonus / n) * 6; // tier 1~3 → 10~30, 노력치 풀투자 +6
+  return sum / party.length;
 }
 
 /**
@@ -93,7 +93,7 @@ export function trainerRating(trainer) {
   /* 컨디션은 빼고 순수 실력만 본다 — 출전 자격/시드는 컨디션 때문에 흔들리면 안 된다 */
   const s = trainer.stats;
   const skill = STAT_KEYS.reduce((acc, k) => acc + curve(s[k]), 0) / STAT_KEYS.length;
-  return skill * 0.5 + teamPower(trainer.team) * 0.5;
+  return skill * 0.5 + teamPower(trainer.party) * 0.5;
 }
 
 /* ---------------- 트레이너 생성 ---------------- */
@@ -103,7 +103,7 @@ export function trainerRating(trainer) {
  * 현재 실력(CA)은 statRange 안에서 뽑고, 잠재력(PA)은 그보다 위로 잡는다 —
  * PA와 CA의 간격이 곧 "얼마나 더 클 수 있는 선수인가"다 (§4.3).
  */
-export function makeTrainerFor(agency, id, rng, { name = null } = {}) {
+export async function makeTrainerFor(agency, id, rng, { name = null, profile = null } = {}) {
   const [lo, hi] = agency.statRange;
   const stats = {};
   const potential = {};
@@ -119,7 +119,7 @@ export function makeTrainerFor(agency, id, rng, { name = null } = {}) {
     agencyId: agency.id,
     stats,
     potential,
-    team: buildTeam(rng, agency.rosterProfile),
+    party: await buildParty(rng, profile || agency.rosterProfile),
   });
   t.salary = salaryFor(t);
   return t;
@@ -135,7 +135,7 @@ export function salaryFor(trainer) {
 /**
  * 관동·성도 리그를 만든다. 같은 시드면 같은 리그가 나온다.
  */
-export function createLeague({ seed = 20260904, playerAgencyId = null } = {}) {
+export async function createLeague({ seed = 20260904, playerAgencyId = null } = {}) {
   const rng = makeRng(seed);
   const agencies = [];
   let trainerSeq = 1;
@@ -149,7 +149,7 @@ export function createLeague({ seed = 20260904, playerAgencyId = null } = {}) {
     const agency = createAgency(def);
     const [lo, hi] = def.statRange;
     for (let i = 0; i < LEAGUE_CONFIG.trainersPerAgency; i++) {
-      const t = makeTrainerFor(agency, `t${trainerSeq++}`, rng);
+      const t = await makeTrainerFor(agency, `t${trainerSeq++}`, rng);
       agency.roster.push(t);
     }
     agencies.push(agency);
@@ -305,7 +305,7 @@ export function runMatch(league, aId, bId, seed, { collectLog = false, snapshot 
       /* 컨디션이 깎인 트레이너는 실제로 약해진다 (§4.5) — 그 시점 값을 그대로 굳힌다 */
       aStats: { ...effectiveStats(a) }, bStats: { ...effectiveStats(b) },
       aStyle: a.nature.style, bStyle: b.nature.style,
-      aTeam: a.team, bTeam: b.team,
+      aTeam: teamTextOf(a.party), bTeam: teamTextOf(b.party),
     };
   }
 

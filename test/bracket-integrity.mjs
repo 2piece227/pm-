@@ -7,11 +7,11 @@
  */
 import { createGame, advanceDay, assignAction, playerRoster, tournamentOn, findTrainer } from '../src/engine/game.js';
 
-const game = createGame({ seed: 20260905 });
+const game = await createGame({ seed: 20260905 });
 for (let d = 0; d < 25; d++) {
   const tier = tournamentOn(game.day);
   for (const t of playerRoster(game)) assignAction(game, t.id, tier ? `enter:${tier.id}` : 'train:judge');
-  advanceDay(game);
+  await advanceDay(game);
 }
 
 let problems = 0;

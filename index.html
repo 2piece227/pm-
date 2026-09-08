@@ -247,6 +247,101 @@ th,td{border:1px solid var(--line2);padding:5px 7px;text-align:left}
 th{background:var(--panel2);color:var(--sub)}td.n{text-align:right;font-variant-numeric:tabular-nums}
 .note{font-size:11px;color:var(--sub);line-height:1.7}
 .sub-t{color:var(--sub);font-weight:400}
+/* ================= FM식 셸 — 상단바 + 좌측 메뉴 + 본문 ================= */
+body{padding:0}
+.app[hidden]{display:none!important}
+.app{display:flex;flex-direction:column;height:100vh}
+
+.topbar{display:flex;align-items:center;gap:16px;padding:9px 14px;
+  background:var(--panel);border-bottom:2px solid var(--line);flex:none}
+.tb-club{min-width:150px}
+.tb-club b{display:block;font-size:14px;line-height:1.25}
+.tb-club span{font-size:11px;color:var(--sub)}
+.tb-info{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--sub);flex:1}
+.tb-info b{color:var(--ink);font-size:13px;margin-left:3px}
+.tb-info b.neg{color:var(--red)}
+#tb-continue{padding:8px 18px}
+
+.body{display:flex;flex:1;min-height:0}
+.side{width:170px;flex:none;background:var(--panel2);border-right:2px solid var(--line);
+  padding:8px 0;overflow-y:auto}
+.side .grp{font-size:10px;font-weight:800;color:var(--sub);padding:10px 14px 4px;letter-spacing:.5px}
+.side button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:transparent;
+  border:none;border-left:3px solid transparent;border-radius:0;color:var(--sub);
+  font-size:13px;font-weight:700;padding:8px 14px}
+.side button:hover{background:var(--panel);color:var(--ink)}
+.side button.on{background:var(--panel);color:var(--ink);border-left-color:var(--accent)}
+.side .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:10px;font-weight:800;
+  border-radius:9px;padding:0 6px;min-width:17px;text-align:center}
+.side button.lock{opacity:.45}
+
+.main{flex:1;min-width:0;overflow-y:auto;padding:14px 16px}
+.page-h{display:flex;align-items:baseline;gap:10px;margin:0 0 12px}
+.page-h h2{font-size:17px;margin:0}
+.page-h .note{margin:0}
+
+/* FM식 표 */
+.grid{width:100%;border-collapse:collapse;font-size:12.5px}
+.grid th{text-align:left;font-size:10.5px;color:var(--sub);font-weight:800;
+  border-bottom:2px solid var(--line);padding:5px 7px;white-space:nowrap}
+.grid td{border-bottom:1px solid var(--line2);padding:6px 7px}
+.grid tbody tr{cursor:pointer}
+.grid tbody tr:hover{background:var(--panel2)}
+.grid td.n,.grid th.n{text-align:right;font-variant-numeric:tabular-nums}
+.grid .nm{font-weight:800}
+
+/* 능력치 숫자 — FM처럼 값에 따라 색이 붙는다 */
+.at{display:inline-block;min-width:20px;text-align:center;border-radius:3px;
+  font-weight:800;font-size:12px;padding:0 3px}
+.at.lo{color:#c76a5c}.at.mid{color:var(--sub)}.at.hi{color:#3f9a53}.at.top{color:#2f7fd0}
+
+/* 받은 메시지함 */
+.inbox{border:2px solid var(--line);border-radius:8px;overflow:hidden}
+.msg{display:flex;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line2);
+  background:var(--panel);cursor:pointer}
+.msg:last-child{border-bottom:none}
+.msg:hover{background:var(--panel2)}
+.msg.unread{border-left:3px solid var(--accent)}
+.msg .d{font-size:10.5px;color:var(--sub);width:52px;flex:none;padding-top:2px}
+.msg .t{font-weight:800;font-size:13px;margin-bottom:2px}
+.msg .x{font-size:12px;color:var(--sub);line-height:1.6}
+
+/* 카드 묶음 */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.card{background:var(--panel);border:2px solid var(--line2);border-radius:8px;padding:10px}
+.card h3{font-size:13.5px;margin:0 0 6px}
+.card.sel{border-color:var(--accent)}
+
+/* 포켓몬 줄 */
+.mon{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--line2)}
+.mon:last-child{border-bottom:none}
+.mon img{width:34px;height:34px;object-fit:contain;image-rendering:pixelated;flex:none}
+.mon .nm{font-weight:800;font-size:12.5px}
+.mon .lv{font-size:11px;color:var(--sub)}
+.mon .mv{font-size:10.5px;color:var(--sub);margin-left:auto;text-align:right;line-height:1.5}
+.xpbar{height:4px;background:var(--line2);border-radius:2px;overflow:hidden;margin-top:3px}
+.xpbar i{display:block;height:100%;background:var(--accent)}
+
+/* 계약 협상 — FM처럼 대화로 주고받는다 */
+.nego{display:grid;grid-template-columns:280px 1fr;gap:14px;align-items:start}
+@media(max-width:820px){.nego{grid-template-columns:1fr}}
+.chat{border:2px solid var(--line);border-radius:8px;background:var(--panel);
+  padding:12px;max-height:52vh;overflow-y:auto}
+.line{margin-bottom:12px;max-width:86%}
+.line .who{font-size:10.5px;color:var(--sub);font-weight:800;margin-bottom:3px}
+.line .bub{background:var(--panel2);border:2px solid var(--line2);border-radius:10px;
+  padding:8px 11px;font-size:12.5px;line-height:1.7}
+.line.me{margin-left:auto}
+.line.me .who{text-align:right}
+.line.me .bub{background:var(--accent);border-color:var(--accent);color:#fff}
+.line.sys{max-width:100%;text-align:center}
+.line.sys .bub{background:transparent;border:none;color:var(--sub);font-size:11.5px;padding:2px}
+
+.watch-ov{position:fixed;inset:0;z-index:50;background:rgba(8,11,18,.82);
+  overflow-y:auto;padding:16px}
+.watch-ov[hidden]{display:none!important}
+.watch-inner{max-width:820px;margin:0 auto}
+
 /* ================= 오프닝 (§3.10) ================= */
 .ov{position:fixed;inset:0;z-index:60;background:var(--bg);overflow-y:auto;
   display:flex;align-items:center;justify-content:center;padding:20px}
@@ -398,16 +493,6 @@ input[type=number]{font-family:inherit;font-size:13px;padding:5px 7px;width:92px
     </div>
   </section>
 
-  <!-- 5. 첫 유스 계약 (§5.3) -->
-  <section class="ov-page" data-page="scout">
-    <h2 class="ov-h">첫 트레이너 계약</h2>
-    <div class="ov-sub" id="scout-sub"></div>
-    <input type="text" id="scout-q" placeholder="이름으로 검색" autocomplete="off" style="margin-bottom:10px">
-    <div class="scout-grid">
-      <div id="cand-list"></div>
-      <div id="offer-box"></div>
-    </div>
-  </section>
 </div>
 
 <!-- 튜토리얼 말풍선 -->
@@ -424,115 +509,61 @@ input[type=number]{font-family:inherit;font-size:13px;padding:5px 7px;width:92px
   </div>
 </div>
 
-<div class="wrap">
+<div class="app" id="app" hidden>
 
-  <div class="topbar">
-    <div>
-      <div class="who" id="hd-agency">—</div>
-      <div class="note" id="hd-concept"></div>
+  <!-- 상단 바 — 소속사 / 날짜 / 자금 / 계속 -->
+  <header class="topbar">
+    <div class="tb-club">
+      <b id="tb-agency">—</b>
+      <span id="tb-manager"></span>
     </div>
-    <div class="stats-row" id="hd-stats"></div>
-    <button id="btn-day">다음 날 ▶</button>
-  </div>
-
-  <div id="gameover" style="display:none" class="panel"><div class="over" id="gameover-msg"></div></div>
-
-  <div class="tabs">
-    <button class="tab on" data-tab="today">오늘</button>
-    <button class="tab" data-tab="roster">트레이너</button>
-    <button class="tab" data-tab="tour">대회</button>
-    <button class="tab" data-tab="market">시장</button>
-    <button class="tab" data-tab="league">리그</button>
-    <button class="tab" data-tab="news">소식</button>
-  </div>
-
-  <!-- 관전 화면: 평소엔 접혀 있고 [관전] 누르면 열린다 -->
-  <div class="panel" id="watch-panel" style="display:none">
-    <div class="panel-t" id="watch-title">관전</div>
-    <div class="scene" id="scene">
-      <div class="plat foe"></div><div class="plat me"></div>
-      <div class="hpbox foe" id="hp-p2"></div>
-      <div class="hpbox me" id="hp-p1"></div>
-      <div class="spr foe" id="sp-p2"></div>
-      <div class="spr me" id="sp-p1"></div>
-      <div class="btname foe" id="tn-p2"></div>
-      <div class="btname me" id="tn-p1"></div>
+    <div class="tb-info">
+      <span>날짜 <b id="tb-date">—</b></span>
+      <span>자금 <b id="tb-funds">—</b></span>
+      <span>주급 <b id="tb-wage">—</b></span>
+      <span>평판 <b id="tb-rep">—</b></span>
     </div>
-    <div class="tbox" id="tbox"></div>
-    <div class="ctrl" style="margin-top:8px">
-      <select id="speed">
-        <option value="0.7">0.7배속 (느리게)</option>
-        <option value="1" selected>1배속</option>
-        <option value="2">2배속</option>
-        <option value="4">4배속</option>
-        <option value="0">즉시(로그만)</option>
-      </select>
-      <label class="chk"><input type="checkbox" id="sfx-on" checked> 효과음</label>
-      <button id="watch-pause" class="ghost">⏸ 일시정지</button>
-      <button id="watch-close" class="ghost">닫기</button>
+    <button id="tb-continue">계속 ▶</button>
+  </header>
+
+  <div class="body">
+    <!-- 좌측 메뉴 -->
+    <nav class="side" id="side"></nav>
+
+    <!-- 본문 -->
+    <main class="main" id="main"></main>
+  </div>
+</div>
+
+<!-- 관전 화면 — 오버레이로 뜬다 -->
+<div class="watch-ov" id="watch-ov" hidden>
+  <div class="watch-inner">
+    <div class="panel" id="watch-panel" style="display:none">
+      <div class="panel-t" id="watch-title">관전</div>
+      <div class="scene" id="scene">
+        <div class="plat foe"></div><div class="plat me"></div>
+        <div class="hpbox foe" id="hp-p2"></div>
+        <div class="hpbox me" id="hp-p1"></div>
+        <div class="spr foe" id="sp-p2"></div>
+        <div class="spr me" id="sp-p1"></div>
+        <div class="btname foe" id="tn-p2"></div>
+        <div class="btname me" id="tn-p1"></div>
+      </div>
+      <div class="tbox" id="tbox"></div>
+      <div class="ctrl" style="margin-top:8px">
+        <select id="speed">
+          <option value="0.7">0.7배속 (느리게)</option>
+          <option value="1" selected>1배속</option>
+          <option value="2">2배속</option>
+          <option value="4">4배속</option>
+          <option value="0">즉시(로그만)</option>
+        </select>
+        <label class="chk"><input type="checkbox" id="sfx-on" checked> 효과음</label>
+        <button id="watch-pause" class="ghost">⏸ 일시정지</button>
+        <button id="watch-close" class="ghost">닫기</button>
+      </div>
+      <div id="log" style="margin-top:8px"></div>
     </div>
-    <div id="log" style="margin-top:8px"></div>
-  </div>
-
-  <!-- 오늘 -->
-  <div class="panel" data-panel="today">
-    <div class="panel-t">오늘 일정</div>
-    <div id="today-sched"></div>
-  </div>
-  <div class="panel" data-panel="today">
-    <div class="panel-t">트레이너에게 오늘 할 일 배정</div>
-    <div class="tcards" id="today-cards"></div>
-  </div>
-  <div class="panel" data-panel="today">
-    <div class="panel-t">어제 리포트</div>
-    <div id="today-report"></div>
-  </div>
-
-  <!-- 트레이너 -->
-  <div class="panel" data-panel="roster" style="display:none">
-    <div class="panel-t">내 트레이너</div>
-    <div id="roster-body"></div>
-  </div>
-
-  <!-- 대회 -->
-  <div class="panel" data-panel="tour" style="display:none">
-    <div class="panel-t">다가오는 대회</div>
-    <div id="tour-upcoming"></div>
-  </div>
-  <div class="panel" data-panel="tour" style="display:none">
-    <div class="panel-t">지난 대회</div>
-    <div class="lg-cols">
-      <div id="tour-list"></div>
-      <div id="tour-matches"></div>
-    </div>
-  </div>
-
-  <!-- 시장 -->
-  <div class="panel" data-panel="market" style="display:none">
-    <div class="panel-t">영입 가능 (7일마다 갱신)</div>
-    <div class="mkt" id="market-body"></div>
-  </div>
-  <div class="panel" data-panel="market" style="display:none">
-    <div class="panel-t">방출</div>
-    <div id="release-body"></div>
-  </div>
-
-  <!-- 리그 -->
-  <div class="panel" data-panel="league" style="display:none">
-    <div class="panel-t">리그 순위표</div>
-    <div id="league-body"></div>
-  </div>
-
-  <!-- 소식 -->
-  <div class="panel" data-panel="news" style="display:none">
-    <div class="panel-t">소식</div>
-    <div id="news-body"></div>
-  </div>
-
-  <div class="panel note">
-    배틀 계산은 <b>@pkmn/sim</b>(포켓몬쇼다운 시뮬레이터)이 처리하고, 이 프로젝트가 만든 건
-    트레이너 AI 레이어와 매니지먼트 루프다. 스프라이트는 쇼다운 gen5 도트를 링크해서 쓴다.<br>
-    <b>미구현(스키마만):</b> 코치 · 계약 협상/바이아웃 · 글로벌 대회 · 타지방 · 전설의 포켓몬 · 콘테스트 · 회복약.
   </div>
 </div>
 <script type="module" src="/src/main.js"></script>

@@ -8,7 +8,7 @@
  *
  * 지금은 포켓로그의 BW 애니메이션 시트를 먼저 쓰고, 없을 때만 GIF/PNG로 떨어진다.
  */
-import { POKEMON_POOL } from '../src/data/pokemon-pool.js';
+import { SPECIES_POOL } from '../src/data/species-pool.js';
 import { sheetPaths, parseAtlas, SHEET_REPO } from '../src/ui/sprite-anim.js';
 import { spriteCandidates } from '../src/ui/sprites.js';
 
@@ -49,7 +49,7 @@ async function findFallback(species, side) {
 }
 
 const jobs = [];
-for (const e of POKEMON_POOL) for (const side of ['p1', 'p2']) jobs.push({ species: e.species, side });
+for (const e of SPECIES_POOL) for (const side of ['p1', 'p2']) jobs.push({ species: e.species, side });
 
 const results = [];
 let next = 0;
@@ -66,7 +66,7 @@ const stillOnly = results.filter((r) => r.sheet && r.sheet.frames === 1);
 const viaFallback = results.filter((r) => !r.sheet && r.fallback);
 const missing = results.filter((r) => !r.sheet && !r.fallback);
 
-console.log(`풀 ${POKEMON_POOL.length}종 x 앞뒤 = ${results.length}장`);
+console.log(`풀 ${SPECIES_POOL.length}종 x 앞뒤 = ${results.length}장`);
 console.log(`  시트 애니메이션   ${animated.length}`);
 console.log(`  시트 정지컷       ${stillOnly.length}` +
   (stillOnly.length ? ` (${[...new Set(stillOnly.map((r) => r.species))].join(', ')})` : ''));

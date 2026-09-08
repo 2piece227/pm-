@@ -180,7 +180,7 @@ export function makeName(rng) {
  * 이번 세션에서 실제로 쓰이는 건 stats / team / record 뿐이고,
  * 나머지는 §0.2에 따라 "필드는 있고 로직은 비어있는" 상태로 둔다.
  */
-export function createTrainer({ id, name, agencyId, stats, potential, team }) {
+export function createTrainer({ id, name, agencyId, stats, potential, party = [] }) {
   return {
     id,
     name,
@@ -200,7 +200,8 @@ export function createTrainer({ id, name, agencyId, stats, potential, team }) {
       stardom: null,
     },
 
-    team,
+    /* 보유 포켓몬 — 레벨 5부터 직접 키운다 (data/pokemon.js) */
+    party,
 
     /* §4.5 컨디션 — 대회/훈련으로 깎이고 휴식으로 회복. 낮으면 배틀 능력이 떨어진다 */
     condition: 100,

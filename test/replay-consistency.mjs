@@ -10,11 +10,11 @@
 import { createGame, advanceDay, assignAction, playerRoster, tournamentOn, findTrainer } from '../src/engine/game.js';
 import { replayMatch } from '../src/engine/league.js';
 
-const game = createGame({ seed: 20260905 });
+const game = await createGame({ seed: 20260905 });
 for (let d = 0; d < 20; d++) {
   const tier = tournamentOn(game.day);
   for (const t of playerRoster(game)) assignAction(game, t.id, tier ? `enter:${tier.id}` : 'train:judge');
-  advanceDay(game);
+  await advanceDay(game);
 }
 
 let total = 0, mismatch = 0, turnMismatch = 0;
