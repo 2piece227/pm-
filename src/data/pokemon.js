@@ -50,14 +50,18 @@ export async function levelUpMoves(speciesName) {
         const ls = await GEN.learnsets.get(id);
         const table = ls?.learnset;
         if (!table) continue;
-        const out = [];
+        /* 최신 세대에 없는 종(구구·캐터피는 SV에 안 나온다)은 9L 항목이 하나도 없다.
+           그 종이 마지막으로 나온 세대의 레벨업 표를 쓴다. */
+        const byGen = {};
         for (const [move, sources] of Object.entries(table)) {
           for (const s of sources) {
-            const m = /^9L(\d+)$/.exec(s);
-            if (m) out.push({ move: GEN.moves.get(move).name, level: Number(m[1]) });
+            const m = /^(\d)L(\d+)$/.exec(s);
+            if (!m) continue;
+            (byGen[m[1]] ??= []).push({ move: GEN.moves.get(move).name, level: Number(m[2]) });
           }
         }
-        if (out.length) return out.sort((a, b) => a.level - b.level);
+        const gens = Object.keys(byGen).map(Number).sort((a, b) => b - a);
+        if (gens.length) return byGen[gens[0]].sort((a, b) => a.level - b.level);
       }
     } catch { /* 못 받아오면 아래 폴백 */ }
     return [];
@@ -101,9 +105,20 @@ export async function createPokemon({ species, level = 5, rng = Math.random, nic
     ability: abilities[Math.floor(rng() * abilities.length)] || abilities[0] || 'Pressure',
     item: null,
     moves: movesAtLevel(table, level),
+    /* 지금까지 배운 기술 전부 — 플레이어가 이 안에서 4개를 고른다 */
+    learned: [...new Set(table.filter((m) => m.level <= level).map((m) => m.move))],
     happiness: 70,
     caughtOnDay: null,
   };
+}
+
+/** 플레이어가 기술 4개를 고른다. 배운 적 없는 기술은 거른다 */
+export function setMoves(mon, moves) {
+  const ok = (moves || []).filter((m) => (mon.learned || []).includes(m));
+  const uniq = [...new Set(ok)].slice(0, 4);
+  if (!uniq.length) return false;
+  mon.moves = uniq;
+  return true;
 }
 
 /**
@@ -118,10 +133,14 @@ export async function gainExp(mon, amount) {
 
   mon.level = after;
   const table = await levelUpMoves(mon.species);
-  const now = movesAtLevel(table, after);
-  const learned = now.filter((m) => !mon.moves.includes(m));
-  mon.moves = now;
-  return { levels: after - before, learned };
+  const newly = [...new Set(table.filter((m) => m.level > before && m.level <= after).map((m) => m.move))];
+  mon.learned = [...new Set([...(mon.learned || []), ...newly])];
+  /* 자리가 남으면 자동으로 채우고, 꽉 찼으면 **덮어쓰지 않는다** — 플레이어가 고른다 */
+  for (const mv of newly) {
+    if (mon.moves.includes(mv)) continue;
+    if (mon.moves.length < 4) mon.moves.push(mv);
+  }
+  return { levels: after - before, learned: newly };
 }
 
 /** 훈련으로 노력치를 넣는다 — 한 스탯 252 / 총합 510이 상한 (원작과 같다) */

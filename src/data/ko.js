@@ -79,6 +79,15 @@ export const eunNeun = (s) => `${s}${hasJong(s) ? '은' : '는'}`;
 export const eulReul = (s) => `${s}${hasJong(s) ? '을' : '를'}`;
 export const iGa = (s) => `${s}${hasJong(s) ? '이' : '가'}`;
 export const gwaWa = (s) => `${s}${hasJong(s) ? '과' : '와'}`;
+/** (으)로 — 받침이 없거나 ㄹ받침이면 '로' */
+export const euro = (s) => {
+  const str = String(s);
+  const c = str.charCodeAt(str.length - 1);
+  const jong = c >= 0xac00 && c <= 0xd7a3 ? (c - 0xac00) % 28 : 0;
+  return `${str}${jong === 0 || jong === 8 ? '로' : '으로'}`;
+};
+/** 숫자 뒤 이/가 — 끝자리를 한글로 읽었을 때의 받침으로 정한다 (0,1,3,6,7,8 → 받침) */
+export const numIGa = (n) => `${n}${[0, 1, 3, 6, 7, 8].includes(Math.abs(Number(n)) % 10) ? '이' : '가'}`;
 
 /* ===== 배틀 메시지용 표 — 실제 게임 자막 문구에 맞춘다 ===== */
 

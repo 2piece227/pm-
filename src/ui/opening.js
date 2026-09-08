@@ -10,7 +10,7 @@ import { createGame } from '../engine/game.js';
 import { PLAYER_AGENCY_CHOICES } from '../data/agencies.js';
 import { loadSave, writeSave, clearSave, hasResumable, saveSummary } from '../engine/save.js';
 import { initFm, gotoScouting } from './fm-view.js';
-import { resetNegotiation } from './negotiation.js';
+import { resetNegotiation, restoreYouth } from './negotiation.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -77,6 +77,7 @@ async function resume(save) {
   if (!save.agencyId) { $('in-name').value = state.playerName; show('name'); return; }
 
   await buildGame();
+  if (save.youth) await restoreYouth(state.game, save.youth);
   launch({ thenScout: !save.youth });
 }
 
@@ -177,9 +178,14 @@ const TOUR = [
     text: '계약한 트레이너와 그들이 데리고 있는 포켓몬을 봅니다. 이름을 누르면 상세로 들어갑니다.',
   },
   {
-    sel: '[data-s="training"]',
-    title: '훈련',
-    text: '오늘 뭘 시킬지 정합니다. 훈련하면 트레이너도 포켓몬도 같이 크지만 컨디션이 깎입니다.',
+    sel: '[data-s="map"]',
+    title: '맵',
+    text: '하루의 결정은 여기서 합니다. 도로를 누르고 포켓몬을 잡을지, 트레이너와 싸울지 정하면 [계속]에 결과가 옵니다.',
+  },
+  {
+    sel: '[data-s="box"]',
+    title: '박스',
+    text: '잡은 포켓몬이 여기 쌓입니다. 파티(6마리)로 올리고 내릴 수 있습니다.',
   },
   {
     sel: '[data-s="scouting"]',

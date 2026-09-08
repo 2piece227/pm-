@@ -105,12 +105,21 @@ export function runBattle({ trainerA, trainerB, teamA, teamB, seed, collectThink
   const winner =
     battle.winner === battle.p1.name ? 'p1' : battle.winner === battle.p2.name ? 'p2' : null;
 
+  /* 끝난 뒤 양쪽 파티의 남은 체력 — 탐험에서 "센터에 들렀다"를 판단하는 데 쓴다 */
+  const hpAfter = {};
+  for (const side of SIDES) {
+    hpAfter[side] = battle[side].pokemon.map((p) => ({
+      species: p.species.name, hp: p.hp, maxhp: p.maxhp, fainted: !!p.fainted,
+    }));
+  }
+
   return {
     winner,
     turns: battle.turn,
     log: battle.log.slice(),
     think,
     stats: { setupUsed, switches },
+    hpAfter,
   };
 }
 

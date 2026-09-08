@@ -17,6 +17,7 @@ import { youthStats } from '../data/youth-candidates.js';
 import { STAT_KO } from '../data/styles.js';
 import { STARTERS } from '../data/species-pool.js';
 import { ko, SPECIES_KO, gwaWa, eulReul } from '../data/ko.js';
+import { writeSave } from '../engine/save.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const won = (n) => Math.round(n).toLocaleString();
@@ -160,32 +161,40 @@ function propose() {
 
   if (!res.accept) { draw(); return; }
 
-  /* 성사 — 실제 트레이너를 만들어 로스터에 넣는다 */
+  /* 성사 — 실제 트레이너를 만들어 로스터에 넣는다. 세이브에도 남긴다 */
   const t = signCandidate(c);
   state.signed = true;
+  writeSave({ youth: { candidateId: c.id, name: c.name, offer: { ...state.offer }, starter: state.starter } });
   sayTo('sys', `계약 성사 — ${c.name}`);
   t.then(() => {
-    sayTo('sys', `첫 포켓몬으로 ${eulReul(ko(SPECIES_KO, state.starter))} 받았습니다.`);
+    sayTo('sys', `첫 포켓몬으로 ${eulReul(ko(SPECIES_KO, state.starter))} 받았습니다. 이제 맵에서 어디로 보낼지 정하세요.`);
     draw();
-    onDone?.();
+    setTimeout(() => onDone?.(), 900);
   });
   draw();
 }
 
-async function signCandidate(cand) {
-  const rng = makeRng((game.seed ^ 0x9e37) >>> 0);
+async function signCandidate(cand, offer = state.offer, starter = state.starter, g = game) {
+  const rng = makeRng((g.seed ^ 0x9e37) >>> 0);
   const t = createTrainer({
     id: `y-${cand.id}`,
     name: cand.name,
-    agencyId: playerAgency(game).id,
+    agencyId: playerAgency(g).id,
     stats: youthStats(cand),
     potential: { ...cand.potential },
-    party: await makeStarterParty(rng, state.starter),
+    party: await makeStarterParty(rng, starter),
   });
   t.badges = [];
   t.isYouth = true;
-  signYouth(game, t, contractFrom(state.offer, game.day));
+  signYouth(g, t, contractFrom(offer, g.day));
   return t;
+}
+
+/** 이어하기 — 세이브에 적힌 계약을 다시 앉힌다 */
+export async function restoreYouth(g, saved) {
+  const cand = YOUTH_CANDIDATES.find((c) => c.id === saved?.candidateId);
+  if (!cand) return null;
+  return signCandidate(cand, saved.offer || DEFAULT_OFFER, saved.starter || STARTERS[0].species, g);
 }
 
 /* ---------------- 진입 ---------------- */

@@ -17,6 +17,8 @@ import {
 } from './league.js';
 import { STAT_KEYS } from '../data/agencies.js';
 import { gainExp } from '../data/pokemon.js';
+import { explore } from './explore.js';
+import { locationById } from '../data/routes.js';
 import { SPECIES_KO, ko, iGa } from '../data/ko.js';
 
 export const GAME_CONFIG = {
@@ -164,32 +166,68 @@ export const ACTION_LABELS = {
 };
 
 /** 오늘 이 트레이너가 고를 수 있는 행동들 */
+/**
+ * 트레이너가 오늘 할 수 있는 일. 훈련은 뺐다 — 성장은 탐험(포획·배틀)으로만 한다.
+ *   rest                            쉰다
+ *   explore:<장소>:<catch|battle>   지도에서 고른 곳으로 나간다
+ *   enter:<등급>                    오늘 열리는 대회에 나간다
+ */
 export function availableActions(game, trainer) {
-  const list = [
-    { id: 'rest', label: '휴식', hint: `컨디션 +${GAME_CONFIG.condition.rest}` },
-    ...STAT_KEYS.map((k) => ({
-      id: `train:${k}`,
-      label: ACTION_LABELS[`train:${k}`],
-      hint: `컨디션 ${GAME_CONFIG.condition.train}`,
-    })),
-  ];
-
+  const list = [{ id: 'rest', label: '휴식', hint: '' }];
   const tier = tournamentOn(game.day);
   if (tier) {
     const eligible = isEligible(trainer, { ratingBand: tier.ratingBand });
-    const fit = trainer.condition >= GAME_CONFIG.condition.minToEnter;
     list.unshift({
       id: `enter:${tier.id}`,
       label: `${tier.label} 컵 출전`,
-      hint: !eligible
-        ? `출전 자격 없음 (레이팅 ${tier.ratingBand[0]}~${tier.ratingBand[1] === 999 ? '∞' : tier.ratingBand[1]})`
-        : !fit
-          ? `컨디션 부족 (${GAME_CONFIG.condition.minToEnter} 이상 필요)`
-          : `참가비 ${tier.entryCost} · 컨디션 ${GAME_CONFIG.condition.tournament}`,
-      disabled: !eligible || !fit,
+      hint: eligible ? `참가비 ${tier.entryCost}` : '출전 자격 없음',
+      disabled: !eligible,
     });
   }
   return list;
+}
+
+/** 탐험 행동 문자열 만들기/풀기 */
+export const exploreAction = (locationId, mode) => `explore:${locationId}:${mode}`;
+export function parseExplore(action) {
+  const m = /^explore:([^:]+):(catch|battle)$/.exec(action || '');
+  return m ? { locationId: m[1], mode: m[2] } : null;
+}
+
+/** 오늘 배정된 일을 사람 말로 */
+export function describeAction(action) {
+  const ex = parseExplore(action);
+  if (ex) {
+    const loc = locationById(ex.locationId);
+    return `${loc?.name || ex.locationId} · ${ex.mode === 'catch' ? '포켓몬 포획' : '트레이너 배틀'}`;
+  }
+  if (!action || action === 'rest') return '휴식';
+  if (action.startsWith('enter:')) return '대회 출전';
+  return action;
+}
+
+/* ---------------- 박스 ---------------- */
+
+/** 박스 → 파티 (6마리까지) */
+export function boxToParty(game, trainerId, index) {
+  const a = playerAgency(game);
+  const t = findTrainer(game.league, trainerId);
+  if (!t || !a.box[index]) return { ok: false, msg: '없는 포켓몬입니다.' };
+  if ((t.party || []).length >= 6) return { ok: false, msg: '파티는 6마리까지입니다.' };
+  const [mon] = a.box.splice(index, 1);
+  t.party.push(mon);
+  return { ok: true };
+}
+
+/** 파티 → 박스 (마지막 한 마리는 못 뺀다) */
+export function partyToBox(game, trainerId, index) {
+  const a = playerAgency(game);
+  const t = findTrainer(game.league, trainerId);
+  if (!t || !t.party?.[index]) return { ok: false, msg: '없는 포켓몬입니다.' };
+  if (t.party.length <= 1) return { ok: false, msg: '마지막 한 마리는 뺄 수 없습니다.' };
+  const [mon] = t.party.splice(index, 1);
+  a.box.push(mon);
+  return { ok: true };
 }
 
 export function assignAction(game, trainerId, actionId) {
@@ -205,9 +243,8 @@ export function clearActions(game) {
 function growStat(trainer, key, rate) {
   const gap = (trainer.potential[key] ?? 20) - trainer.stats[key];
   if (gap <= 0) return 0;
-  const condF = 0.5 + 0.5 * (trainer.condition / 100);
   const satF = 0.7 + 0.3 * (trainer.satisfaction / 100);
-  const gain = rate * gap * condF * satF;
+  const gain = rate * gap * satF;
   trainer.stats[key] = Math.min(trainer.potential[key], trainer.stats[key] + gain);
   return gain;
 }
@@ -247,6 +284,7 @@ export async function advanceDay(game) {
     day: game.day,
     trained: [],
     rested: [],
+    explored: [],   // 탐험 결과 — 줄글
     levelUps: [],   // 포켓몬이 레벨업하면 여기 쌓인다
     tournament: null,
     myResults: [],
@@ -270,28 +308,27 @@ export async function advanceDay(game) {
     t.lastAction = action;
 
     if (action.startsWith('enter:')) {
-      if (tier && action === `enter:${tier.id}` && t.condition >= GAME_CONFIG.condition.minToEnter
-          && isEligible(t, { ratingBand: tier.ratingBand })) {
+      if (tier && action === `enter:${tier.id}` && isEligible(t, { ratingBand: tier.ratingBand })) {
         myEntrants.push(t);
         continue;
       }
-      /* 조건이 안 맞으면 그냥 쉰 걸로 */
-      t.condition = Math.min(100, t.condition + GAME_CONFIG.condition.idle);
       t.lastAction = 'rest';
       continue;
     }
 
-    if (action.startsWith('train:')) {
-      const key = action.split(':')[1];
-      const gain = growStat(t, key, GAME_CONFIG.growth.trainRate);
-      t.condition = Math.max(0, t.condition + GAME_CONFIG.condition.train);
-      /* 트레이너만 크는 게 아니다 — 포켓몬도 같이 큰다 (§6.2) */
-      await trainParty(game, t, GAME_CONFIG.growth.trainExp, report);
-      report.trained.push({ name: t.name, key, gain });
+    /* 탐험 — 포켓몬 포획 / NPC 배틀. 결과는 글로 받은 메시지함에 들어간다 */
+    const ex = parseExplore(action);
+    if (ex) {
+      const r = await explore(game, t, ex.locationId, ex.mode);
+      if (r.caught) player.box.push(r.caught);
+      if (r.money) player.funds += r.money;
+      /* 배틀을 뛰면 트레이너 실력도 조금 는다 */
+      if (r.won !== null) for (const k of STAT_KEYS) growStat(t, k, GAME_CONFIG.growth.battleRate);
+      report.explored.push({ trainerId: t.id, name: t.name, location: r.location?.name, lines: r.lines, won: r.won });
+      league.newsFeed.push({ day: game.day, text: r.lines.join(' '), kind: 'explore', trainerId: t.id });
       continue;
     }
 
-    t.condition = Math.min(100, t.condition + GAME_CONFIG.condition.rest);
     report.rested.push(t.name);
   }
 
@@ -302,7 +339,7 @@ export async function advanceDay(game) {
     /* NPC는 §3.5 자동 판단, 플레이어는 위에서 직접 고른 사람만 */
     decideEntrants(league, tournament, {
       skipAgencyIds: [player.id],
-      minCondition: GAME_CONFIG.condition.minToEnter,
+      minCondition: 0,
     });
     for (const t of myEntrants) {
       tournament.entrants.push({ trainerId: t.id, agencyId: player.id, score: null, winChance: null });
@@ -311,11 +348,6 @@ export async function advanceDay(game) {
     runTournament(league, tournament, game.rng);
     league.tournaments.push(tournament);
 
-    /* 참가자 컨디션 소모 */
-    for (const e of tournament.entrants) {
-      const t = findTrainer(league, e.trainerId);
-      if (t) t.condition = Math.max(0, t.condition + GAME_CONFIG.condition.tournament);
-    }
 
     /* 배틀을 뛰면 전 스탯이 조금씩 늘고, 포켓몬은 경험치를 받는다 */
     for (const m of tournament.matches) {

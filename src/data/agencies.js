@@ -239,10 +239,15 @@ export const STAT_KEYS = ['judge', 'ops', 'focus', 'know', 'mental'];
  * 컨디션 100이면 그대로, 0이면 65%까지 떨어진다.
  * 이게 있어야 "연속 출전시키면 약해진다"가 성립하고, 로테이션 결정이 의미를 갖는다.
  */
+/**
+ * 배틀에 실제로 들어가는 스탯.
+ * 연패 페널티(mentalDebuff, §4.5)가 전 스탯에서 빠진다 — 멘탈이 낮을수록 크게 쌓인다.
+ * (예전의 컨디션 배율은 뺐다. 컨디션은 체력 게이지가 아니다.)
+ */
 export function effectiveStats(trainer) {
-  const f = 0.65 + 0.35 * (Math.max(0, Math.min(100, trainer.condition)) / 100);
+  const debuff = trainer.mentalDebuff || 0;
   const out = {};
-  for (const k of STAT_KEYS) out[k] = Math.max(1, trainer.stats[k] * f);
+  for (const k of STAT_KEYS) out[k] = Math.max(1, trainer.stats[k] - debuff);
   return out;
 }
 
@@ -276,6 +281,9 @@ export function createAgency(def) {
     statRange: def.statRange,
 
     roster: [],
+
+    /* 소속사 박스 — 잡아온 포켓몬이 여기로 온다. 파티(6마리)와 오간다 */
+    box: [],
 
     /* §6 코치 — 필드만. 배정 로직 없음 */
     coaches: [],
