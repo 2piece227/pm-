@@ -7,7 +7,7 @@
 import {
   createGame, advanceDay, assignAction, availableActions, playerAgency, playerRoster,
   tournamentOn, upcomingTournaments, dailyUpkeep, trainerRating, placementOf,
-  refreshMarket, signTrainer, releaseTrainer, marketFeeFor,
+  refreshMarket, signTrainer, releaseTrainer, marketFeeFor, rosterLock,
   findTrainer, findAgency, allTrainers, GAME_CONFIG, ACTION_LABELS,
 } from '../engine/game.js';
 import { standings, replayMatch } from '../engine/league.js';
@@ -49,7 +49,8 @@ function renderHeader() {
   const a = playerAgency(game);
   const upkeep = dailyUpkeep(game);
   $('hd-agency').textContent = `${a.name}`;
-  $('hd-concept').textContent = `${a.tierLabel} · ${a.concept}`;
+  /* 등급 라벨(대기업/중소…)은 화면에 안 띄운다 — §3.3 */
+  $('hd-concept').textContent = (game.playerName ? `${game.playerName} 대표 · ` : '') + a.concept;
   $('hd-stats').innerHTML =
     `<span>날짜 <b>${game.day}일차</b></span>` +
     `<span>자금 <b class="${a.funds < upkeep * 5 ? 'neg' : ''}">${won(a.funds)}</b></span>` +
@@ -279,6 +280,21 @@ async function watchMatch(tournament, index) {
 
 function renderMarket() {
   const a = playerAgency(game);
+
+  /* §3.10 — 첫 트레이너가 뱃지 8개를 채울 때까지 추가 계약은 잠긴다 */
+  const lock = rosterLock(game);
+  if (lock) {
+    $('market-body').innerHTML =
+      '<div class="tc" style="grid-column:1/-1;opacity:.85">'
+      + '<div class="tc-h"><b>지금은 계약 불가</b>'
+      + `<span class="pill">뱃지 ${lock.badges} / ${lock.needed}</span></div>`
+      + '<div class="note">첫 트레이너가 지역 뱃지 8개를 모두 모아야 로스터를 늘릴 수 있습니다.'
+      + (lock.trainer ? ` 지금은 <b>${esc(lock.trainer.name)}</b> 한 명뿐입니다.` : '')
+      + '</div></div>';
+    $('release-body').innerHTML =
+      '<div class="note">오프닝이 끝나기 전에는 방출도 잠겨 있습니다.</div>';
+    return;
+  }
   $('market-body').innerHTML = game.market.length
     ? game.market
         .map((entry, i) => {
@@ -395,8 +411,12 @@ function initTabs() {
   });
 }
 
-export function initGame() {
-  game = createGame({ seed: 20260905 });
+/**
+ * @param {{ game?: object }} opts
+ *   오프닝에서 이미 만든 게임을 넘겨받는다. 안 넘기면(=개발자 모드) 예전처럼 바로 만든다.
+ */
+export function initGame({ game: existing = null } = {}) {
+  game = existing || createGame({ seed: 20260905 });
   initTabs();
   $('btn-day').onclick = nextDay;
   const pauseBtn = $('watch-pause');

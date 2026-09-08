@@ -13,7 +13,7 @@
 import { createTrainerAI, runBattle, makeRng, GEN } from './run-battle.js';
 import { buildTeam } from './team-builder.js';
 import {
-  KANTO_JOHTO_AGENCIES, createAgency, createTrainer, makeName, effectiveStats, STAT_KEYS,
+  KANTO_JOHTO_AGENCIES, createAgency, createTrainer, makeName, playerAgencyDef, effectiveStats, STAT_KEYS,
 } from '../data/agencies.js';
 import { curve } from '../ai/estimate.js';
 import { POKEMON_POOL } from '../data/pokemon-pool.js';
@@ -135,12 +135,17 @@ export function salaryFor(trainer) {
 /**
  * 관동·성도 리그를 만든다. 같은 시드면 같은 리그가 나온다.
  */
-export function createLeague({ seed = 20260904 } = {}) {
+export function createLeague({ seed = 20260904, playerAgencyId = null } = {}) {
   const rng = makeRng(seed);
   const agencies = [];
   let trainerSeq = 1;
 
-  for (const def of KANTO_JOHTO_AGENCIES) {
+  /* 플레이어가 소속사를 골랐으면 그 정의로 갈아끼운다 (§3.3) */
+  const defs = KANTO_JOHTO_AGENCIES.map((d) => (
+    d.isPlayer && playerAgencyId ? playerAgencyDef(playerAgencyId) : d
+  ));
+
+  for (const def of defs) {
     const agency = createAgency(def);
     const [lo, hi] = def.statRange;
     for (let i = 0; i < LEAGUE_CONFIG.trainersPerAgency; i++) {

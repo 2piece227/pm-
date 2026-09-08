@@ -49,15 +49,22 @@ export const GAME_CONFIG = {
 
 /* ---------------- 게임 생성 ---------------- */
 
-export function createGame({ seed = Date.now() & 0x7fffffff } = {}) {
-  const league = createLeague({ seed });
+export function createGame({
+  seed = Date.now() & 0x7fffffff,
+  playerName = null,
+  agencyChoiceId = null,
+  startEmpty = false,   // 오프닝을 거치면 로스터를 비운 채 시작한다 (§3.10)
+} = {}) {
+  const league = createLeague({ seed, playerAgencyId: agencyChoiceId });
   const player = league.agencies.find((a) => a.isPlayer);
+  if (startEmpty) player.roster = [];
 
   const game = {
     seed,
     day: GAME_CONFIG.startDay,
     league,
     playerAgencyId: player.id,
+    playerName,
     rng: makeRng(seed ^ 0x5f3a),
 
     actions: {},       // trainerId -> 'rest' | 'train:judge' | 'enter:rookie'
@@ -66,10 +73,50 @@ export function createGame({ seed = Date.now() & 0x7fffffff } = {}) {
     log: [],           // 날짜별 리포트
     lastReport: null,
     gameOver: null,    // 파산하면 사유가 들어간다
+
+    /**
+     * §3.10 오프닝 — 트레이너 1명으로 시작하고, 그 트레이너가 뱃지 8개를 다 딸 때까지
+     * 로스터를 못 늘린다. 스키마만 두고 체육관 도전 자체는 아직 안 붙였다 (§0.2).
+     */
+    opening: {
+      done: !startEmpty,   // 개발자 모드로 바로 들어오면 이미 끝난 것으로 친다
+      badgesNeeded: BADGES_TO_UNLOCK,
+      firstTrainerId: null,
+    },
   };
 
   refreshMarket(game);
   return game;
+}
+
+/** 로스터 확장에 필요한 뱃지 수 (§3.10) */
+export const BADGES_TO_UNLOCK = 8;
+
+/** 지금 시장에서 계약할 수 있나 — 오프닝이 안 끝났으면 잠긴다 (§3.10) */
+export function rosterLock(game) {
+  if (game.opening?.done) return null;
+  const t = game.opening?.firstTrainerId
+    ? findTrainer(game.league, game.opening.firstTrainerId) : null;
+  const badges = t?.badges?.length ?? 0;
+  return {
+    locked: true,
+    badges,
+    needed: game.opening?.badgesNeeded ?? BADGES_TO_UNLOCK,
+    trainer: t,
+  };
+}
+
+/** 협상이 끝난 유스를 로스터에 넣는다 (§5.3) */
+export function signYouth(game, trainer, contract) {
+  const a = playerAgency(game);
+  trainer.agencyId = a.id;
+  trainer.contract = { ...trainer.contract, ...contract };
+  trainer.salary = contract.wage;
+  trainer.isYouth = true;
+  a.roster.push(trainer);
+  a.funds -= contract.signing || 0;
+  if (!game.opening.firstTrainerId) game.opening.firstTrainerId = trainer.id;
+  return trainer;
 }
 
 export const playerAgency = (game) => findAgency(game.league, game.playerAgencyId);

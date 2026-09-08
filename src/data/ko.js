@@ -66,6 +66,20 @@ export const STATUS_KO = {
 
 export const ko = (table, name) => table[name] || name;
 
+/* ---------------- 한국어 조사 ---------------- */
+
+/** 마지막 글자에 받침이 있나 */
+export function hasJong(s) {
+  if (!s) return false;
+  const c = String(s).charCodeAt(String(s).length - 1);
+  if (c < 0xac00 || c > 0xd7a3) return false;   // 한글 음절이 아니면 받침 없음 취급
+  return (c - 0xac00) % 28 !== 0;
+}
+export const eunNeun = (s) => `${s}${hasJong(s) ? '은' : '는'}`;
+export const eulReul = (s) => `${s}${hasJong(s) ? '을' : '를'}`;
+export const iGa = (s) => `${s}${hasJong(s) ? '이' : '가'}`;
+export const gwaWa = (s) => `${s}${hasJong(s) ? '과' : '와'}`;
+
 /* ===== 배틀 메시지용 표 — 실제 게임 자막 문구에 맞춘다 ===== */
 
 /** 날씨 */

@@ -12,21 +12,9 @@
 import {
   ABILITY_KO, BOOST_KO, CANT_MSG, ITEM_KO, MOVE_KO, MOVE_TYPE, SPECIES_KO, SPECIES_TYPES,
   STATUS_BADGE, STATUS_KO, STATUS_MSG, STATUS_TICK, WEATHER_MSG, ko,
+  eunNeun, eulReul, iGa,
 } from '../data/ko.js';
 import { animArchetype } from '../data/move-anim.js';
-
-/* ---------------- 한국어 조사 ---------------- */
-
-/** 마지막 글자에 받침이 있나 */
-function hasJong(s) {
-  if (!s) return false;
-  const c = s.charCodeAt(s.length - 1);
-  if (c < 0xac00 || c > 0xd7a3) return false; // 한글 음절이 아니면 받침 없음 취급
-  return (c - 0xac00) % 28 !== 0;
-}
-const eunNeun = (s) => `${s}${hasJong(s) ? '은' : '는'}`;
-const eulReul = (s) => `${s}${hasJong(s) ? '을' : '를'}`;
-const iGa = (s) => `${s}${hasJong(s) ? '이' : '가'}`;
 
 /* ---------------- 파싱 ---------------- */
 

@@ -80,6 +80,86 @@ export const KANTO_JOHTO_AGENCIES = [
   },
 ];
 
+/**
+ * 플레이어가 고르는 소속사 — **화면에는 등급 라벨을 절대 안 보여준다.** (SPEC §3.3)
+ *
+ * FM이 팀을 고를 때 "약체/강팀" 딱지를 안 붙이고 재정·이사회 기대만 보여주는 것과 같다.
+ * 등급(`tier`)은 내부 데이터로만 살아 있고, 플레이어에게는 아래 두 막대로만 전달된다:
+ *
+ *   parentFunds  모기업 자금   0~5
+ *   boardHopes   이사진 기대   0~5   (높을수록 성적 압박이 세다 = 어렵다)
+ *
+ * 코치진 유무 같은 나머지는 §3.3대로 **선택 이후 게임 안에서 자연스럽게 드러난다.**
+ */
+export const PLAYER_AGENCY_CHOICES = [
+  {
+    id: 'player-indie',
+    name: '신생 소속사',
+    tier: 'indie',
+    concept: '모기업 없음. 코치 0명, 실패 시 파산.',
+    blurb: '뒤를 봐주는 곳이 없다. 대신 아무도 성적을 재촉하지 않는다.',
+    parentFunds: 1,
+    boardHopes: 0,
+    funds: 3000,
+    reputation: 20,
+    coachSlots: 0,
+    rosterProfile: 'modern',
+    statRange: [10, 16],
+    policy: { aggression: 0.5 },
+  },
+  {
+    id: 'player-small',
+    name: '무지개백화점 스포츠팀',
+    tier: 'small',
+    concept: '지역 유통사 산하. 자금은 있으나 육성 노하우가 얕다.',
+    blurb: '지역에서는 이름이 통한다. 다만 트레이너를 키워본 적은 없다.',
+    parentFunds: 2,
+    boardHopes: 2,
+    funds: 6000,
+    reputation: 32,
+    coachSlots: 1,
+    rosterProfile: 'modern',
+    statRange: [11, 17],
+    policy: { aggression: 0.5 },
+  },
+  {
+    id: 'player-mid',
+    name: '도라지 트레이더스',
+    tier: 'mid',
+    concept: '중견 무역회사. 균형은 잡혀 있지만 기대치도 같이 온다.',
+    blurb: '균형 잡힌 출발. 이사진은 첫 시즌부터 결과를 궁금해한다.',
+    parentFunds: 3,
+    boardHopes: 3,
+    funds: 9000,
+    reputation: 45,
+    coachSlots: 2,
+    rosterProfile: 'modern',
+    statRange: [12, 18],
+    policy: { aggression: 0.55 },
+  },
+  {
+    id: 'player-major',
+    name: '실프주식회사 육성부',
+    tier: 'major',
+    concept: '관동 최대 기업의 신설 육성부. 돈은 넉넉하고 눈은 높다.',
+    blurb: '자금 걱정은 없다. 대신 첫해부터 우승을 묻는다.',
+    parentFunds: 5,
+    boardHopes: 5,
+    funds: 20000,
+    reputation: 70,
+    coachSlots: 4,
+    rosterProfile: 'modern',
+    statRange: [14, 20],
+    policy: { aggression: 0.65 },
+  },
+];
+
+/** 플레이어가 고른 소속사를 리그 정의 형태로 바꾼다 */
+export function playerAgencyDef(choiceId) {
+  const c = PLAYER_AGENCY_CHOICES.find((x) => x.id === choiceId) || PLAYER_AGENCY_CHOICES[0];
+  return { ...c, isPlayer: true };
+}
+
 /** 트레이너 이름 풀 — 네임드가 아닌 일반 소속 트레이너용 */
 const GIVEN_NAMES = [
   '민준', '서연', '도윤', '하은', '시우', '지아', '주원', '수아', '건우', '유나',
@@ -198,6 +278,11 @@ export function createAgency(def) {
 
     /* §6 코치 — 필드만. 배정 로직 없음 */
     coaches: [],
+    coachSlots: def.coachSlots ?? 0,
+
+    /* §3.3 화면에 보여줄 상대적 수준 (등급 라벨 대신 이것만 노출) */
+    parentFunds: def.parentFunds ?? null,
+    boardHopes: def.boardHopes ?? null,
 
     /* §5.4 스폰서 / §3.3 모기업 기대치 — 필드만 */
     sponsors: [],
