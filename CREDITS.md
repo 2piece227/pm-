@@ -93,16 +93,13 @@ PokéRogue 저장소가 기여자를 정리해 두고 있다 — 개별 제작�
 
 등록된 음원만 재생하며, 음원을 받지 못하면 소리를 생략한다. 자체 합성음 폴백은 사용하지 않는다.
 
-## 지방 도식 지도 / 관리 화면
+## 커뮤니티 도트 타운맵
 
-관리 화면의 지도는 `src/data/region-atlas.js`의 자체 작성 SVG 도식이다.
-관동부터 팔데아까지 같은 시각 언어로 표현한다. 원작 지도를 복제하거나 정확한 지리·축척을 주장하지 않는다.
-관동·성도는 기존 장소 데이터와 연결하며, 그 외 7개 지방의 실루엣은 탐험 데이터가 없는 미리보기다.
-과거 HGSS 지도 이미지 링크는 새 관리 화면에서 사용하지 않는다.
-포켓몬 이미지와 울음소리는 위에 기재한 기존 출처를 유지한다.
-
-> 위 에셋의 URL은 전부 [`src/data/battle-assets.js`](src/data/battle-assets.js) 한 곳에 모여 있다.
-> 오리지널 IP나 CC0 소재로 갈아끼울 때 이 파일만 고치면 된다.
+관동·성도 지도는 **ENLS**가 [Eevee Expo에 공개한 Bill's Experiments: Episode 1 Resource Pack](https://eeveeexpo.com/resources/572/)의 `Graphics/Pictures/mapRegion0.png`를 사용한다.
+HGSS 원본을 ENLS가 편집한 도트 타운맵이다. 원본 파일은 그대로 보존하고 지방별 표시 영역과 클릭 지점만 덧붙였다.
+원작 권리: Nintendo / Creatures Inc. / GAME FREAK Inc. 공개 리소스 팩에는 별도의 표준 CC/오픈소스 라이선스가 명시되어 있지 않다.
+다운로드 출처·파일 내 크레딧은 [맵 출처 기록](public/assets/maps/README.md)에 기재했다.
+이전 자체 SVG 지형은 화면에서 제거했으며, 미개방 지방은 이미지가 준비되지 않았다고 표시한다.
 
 ## 폰트
 

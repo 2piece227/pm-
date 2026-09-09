@@ -17,6 +17,7 @@ import {
 import { STAT_KEYS, displayStats } from '../data/agencies.js';
 import { STAT_KO } from '../data/styles.js';
 import { SPECIES_KO, MOVE_KO, ko } from '../data/ko.js';
+import { fieldState } from '../engine/field-state.js';
 import { realStats, expForLevel, setMoves } from '../data/pokemon.js';
 import { locationById, locationsIn, TRAINER_CLASSES } from '../data/routes.js';
 import { openNegotiation } from './negotiation.js';
@@ -32,6 +33,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const won = (n) => Math.round(n).toLocaleString();
 const K = (s) => ko(SPECIES_KO, s);
 const M = (s) => ko(MOVE_KO, s);
+const statusLabel = s => ({brn:'화상',psn:'독',tox:'맹독',par:'마비',slp:'잠듦',frz:'얼음'}[s] || s);
 
 let game = null;
 let screen = 'office';
@@ -45,7 +47,7 @@ let lastView = '';
 let detailId = null;       // 트레이너 프로필
 
 /* 맵 화면 상태 */
-const map = { region: 'kanto', locId: null, trainerId: null };
+const map = { region: 'kanto', locId: null, trainerId: null, activities: 8 };
 
 /* 읽은 메시지 — 세션 동안만 */
 const read = new Set();
@@ -127,7 +129,7 @@ function inboxItems() {
   for (const n of [...(game.league.newsFeed || [])].sort((a,b)=>(b.day||0)-(a.day||0)).slice(0,40)) {
     if (n.kind === 'explore') {
       const [first, ...rest] = n.text.split(' / ');
-      out.push({ key: `n-${n.day}-${n.trainerId}-${n.text.length}`, day: n.day, title: first, body: rest.join('\n') });
+      out.push({ key: `n-${n.day}-${n.trainerId}-${n.text.length}`, day: n.day, trainerId: n.trainerId, title: first.replace('탐험을 시작했다.', '탐험 보고'), body: rest.join('\n'), preview: rest.at(-1) });
     } else {
       out.push({ key: `n-${n.day}-${n.text}`, day: n.day, title: n.text, body: '' });
     }
@@ -144,12 +146,14 @@ function renderOffice() {
     <div class="office-columns"><section class="card"><div class="section-heading"><h3>오늘의 운영 계획</h3><button class="ghost" data-nav="map">일정 변경</button></div>
       ${roster.length ? roster.map(t=>`<div class="assignment"><span class="avatar">${esc(t.name[0])}</span><div><b>${esc(t.name)}</b><p>${esc(describeAction(game.actions[t.id]))}</p></div><div class="mini-party">${t.party.map(m=>monImage(m.species)).join('')}</div></div>`).join('') : '<p class="muted">아직 계약한 트레이너가 없습니다.</p>'}</section>
       <section class="card"><div class="section-heading"><h3>대표에게 온 보고</h3><button class="ghost" data-nav="inbox">전체 보기</button></div>${inboxItems().slice(0,3).map(m=>`<button class="brief-link" data-nav="inbox"><small>${m.day}일차 · 운영 보고</small><b>${esc(m.title)}</b><span>→</span></button>`).join('') || '<p class="muted">첫 유스 계약을 기다리고 있습니다.</p>'}</section></div>
-    ${rep ? renderDailySummary(rep) : ''}`;
+    ${rep ? renderDailySummary(rep, false) : ''}`;
 }
 
-function renderDailySummary(rep) {
+function renderDailySummary(rep, detailed = true) {
   return `<section class="card daily-summary"><div class="section-heading"><div><div class="eyebrow">DAILY REVIEW · ${rep.day}일차</div><h3>하루 운영 보고서</h3></div><b class="${rep.net < 0 ? 'negative' : 'positive'}">수지 ${rep.net >= 0 ? '+' : ''}${won(rep.net)}</b></div>
-  ${(rep.explored || []).map(r=>`<div class="report-activity"><b>${esc(r.name)} · ${esc(r.location)}</b><span class="pill">${r.won === true ? '활동 완료' : r.won === false ? '패배 · 회복 필요' : '복귀'}</span><ul>${r.lines.slice(1).map(l=>`<li>${esc(l)}</li>`).join('')}</ul></div>`).join('')}
+  ${(rep.explored || []).map(r=>`<div class="report-activity"><b>${esc(r.name)} · ${esc(r.location)}</b>
+    ${r.events ? `<div class="activity-totals"><span>${r.events.length}/${r.budget} 활동</span><span>${r.wins}승 ${r.losses}패</span><span>포획 ${r.caught}마리</span><span>센터 ${r.centers}회</span><span>상금 +${won(r.money)}</span></div>
+      <details class="activity-details" ${detailed?'open':''}><summary>시간순 활동 기록</summary><ol class="activity-timeline">${r.events.map(e=>`<li class="activity-${e.kind}"><time>${e.time}<small>${e.slot}번째 활동</small></time><div><b>${e.kind==='center'?'포켓몬센터':e.kind==='catch'?'야생 포켓몬 탐색':'트레이너 배틀'} ${e.won===false?'· 패배':''}</b>${e.lines.map(l=>`<p>${esc(l)}</p>`).join('')}<small class="muted">파티 HP ${e.before.reduce((n,p)=>n+p.hp,0)} → ${e.after.reduce((n,p)=>n+p.hp,0)} / ${e.after.reduce((n,p)=>n+p.maxhp,0)}</small></div></li>`).join('')}</ol></details>` : `<ul>${r.lines.slice(1).map(l=>`<li>${esc(l)}</li>`).join('')}</ul>`}</div>`).join('')}
   ${rep.rested.length ? `<p class="muted">휴식 완료 · ${esc(rep.rested.join(', '))}</p>` : ''}
   <div class="report-foot">급여 지급 ${won(rep.upkeep)} · 새로운 소식 ${rep.news.length}건</div></section>`;
 }
@@ -157,10 +161,10 @@ function renderDailySummary(rep) {
 function renderInbox() {
   const items = inboxItems();
   const selected = items.find(m => m.key === selectedMessage) || items[0];
+  const selectedReport = selected?.trainerId ? game.log.find(r=>r.day===selected.day) : null;
   return `<div class="page-h"><div><div class="eyebrow">COMMUNICATIONS</div><h2>받은 메시지함</h2></div><span class="muted">${items.length}건</span></div>
-    ${game.lastReport ? renderDailySummary(game.lastReport) : ''}
-    <div class="mail-layout"><div class="mail-list">${items.map((m,i)=>`<button class="mail-item ${selected?.key === m.key ? 'selected' : ''} ${read.has(m.key)?'':'unread'}" data-message="${i}"><small>${m.day}일차 · 운영팀</small><b>${esc(m.title)}</b><p>${esc(m.body || '소속사 소식을 확인하세요.')}</p></button>`).join('') || '<p class="muted">받은 소식이 없습니다.</p>'}</div>
-    <article class="mail-body">${selected ? `<div class="eyebrow">운영팀 → ${esc(game.playerName || '대표')}</div><h2>${esc(selected.title)}</h2><small>${selected.day}일차 · ${gameDate(selected.day)}</small><hr><div class="letter">${esc(selected.body || '상세 내용은 관련 화면에서 확인할 수 있습니다.').replace(/\n/g,'<br>')}</div><div class="dialog-actions"><button class="ghost" data-nav="map">탐험 지도</button><button class="ghost" data-nav="squad">스쿼드 확인</button></div>` : '<h3>새로운 소식을 기다리고 있습니다.</h3>'}</article></div>`;
+    <div class="mail-layout"><div class="mail-list">${items.map((m,i)=>`<button class="mail-item ${selected?.key === m.key ? 'selected' : ''} ${read.has(m.key)?'':'unread'}" data-message="${i}"><small>${m.day}일차 · 운영팀</small><b>${esc(m.title)}</b><p>${esc((m.preview || m.body || '소속사 소식을 확인하세요.').slice(0,140))}</p></button>`).join('') || '<p class="muted">받은 소식이 없습니다.</p>'}</div>
+    <article class="mail-body">${selected ? `<div class="eyebrow">운영팀 → ${esc(game.playerName || '대표')}</div><h2>${esc(selected.title)}</h2><small>${selected.day}일차 · ${gameDate(selected.day)}</small><hr>${selectedReport ? renderDailySummary(selectedReport) : `<div class="letter">${esc(selected.body || '상세 내용은 관련 화면에서 확인할 수 있습니다.').replace(/\n/g,'<br>')}</div>`}<div class="dialog-actions"><button class="ghost" data-nav="map">탐험 지도</button><button class="ghost" data-nav="squad">스쿼드 확인</button></div>` : '<h3>새로운 소식을 기다리고 있습니다.</h3>'}</article></div>`;
 }
 
 /* ---------------- 스쿼드 ---------------- */
@@ -222,7 +226,7 @@ function monRow(m, { trainerId = null, index = null, editable = false, boxIndex 
       <div class="nm">${K(m.species)} <span class="lv">Lv${m.level}</span>
         ${trainerId && index != null ? `<button class="ghost to-box" data-t="${trainerId}" data-i="${index}" style="padding:1px 7px;font-size:10px;margin-left:6px">박스로</button>` : ''}
         ${btn}</div>
-      <div class="lv">HP ${st.hp} · 공 ${st.atk} · 방 ${st.def} · 특공 ${st.spa} · 특방 ${st.spd} · 속 ${st.spe} · ${esc(m.nature)}</div>
+      <div class="lv">HP ${fieldState(m).hp}/${st.hp}${fieldState(m).status ? ` · ${statusLabel(fieldState(m).status)}` : ''} · 공 ${st.atk} · 방 ${st.def} · 특공 ${st.spa} · 특방 ${st.spd} · 속 ${st.spe} · ${esc(m.nature)}</div>
       <div class="xpbar"><i style="width:${pct}%"></i></div>
       ${editable ? moveEditor : ''}
     </div>
@@ -289,21 +293,21 @@ function renderMap() {
   const locs = locationsIn(region.id);
   if (!roster.some(t=>t.id === map.trainerId)) map.trainerId = roster[0]?.id || null;
   const t = roster.find(t=>t.id===map.trainerId);
-  if (!locs.some(l=>l.id===map.locId)) map.locId = locs.find(l=>l.id===(t?.locationId || (region.id==='kanto'?'route1':'route29')))?.id || locs[0]?.id;
+  if (!locs.some(l=>l.id===map.locId)) map.locId = locs.find(l=>l.id===t?.locationId)?.id || locs.find(l=>l.id===(region.id==='kanto'?'route1':'route29'))?.id || locs[0]?.id;
   const loc = locationById(map.locId);
   const level = Math.max(1,...(t?.party||[]).map(m=>m.level));
   const cur = game.actions[t?.id], ex = parseExplore(cur);
   const filtered = locs.filter(l=>l.name.includes(mapQuery) && (mapFilter==='all' || (mapFilter==='catch' ? l.wild.length : l.trainers.length)));
   return `<div class="page-h"><div><div class="eyebrow">WORLD ATLAS · FIELD OPERATIONS</div><h2>탐험 지도</h2></div><span class="muted">목적지 선택 → 활동 배정 → 계속</span></div>
     <div class="region-tabs">${ATLAS_REGIONS.map(r=>`<button class="reg ${r.id===map.region?'selected':''}" data-r="${r.id}"><small>${String(r.gen).padStart(2,'0')}</small>${r.name}${r.playable?'<i></i>':''}</button>`).join('')}</div>
-    <div class="atlas-layout"><section><div class="atlas-toolbar"><div><h3>${region.name} 지방</h3><span class="muted">${region.subtitle}</span></div><span class="pill">${region.playable ? '탐험 가능' : '지도 미리보기'}</span></div>
+    <div class="atlas-layout"><section><div class="atlas-toolbar"><div><h3>${region.name} 지방</h3><span class="muted">${region.subtitle}</span></div><span class="pill">${region.playable ? '탐험 가능' : '미개방'}</span></div>
     <div class="atlas-canvas">${regionSvg(region.id,map.locId,level,t?.locationId)}</div>
-    <div class="atlas-legend"><span>● 마을</span><span>○ 도로·숲</span><span class="negative">● 권장 레벨 주의</span><span>도식 지도 · 이동 거리 비례 아님</span></div>
-    ${region.playable ? `<div class="route-tools"><input id="route-search" placeholder="도로 · 마을 검색" value="${esc(mapQuery)}" aria-label="장소 검색"><select id="route-filter" aria-label="활동 필터"><option value="all" ${mapFilter==='all'?'selected':''}>모든 장소</option><option value="catch" ${mapFilter==='catch'?'selected':''}>포획 가능</option><option value="battle" ${mapFilter==='battle'?'selected':''}>배틀 가능</option></select></div><div class="route-list">${filtered.map(l=>`<button class="route-row ${loc?.id===l.id?'selected':''}" data-l="${l.id}"><span>${esc(l.name)}</span><small>Lv.${l.level.join('–')}</small></button>`).join('') || '<p class="muted">검색 결과가 없습니다.</p>'}</div>` : `<section class="card region-preview"><h3>${region.name} 탐험은 아직 개방되지 않았습니다</h3><p class="muted">지도는 공통 디자인으로 준비했습니다. 이 지방의 도로, 출현 포켓몬과 리그는 이후 연결됩니다.</p><button class="ghost reg" data-r="kanto">관동 활동으로 돌아가기</button></section>`}</section>
+    <div class="atlas-legend"><span>● 마을</span><span>○ 도로·숲</span><span class="negative">● 권장 레벨 주의</span><span><a href="https://eeveeexpo.com/resources/572/" target="_blank" rel="noopener noreferrer">HGSS · ENLS 타운맵</a></span></div>
+    ${region.playable ? `<div class="route-tools"><input id="route-search" placeholder="도로 · 마을 검색" value="${esc(mapQuery)}" aria-label="장소 검색"><select id="route-filter" aria-label="활동 필터"><option value="all" ${mapFilter==='all'?'selected':''}>모든 장소</option><option value="catch" ${mapFilter==='catch'?'selected':''}>포획 가능</option><option value="battle" ${mapFilter==='battle'?'selected':''}>배틀 가능</option></select></div><div class="route-list">${filtered.map(l=>`<button class="route-row ${loc?.id===l.id?'selected':''}" data-l="${l.id}"><span>${esc(l.name)}</span><small>Lv.${l.level.join('–')}</small></button>`).join('') || '<p class="muted">검색 결과가 없습니다.</p>'}</div>` : `<section class="card region-preview"><h3>${region.name} 탐험은 아직 개방되지 않았습니다</h3><p class="muted">이 지방의 커뮤니티 타운맵과 출현 데이터는 아직 준비 중입니다.</p><button class="ghost reg" data-r="kanto">관동 활동으로 돌아가기</button></section>`}</section>
     <aside class="card destination">${loc && region.playable ? `<div class="eyebrow">목적지 정보</div><h2>${esc(loc.name)}</h2><span class="level-label">권장 Lv. ${loc.level.join('–')}</span>${level+4<loc.level[0]?'<p class="risk-note">현재 파티로는 어려운 상대가 많습니다.</p>':''}
     <h4>출현 포켓몬 <small>${loc.wild.length}종</small></h4><div class="wild-grid">${loc.wild.map(w=>`<div>${monImage(w.species)}<b>${K(w.species)}</b><small>Lv.${w.min}–${w.max}</small></div>`).join('') || '<p class="muted">야생 포켓몬이 출현하지 않습니다.</p>'}</div>
     <h4>현지 트레이너</h4>${loc.trainers.map(n=>`<div class="npc-row"><b>${t?.beaten?.[`${loc.id}:${n.name}`]?'✓ ':''}${TRAINER_CLASSES[n.cls]?.name || n.cls} ${esc(n.name)}</b><p>${n.party.map(([s,l])=>`${K(s)} Lv.${l}`).join(' · ')}</p></div>`).join('')||'<p class="muted">배틀 상대가 없습니다.</p>'}
-    <div class="dispatch-form"><label>파견 트레이너<select id="map-trainer">${roster.map(x=>`<option value="${x.id}" ${x.id===t?.id?'selected':''}>${esc(x.name)} · 파티 ${x.party.length}마리</option>`).join('') || '<option>첫 계약이 필요합니다</option>'}</select></label><button data-act="catch" ${t&&loc.wild.length?'':'disabled'}>${ex?.locationId===loc.id&&ex.mode==='catch'?'✓ 포획 배정됨':'포켓몬 포획 배정'}</button><button class="ghost" data-act="battle" ${t&&loc.trainers.length?'':'disabled'}>${ex?.locationId===loc.id&&ex.mode==='battle'?'✓ 배틀 배정됨':'트레이너 배틀 배정'}</button><p class="muted">오늘: ${esc(describeAction(cur))}</p>${cur&&cur!=='rest'?'<button class="ghost" id="cancel-assignment">배정 취소 · 휴식</button>':''}</div>` : `<div class="eyebrow">WORLD ATLAS</div><h2>${region.name}</h2><p class="muted">현재 소속사의 활동 범위는 관동·성도입니다.</p>`}</aside></div>`;
+    <div class="dispatch-form"><label>파견 트레이너<select id="map-trainer">${roster.map(x=>`<option value="${x.id}" ${x.id===t?.id?'selected':''}>${esc(x.name)} · 파티 ${x.party.length}마리</option>`).join('') || '<option>첫 계약이 필요합니다</option>'}</select></label><label>하루 활동 횟수<select id="activity-budget" aria-label="하루 활동 횟수">${[6,7,8,9,10].map(n=>`<option value="${n}" ${n===(ex?.activities || map.activities)?'selected':''}>${n}회${n===8?' · 기본':''}</option>`).join('')}</select></label><p class="muted">센터 방문도 1회입니다. HP 50% 미만·기절·상태이상·PP 부족 시 회복 후 탐험을 이어갑니다.</p><div class="field-party">${(t?.party||[]).map(m=>`<span>${K(m.species)} <b>HP ${fieldState(m).hp}/${fieldState(m).maxhp}</b>${fieldState(m).status?' · '+statusLabel(fieldState(m).status):''}</span>`).join('')}</div><button data-act="mixed" ${t&&(loc.wild.length||loc.trainers.length)?'':'disabled'}>${ex?.locationId===loc.id&&ex.mode==='mixed'?'✓ 병행 탐험 배정됨':'포획·배틀 병행 배정'}</button><button data-act="catch" ${t&&loc.wild.length?'':'disabled'}>${ex?.locationId===loc.id&&ex.mode==='catch'?'✓ 포획 배정됨':'포켓몬 포획 배정'}</button><button class="ghost" data-act="battle" ${t&&loc.trainers.length?'':'disabled'}>${ex?.locationId===loc.id&&ex.mode==='battle'?'✓ 배틀 배정됨':'트레이너 배틀 배정'}</button><p class="muted">오늘: ${esc(describeAction(cur))}</p>${cur&&cur!=='rest'?'<button class="ghost" id="cancel-assignment">배정 취소 · 휴식</button>':''}</div>` : `<div class="eyebrow">WORLD ATLAS</div><h2>${region.name}</h2><p class="muted">현재 소속사의 활동 범위는 관동·성도입니다.</p>`}</aside></div>`;
 }
 
 /* ---------------- 활동 일정 ---------------- */
@@ -311,7 +315,7 @@ function renderSchedule() {
   const roster = playerRoster(game);
   return `<div class="page-h"><div><div class="eyebrow">OPERATIONS CALENDAR</div><h2>활동 일정</h2></div><span class="muted">오늘의 배정과 주간 정산</span></div>
     <div class="week-calendar">${Array.from({length:7},(_,i)=>game.day+i).map(day=>`<section class="calendar-day ${day===game.day?'today':''}"><small>${day===game.day?'오늘':`${day-game.day}일 후`}</small><h3>${gameDate(day)}</h3>${day===game.day?roster.map(t=>`<p><b>${esc(t.name)}</b><br>${esc(describeAction(game.actions[t.id]))}</p>`).join(''):'<p class="muted">활동 미배정</p>'}${day%7===0?'<span class="pill">주급 지급일</span>':''}</section>`).join('')}</div>
-    <section class="card" style="margin-top:22px"><div class="section-heading"><h3>오늘의 활동 지시</h3><button data-nav="map">목적지 선택 →</button></div><p class="muted">활동은 하루 단위로 배정합니다. 배정하지 않은 트레이너는 휴식합니다.</p>${roster.map(t=>`<div class="assignment"><span class="avatar">${esc(t.name[0])}</span><div><b>${esc(t.name)}</b><p>${esc(describeAction(game.actions[t.id]))}</p></div></div>`).join('')}</section>
+    <section class="card" style="margin-top:22px"><div class="section-heading"><h3>오늘의 활동 지시</h3><button data-nav="map">목적지 선택 →</button></div><p class="muted">하루 6~10회의 활동을 배정합니다. 센터 방문도 활동에 포함되며, 배정하지 않은 트레이너와 포켓몬은 휴식하며 회복합니다.</p>${roster.map(t=>`<div class="assignment"><span class="avatar">${esc(t.name[0])}</span><div><b>${esc(t.name)}</b><p>${esc(describeAction(game.actions[t.id]))}</p></div></div>`).join('')}</section>
     <section class="card" style="margin-top:22px"><h3>지난 활동</h3>${game.log.slice(0,7).map(rep=>`<div class="assignment"><b>${gameDate(rep.day)}</b><span class="muted">${rep.explored.map(r=>`${esc(r.name)} · ${esc(r.location)}`).join(' / ') || '휴식 및 소속사 운영'} · 수지 ${rep.net>=0?'+':''}${won(rep.net)}</span></div>`).join('') || '<p class="muted">아직 완료한 활동이 없습니다.</p>'}</section>`;
 }
 
@@ -417,12 +421,18 @@ function wire() {
     b.onclick = () => { map.locId = b.dataset.l; render(); };
     b.onkeydown = e => { if(e.key==='Enter'||e.key===' '){e.preventDefault();b.onclick();} };
   });
+  const budgetInput = $('activity-budget');
+  if (budgetInput) budgetInput.onchange = () => {
+    map.activities = Number(budgetInput.value);
+    const ex = parseExplore(game.actions[map.trainerId]);
+    if (ex?.locationId === map.locId) { assignAction(game,map.trainerId,exploreAction(ex.locationId,ex.mode,map.activities));persist();render(); }
+  };
   const mt = $('map-trainer');
   if (mt) mt.onchange = () => { map.trainerId = mt.value; render(); };
   main.querySelectorAll('button[data-act]').forEach((b) => {
     b.onclick = () => {
       if (!map.trainerId || !map.locId) return;
-      assignAction(game, map.trainerId, exploreAction(map.locId, b.dataset.act));
+      assignAction(game, map.trainerId, exploreAction(map.locId, b.dataset.act, Number($('activity-budget')?.value || 8)));
       persist(); render();
     };
   });

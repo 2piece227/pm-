@@ -18,6 +18,7 @@ import {
 import { STAT_KEYS } from '../data/agencies.js';
 import { gainExp } from '../data/pokemon.js';
 import { explore } from './explore.js';
+import { healParty } from './field-state.js';
 import { locationById } from '../data/routes.js';
 import { SPECIES_KO, ko, iGa } from '../data/ko.js';
 
@@ -191,10 +192,10 @@ export function availableActions(game, trainer) {
 }
 
 /** 탐험 행동 문자열 만들기/풀기 */
-export const exploreAction = (locationId, mode) => `explore:${locationId}:${mode}`;
+export const exploreAction = (locationId, mode, activities = 8) => `explore:${locationId}:${mode}:${Math.max(6,Math.min(10,Math.round(Number(activities)||8)))}`;
 export function parseExplore(action) {
-  const m = /^explore:([^:]+):(catch|battle)$/.exec(action || '');
-  return m ? { locationId: m[1], mode: m[2] } : null;
+  const m = /^explore:([^:]+):(catch|battle|mixed)(?::(6|7|8|9|10))?$/.exec(action || '');
+  return m ? { locationId: m[1], mode: m[2], activities: Number(m[3] || 8) } : null;
 }
 
 /** 오늘 배정된 일을 사람 말로 */
@@ -202,7 +203,7 @@ export function describeAction(action) {
   const ex = parseExplore(action);
   if (ex) {
     const loc = locationById(ex.locationId);
-    return `${loc?.name || ex.locationId} · ${ex.mode === 'catch' ? '포켓몬 포획' : '트레이너 배틀'}`;
+    return `${loc?.name || ex.locationId} · ${ex.mode === 'catch' ? '포획 중심' : ex.mode === 'mixed' ? '포획·배틀 병행' : '배틀 중심'} · ${ex.activities}회 (센터 포함)`;
   }
   if (!action || action === 'rest') return '휴식';
   if (action.startsWith('enter:')) return '대회 출전';
@@ -328,20 +329,26 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
     /* 탐험 — 포켓몬 포획 / NPC 배틀. 결과는 글로 받은 메시지함에 들어간다 */
     const ex = parseExplore(action);
     if (ex) {
-      const r = await explore(game, t, ex.locationId, ex.mode);
+      const r = await explore(game, t, ex.locationId, ex.mode, { activities: ex.activities,
+        onActivity: async (event, budget) => onProgress({ id: `activity-${t.id}-${event.slot}`, state: 'done',
+          label: `${t.name} · ${event.time} · ${event.slot}/${budget}`, detail: event.lines.join(' '),
+          progress: 8 + 60 * (player.roster.indexOf(t) + event.slot / budget) / player.roster.length }),
+      });
       t.locationId = ex.locationId;
-      if (r.caught) player.box.push(r.caught);
+      player.box.push(...r.catches);
       if (r.money) player.funds += r.money;
       /* 배틀을 뛰면 트레이너 실력도 조금 는다 */
-      if (r.won !== null) for (const k of STAT_KEYS) growStat(t, k, GAME_CONFIG.growth.battleRate);
-      report.explored.push({ trainerId: t.id, name: t.name, location: r.location?.name, lines: r.lines, won: r.won });
+      if (r.won !== null) for (const k of STAT_KEYS) growStat(t, k, GAME_CONFIG.growth.battleRate * (r.wins + r.losses));
+      report.explored.push({ trainerId: t.id, name: t.name, location: r.location?.name, lines: r.lines, won: r.won, events: r.events, budget: r.budget, wins: r.wins, losses: r.losses, caught: r.catches.length, centers: r.centers, money: r.money });
       league.newsFeed.unshift({ day: game.day, text: r.lines.join(' / '), kind: 'explore', trainerId: t.id });
-      await onProgress({ id: `trainer-${t.id}`, state: 'done', label: `${t.name} · 활동 완료`, detail: r.lines.slice(1).join(' ') });
+      await onProgress({ id: `trainer-${t.id}`, state: 'done', label: `${t.name} · 활동 완료`, detail: r.lines.at(-1) });
       continue;
     }
 
+    healParty(t);
+    t.mentalDebuff = Math.max(0, (t.mentalDebuff || 0) - (0.4 + t.stats.mental * 0.04));
     report.rested.push(t.name);
-    await onProgress({ id: `trainer-${t.id}`, state: 'done', label: t.name, detail: '휴식 완료' });
+    await onProgress({ id: `trainer-${t.id}`, state: 'done', label: t.name, detail: '포켓몬 전원 회복 · 트레이너 자신감 회복' });
   }
   await onProgress({ id: 'activities', state: 'done', label: '오늘의 활동 완료' });
   await onProgress({ id: 'league', state: 'running', label: '소속사 활동 정리', detail: '트레이너의 하루 기록 확인' });

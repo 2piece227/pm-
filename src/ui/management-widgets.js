@@ -72,15 +72,16 @@ export function dayProgress(day) {
   dialog.addEventListener('cancel', e => e.preventDefault());
   document.body.append(dialog); dialog.showModal();
   const rows = new Map();
-  let count = 0;
+  let progress = 8;
   return {
     async update(event) {
       let row = rows.get(event.id);
       if (!row) { row = document.createElement('div'); row.className = 'day-event'; rows.set(event.id, row); dialog.querySelector('.day-events').append(row); }
       row.classList.toggle('done', event.state === 'done');
       row.innerHTML = `<span class="event-marker">${event.state === 'done' ? '✓' : ''}</span><div><b>${escapeHtml(event.label)}</b><p>${escapeHtml(event.detail || '')}</p></div>`;
-      if (event.state === 'done' && ['activities','league','finance','reports'].includes(event.id)) count++;
-      dialog.querySelector('.day-track i').style.width = `${8 + count * 23}%`;
+      const stageProgress = event.state === 'done' ? ({activities:68,league:80,finance:90,reports:100}[event.id] || 0) : 0;
+      progress = Math.max(progress, event.progress || 0, stageProgress);
+      dialog.querySelector('.day-track i').style.width = `${progress}%`;
       row.scrollIntoView({ block: 'nearest' });
       // Yield between simulation stages so the browser can display actual progress.
       await new Promise(r => setTimeout(r, matchMedia('(prefers-reduced-motion: reduce)').matches ? 20 : 240));

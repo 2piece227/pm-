@@ -29,7 +29,7 @@ export function createTrainerAI(def, style, rng) {
  * 배틀 1회 실행.
  * @returns {{winner:'p1'|'p2'|null, turns:number, log:string[], think:object[], stats:object}}
  */
-export function runBattle({ trainerA, trainerB, teamA, teamB, seed, collectThink = false }) {
+export function runBattle({ trainerA, trainerB, teamA, teamB, seed, collectThink = false, initialState = null }) {
   const rngSeed = seed ?? Math.floor(Math.random() * 0x7fffffff);
   const battle = new Battle({
     formatid: 'gen9customgame',
@@ -41,6 +41,21 @@ export function runBattle({ trainerA, trainerB, teamA, teamB, seed, collectThink
   const nameB = trainerB.name === nameA ? `${trainerB.name} (2)` : trainerB.name;
   battle.setPlayer('p1', { name: nameA, team: Teams.pack(Teams.import(teamA)) });
   battle.setPlayer('p2', { name: nameB, team: Teams.pack(Teams.import(teamB)) });
+
+  // Keep original identity/order: Showdown swaps side.pokemon on every switch.
+  const originalParty = Object.fromEntries(SIDES.map(side => [side, [...battle[side].pokemon]]));
+  for (const side of SIDES) for (const [i, p] of originalParty[side].entries()) {
+    const state = initialState?.[side]?.[i];
+    if (!state) continue;
+    if (Number.isFinite(state.hp)) p.hp = Math.max(1, Math.min(p.maxhp, state.hp));
+    if (state.status) p.setStatus(state.status, p, null, true);
+    for (const slot of p.moveSlots) if (Number.isFinite(state.pp?.[slot.id])) {
+      slot.pp = Math.max(0, Math.min(slot.maxpp, state.pp[slot.id]));
+    }
+  }
+  const stateOf = p => ({ species: p.set.species, hp: p.hp, maxhp: p.maxhp, fainted: !!p.fainted,
+    status: p.status, pp: Object.fromEntries(p.moveSlots.map(m => [m.id, m.pp])) });
+  const hpBefore = Object.fromEntries(SIDES.map(side => [side, originalParty[side].map(stateOf)]));
 
   const ai = { p1: trainerA, p2: trainerB };
   trainerA.reset();
@@ -108,9 +123,7 @@ export function runBattle({ trainerA, trainerB, teamA, teamB, seed, collectThink
   /* 끝난 뒤 양쪽 파티의 남은 체력 — 탐험에서 "센터에 들렀다"를 판단하는 데 쓴다 */
   const hpAfter = {};
   for (const side of SIDES) {
-    hpAfter[side] = battle[side].pokemon.map((p) => ({
-      species: p.species.name, hp: p.hp, maxhp: p.maxhp, fainted: !!p.fainted,
-    }));
+    hpAfter[side] = originalParty[side].map(stateOf);
   }
 
   return {
@@ -120,6 +133,7 @@ export function runBattle({ trainerA, trainerB, teamA, teamB, seed, collectThink
     think,
     stats: { setupUsed, switches },
     hpAfter,
+    hpBefore,
   };
 }
 

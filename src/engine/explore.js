@@ -1,7 +1,7 @@
 /**
  * 탐험 — 지도에서 고른 곳으로 트레이너를 보내 **포켓몬을 잡거나 NPC와 싸운다.** (기획서 §3.10 / §6.3)
  *
- * 하루에 한 번 결과가 글로 돌아온다. 관전은 없다:
+ * 하루 6~10회 활동을 순서대로 처리해 결과가 글로 돌아온다. 관전은 없다:
  *   "1번도로에서 구구 Lv3을 잡았다" / "소년 지훈에게 이겼다 — 상금 48" /
  *   "파이리가 레벨 6이 되었다" / "체력이 부족해 포켓몬센터에 들렀다"
  *
@@ -14,8 +14,10 @@ import { SPECIES_KO, MOVE_KO, ko, iGa, eulReul, eunNeun, euro, numIGa } from '..
 import { STAT_KEYS, effectiveStats } from '../data/agencies.js';
 import { createTrainerAI, runBattle } from './run-battle.js';
 import { curve } from '../ai/estimate.js';
+import { fieldState, healParty, partyCondition } from './field-state.js';
 
 export const EXPLORE_CONFIG = {
+  day: { min: 6, max: 10, default: 8 },
   /* 포획 — 원작처럼 종별 포획률 대신, 레벨 차이와 파티 강함으로 대신한다 (1차 근사) */
   catch: {
     base: 0.55,          // 같은 레벨일 때
@@ -86,8 +88,9 @@ function fight(trainer, myParty, foe, foeParty, seed) {
   const r = runBattle({
     trainerA: me, trainerB: them,
     teamA: partyToTeam(myParty), teamB: partyToTeam(foeParty),
-    seed,
+    seed, initialState: { p1: myParty.map(fieldState) },
   });
+  myParty.forEach((mon, i) => { mon.fieldState = { ...r.hpAfter.p1[i], pp: { ...mon.fieldState?.pp, ...r.hpAfter.p1[i].pp } }; });
   return r;
 }
 
@@ -102,20 +105,13 @@ function rngFrom(seed) {
   };
 }
 
-/** 배틀 뒤 파티 체력 비율 — 센터 판단용 */
-function partyHpRatio(hpAfter) {
-  if (!hpAfter?.length) return 1;
-  const cur = hpAfter.reduce((a, p) => a + p.hp, 0);
-  const max = hpAfter.reduce((a, p) => a + p.maxhp, 0) || 1;
-  return cur / max;
-}
-
 /* ---------------- 경험치 배분 ---------------- */
 
 async function giveExp(trainer, amount, lines) {
   const party = trainer.party || [];
   if (!party.length) return;
   const each = Math.round(amount / party.length);
+  lines.push(`파티 경험치 +${each}씩 획득.`);
   for (const mon of party) {
     const before = mon.level;
     const r = await gainExp(mon, each);
@@ -139,7 +135,7 @@ async function giveExp(trainer, amount, lines) {
  * @param {'catch'|'battle'} mode
  * @returns {Promise<{ lines: string[], won: boolean|null, caught: object|null, money: number }>}
  */
-export async function explore(game, trainer, locationId, mode) {
+async function encounter(game, trainer, locationId, mode, slot) {
   const loc = locationById(locationId);
   const lines = [];
   const out = { lines, won: null, caught: null, money: 0, location: loc };
@@ -147,8 +143,8 @@ export async function explore(game, trainer, locationId, mode) {
   if (!trainer.party?.length) { lines.push('데리고 갈 포켓몬이 없다.'); return out; }
 
   const rng = game.rng;
-  const seed = (game.seed ^ (game.day * 7919) ^ hashStr(trainer.id + locationId)) >>> 0;
-  lines.push(`${trainer.name}: ${euro(loc.name)} 나갔다.`);
+  const seed = (game.seed ^ (game.day * 7919) ^ hashStr(trainer.id + locationId) ^ (slot * 104729)) >>> 0;
+
 
   /* 권장 레벨보다 한참 낮으면 위험하다고 알려준다 (막지는 않는다) */
   const myTop = topLevel(trainer.party);
@@ -168,7 +164,7 @@ export async function explore(game, trainer, locationId, mode) {
 
     /* 먼저 한 판 붙어 약하게 만든다 — 실제 엔진 */
     const foe = { name: '야생', stats: EXPLORE_CONFIG.wildStats };
-    battleResult = fight(trainer, trainer.party, foe, [wild], seed);
+    battleResult = fight(trainer, trainer.party.filter(m => fieldState(m).hp > 0), foe, [wild], seed);
     const iWon = battleResult.winner === 'p1';
 
     if (!iWon) {
@@ -201,6 +197,7 @@ export async function explore(game, trainer, locationId, mode) {
     trainer.beaten ??= {};
     const fresh = loc.trainers.filter((t) => !trainer.beaten[`${loc.id}:${t.name}`]);
     const npc = pick(rng, fresh.length ? fresh : loc.trainers);
+    if (!fresh.length) lines.push('현지 트레이너와 재대결했다.');
     const cls = TRAINER_CLASSES[npc.cls] || { name: npc.cls, money: 16 };
     const npcLevel = Math.max(...npc.party.map(([, lv]) => lv));
     const foeParty = [];
@@ -208,7 +205,7 @@ export async function explore(game, trainer, locationId, mode) {
 
     lines.push(`${cls.name} ${iGa(npc.name)} 승부를 걸어왔다! (${npc.party.map(([sp, lv]) => `${K(sp)} Lv${lv}`).join(', ')})`);
     const foe = { name: `${cls.name} ${npc.name}`, stats: npcStats(npcLevel) };
-    battleResult = fight(trainer, trainer.party, foe, foeParty, seed);
+    battleResult = fight(trainer, trainer.party.filter(m => fieldState(m).hp > 0), foe, foeParty, seed);
     const iWon = battleResult.winner === 'p1';
 
     if (iWon) {
@@ -232,11 +229,9 @@ export async function explore(game, trainer, locationId, mode) {
     }
   }
 
-  /* 체력이 많이 빠졌으면 센터에 들른다 — 이동 시간이 하루를 잡아먹는 건 아직 안 넣었다 */
-  const ratio = partyHpRatio(battleResult?.hpAfter?.p1);
-  if (out.won === false || ratio < EXPLORE_CONFIG.center.visitBelow) {
-    lines.push('체력이 부족해 포켓몬센터에 들렀다.');
-  }
+  out.hpBefore = battleResult?.hpBefore.p1;
+  out.hpAfter = battleResult?.hpAfter.p1;
+  out.turns = battleResult?.turns || 0;
 
   return out;
 }
@@ -246,4 +241,50 @@ function hashStr(s) {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
   return h >>> 0;
+}
+
+/** A day is an activity budget; healing consumes exactly the same slot as an encounter. */
+export async function explore(game, trainer, locationId, mode, { activities = EXPLORE_CONFIG.day.default, onActivity = async () => {} } = {}) {
+  const location = locationById(locationId);
+  const budget = Math.max(6, Math.min(10, Math.round(Number(activities) || 8)));
+  const out = { location, lines: [`${trainer.name}: ${location?.name || '목적지'} 탐험을 시작했다.`],
+    events: [], catches: [], money: 0, won: null, wins: 0, losses: 0, centers: 0, budget };
+  if (!location || !trainer.party?.length || !['catch', 'battle', 'mixed'].includes(mode)) {
+    out.lines.push('탐험할 장소·파티·활동을 확인해 주세요.'); return out;
+  }
+  const modes = mode === 'mixed' ? ['catch', 'battle'] : [mode];
+  const available = modes.filter(m => m === 'catch' ? location.wild.length : location.trainers.length);
+  if (!available.length) { out.lines.push('이 장소에서는 지정한 활동을 할 수 없습니다.'); return out; }
+  let encounters = 0;
+  for (let slot = 1; slot <= budget; slot++) {
+    const before = trainer.party.map(fieldState);
+    const health = partyCondition(trainer);
+    let event;
+    if (health.ratio < EXPLORE_CONFIG.center.visitBelow || health.fainted || health.status || health.exhausted) {
+      const reason = health.fainted ? '쓰러진 포켓몬이 있어' : health.status ? '상태이상 치료가 필요해' : health.exhausted ? '기술 PP가 부족해' : '체력이 부족해';
+      healParty(trainer);
+      out.centers++;
+      event = { kind: 'center', lines: [`${reason} 포켓몬센터에 들렀다. HP·상태이상·PP를 모두 회복했다. (활동 1회)`], money: 0 };
+    } else {
+      const kind = available[encounters++ % available.length];
+      const r = await encounter(game, trainer, locationId, kind, slot);
+      event = { kind, lines: r.lines, won: r.won, money: r.money, caught: r.caught, turns: r.turns,
+        battleBefore: r.hpBefore, battleAfter: r.hpAfter };
+      out.money += r.money;
+      if (r.caught) out.catches.push(r.caught);
+      if (r.won === true) out.wins++;
+      if (r.won === false) out.losses++;
+      out.won = r.won;
+    }
+    event.slot = slot;
+    // Slots span 09:00–18:00; duration is a management abstraction, not battle turn time.
+    event.time = `${String(9 + Math.floor((slot-1)*9/budget)).padStart(2,'0')}:${String(Math.floor(((slot-1)*540/budget)%60)).padStart(2,'0')}`;
+    event.before = before;
+    event.after = trainer.party.map(fieldState);
+    out.events.push(event);
+    out.lines.push(`[${event.time} · ${slot}/${budget}] ${event.lines.join(' ')}`);
+    await onActivity(event, budget);
+  }
+  out.lines.push(`탐험 종료 — ${out.events.length}회 활동, ${out.wins}승 ${out.losses}패, 포획 ${out.catches.length}마리, 센터 ${out.centers}회, 상금 ${out.money}.`);
+  return out;
 }
