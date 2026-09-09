@@ -36,7 +36,7 @@ export const LEAGUE_CONFIG = {
  */
 export const LOCAL_TOURNAMENT_TIERS = [
   {
-    id: "rookie", label: "하급",
+    id: "rookie", label: "하급", name: "루키 로컬컵",
     ratingBand: [0, 15],
     entryCost: 30,
     prize: {
@@ -46,7 +46,7 @@ export const LOCAL_TOURNAMENT_TIERS = [
     },
   },
   {
-    id: "open", label: "중급",
+    id: "open", label: "중급", name: "오픈 로컬컵",
     ratingBand: [12, 21],
     entryCost: 50,
     prize: {
@@ -56,7 +56,7 @@ export const LOCAL_TOURNAMENT_TIERS = [
     },
   },
   {
-    id: "elite", label: "상급",
+    id: "elite", label: "상급", name: "엘리트 로컬컵",
     ratingBand: [18, 999],
     entryCost: 80,
     prize: {
@@ -227,7 +227,6 @@ export function participationScore(league, agency, trainer, tournament) {
 
 /* ---------------- 대회 ---------------- */
 
-let tournamentSeq = 1;
 
 /** 출전 자격 — 대회 등급의 레이팅 밴드 안에 들어야 한다 (§5.2 "뱃지 개수 조건"에 해당) */
 export function isEligible(trainer, tournament) {
@@ -240,8 +239,9 @@ export function isEligible(trainer, tournament) {
  * 로컬 대회 하나를 연다. 참가 인원 제한 없음 (§5.2 — 제한은 글로벌 대회만).
  */
 export function openTournament(league, tierDef) {
+  league.nextTournamentSeq ??= Math.max(0, ...league.tournaments.map(t => Number(t.id.replace(/^tour/, '')) || 0)) + 1;
   return {
-    id: `tour${tournamentSeq++}`,
+    id: `tour${league.nextTournamentSeq++}`,
     name: `${tierDef.label} 로컬 컵 ${league.week + 1}주차`,
     type: "local",
     tierId: tierDef.id,

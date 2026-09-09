@@ -5,14 +5,12 @@
  *
  *   node test/bracket-integrity.mjs
  */
-import { createGame, advanceDay, assignAction, playerRoster, tournamentOn, findTrainer } from '../src/engine/game.js';
+import assert from 'node:assert/strict';
+import { createLeague, advanceWeek, findTrainer } from '../src/engine/league.js';
 
-const game = await createGame({ seed: 20260905 });
-for (let d = 0; d < 25; d++) {
-  const tier = tournamentOn(game.day);
-  for (const t of playerRoster(game)) assignAction(game, t.id, tier ? `enter:${tier.id}` : 'train:judge');
-  await advanceDay(game);
-}
+// Only preserved legacy records; the game loop has no tournament entry point.
+const game = { league: await createLeague({ seed: 20260905 }) };
+for (let week = 0; week < 2; week++) advanceWeek(game.league);
 
 let problems = 0;
 let checked = 0;
@@ -60,6 +58,7 @@ for (const tour of game.league.tournaments) {
 }
 
 console.log(`\n대회 ${game.league.tournaments.length}개 / ${checked}경기 검사`);
+assert(checked > 0, 'no bracket fixtures were exercised');
 if (problems === 0) {
   console.log('✅ 브래킷 기록은 일관적 — 승자만 진출, 우승자 = 결승 승자');
   console.log('   (SPEC §14-6의 "승자/패자 대입이 뒤바뀜" 가설은 해당 없음)');

@@ -11,6 +11,7 @@ import { PLAYER_AGENCY_CHOICES } from '../data/agencies.js';
 import { loadSave, writeSave, clearSave, hasResumable, saveSummary } from '../engine/save.js';
 import { initFm, gotoScouting } from './fm-view.js';
 import { resetNegotiation, restoreYouth } from './negotiation.js';
+import { restoreGame } from '../engine/checkpoint.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -28,7 +29,7 @@ function show(page) {
   document.querySelectorAll('.ov-page').forEach((el) => {
     el.classList.toggle('on', el.dataset.page === page);
   });
-  writeSave({ stage: page });
+  if (page !== 'title') writeSave({ stage: page });
   if (page === 'name') setTimeout(() => $('in-name')?.focus(), 30);
 }
 
@@ -56,7 +57,10 @@ function initTitle() {
   $('opening').addEventListener('pointerdown', press);
 
   $('btn-resume').onclick = () => resume(save);
-  $('btn-newgame').onclick = () => { clearSave(); start(); };
+  $('btn-newgame').onclick = () => {
+    if (resumable && !window.confirm('저장된 진행을 지우고 새로 시작할까요?')) return;
+    clearSave(); start();
+  };
 
   show('title');
 }
@@ -70,11 +74,16 @@ function start() {
 
 /** 세이브에서 이어간다 — 리그는 시드로 똑같이 다시 만든다 */
 async function resume(save) {
+  if (save.snapshot) {
+    try { state.game = restoreGame(save.snapshot); launch(); }
+    catch (error) { $('resume-note').textContent = error.message; }
+    return;
+  }
   state.seed = save.seed ?? (Date.now() & 0x7fffffff);
   state.playerName = save.playerName || '';
   state.agencyId = save.agencyId || PLAYER_AGENCY_CHOICES[0].id;
 
-  if (!save.agencyId) { $('in-name').value = state.playerName; show('name'); return; }
+  if (!save.agencyId) { renderAgencies(); show('agency'); return; }
 
   await buildGame();
   if (save.youth) await restoreYouth(state.game, save.youth);

@@ -17,7 +17,8 @@ import { youthStats } from '../data/youth-candidates.js';
 import { STAT_KO } from '../data/styles.js';
 import { STARTERS } from '../data/species-pool.js';
 import { ko, SPECIES_KO, gwaWa, eulReul } from '../data/ko.js';
-import { writeSave } from '../engine/save.js';
+import { writeSave, saveGame } from '../engine/save.js';
+import { chooseStarter } from './management-widgets.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const won = (n) => Math.round(n).toLocaleString();
@@ -81,7 +82,8 @@ function view() {
   if (!c) {
     return `<div class="note" style="margin-bottom:10px">자금 <b>${won(a.funds)}</b> · 평판 ${a.reputation}
       — 후보를 고르면 협상 자리가 열립니다. 막대는 <b>최대치</b>이지 지금 실력이 아닙니다.</div>
-      <div class="cards">${list}</div>`;
+      <input id="candidate-search" type="search" placeholder="트레이너 이름 검색" aria-label="트레이너 이름 검색" style="width:100%;padding:12px;margin-bottom:18px">
+      <div class="cards">${list}</div><p class="note" id="candidate-empty" hidden>검색 결과가 없습니다.</p>`;
   }
 
   return `
@@ -98,13 +100,7 @@ function view() {
                        min="${f.min}" max="${f.max}" step="${f.step}" ${state.signed ? 'disabled' : ''}>
               </div>`).join('')}
           </div>
-          <div class="term" style="margin-top:8px">
-            <label>첫 포켓몬</label>
-            <select id="nego-starter" ${state.signed ? 'disabled' : ''} style="font-size:12px;padding:4px">
-              ${STARTERS.map((s) => `<option value="${s.species}" ${state.starter === s.species ? 'selected' : ''}>${s.ko}</option>`).join('')}
-            </select>
-          </div>
-          <div class="note" style="margin-top:6px">레벨 5부터 직접 키웁니다.</div>
+          <div class="note" style="margin-top:14px">조건에 합의하면 첫 파트너 포켓몬을 선택합니다. 레벨 5부터 함께 성장합니다.</div>
           <div class="ov-row">
             <button class="ghost" id="nego-back">후보 목록</button>
             <button id="nego-send" ${state.signed ? 'disabled' : ''}>제안하기</button>
@@ -123,6 +119,16 @@ function view() {
 
 function draw() {
   root.innerHTML = view();
+  const search = root.querySelector('#candidate-search');
+  if (search) search.oninput = () => {
+    let visible = 0;
+    root.querySelectorAll('button[data-c]').forEach(b => {
+      const c = YOUTH_CANDIDATES.find(x=>x.id===b.dataset.c);
+      b.hidden = !c.name.includes(search.value.trim());
+      if(!b.hidden) visible++;
+    });
+    root.querySelector('#candidate-empty').hidden = visible > 0;
+  };
   const chat = document.getElementById('nego-chat');
   if (chat) chat.scrollTop = chat.scrollHeight;
 
@@ -151,7 +157,8 @@ function draw() {
 
 /* ---------------- 한 턴 주고받기 ---------------- */
 
-function propose() {
+async function propose() {
+  if (state.signed) return;
   const c = state.candidate;
   const a = playerAgency(game);
   const res = evaluateOffer(c, state.offer, a);
@@ -162,16 +169,21 @@ function propose() {
   if (!res.accept) { draw(); return; }
 
   /* 성사 — 실제 트레이너를 만들어 로스터에 넣는다. 세이브에도 남긴다 */
-  const t = signCandidate(c);
   state.signed = true;
-  writeSave({ youth: { candidateId: c.id, name: c.name, offer: { ...state.offer }, starter: state.starter } });
-  sayTo('sys', `계약 성사 — ${c.name}`);
-  t.then(() => {
-    sayTo('sys', `첫 포켓몬으로 ${eulReul(ko(SPECIES_KO, state.starter))} 받았습니다. 이제 맵에서 어디로 보낼지 정하세요.`);
-    draw();
-    setTimeout(() => onDone?.(), 900);
-  });
+  sayTo('sys', '조건에 합의했습니다. 함께할 파트너를 선택하세요.');
   draw();
+  try {
+    state.starter = await chooseStarter(c.name);
+    await signCandidate(c);
+    writeSave({ youth: { candidateId: c.id, name: c.name, offer: { ...state.offer }, starter: state.starter } });
+    game.league.newsFeed.unshift({ day: game.day, text: `${c.name} 계약 완료 — ${ko(SPECIES_KO, state.starter)}와 첫 여정을 시작합니다.` });
+    saveGame(game);
+    onDone?.();
+  } catch (error) {
+    state.signed = false;
+    sayTo('sys', `계약을 완료하지 못했습니다. 다시 제안해주세요. ${error.message}`);
+    draw();
+  }
 }
 
 async function signCandidate(cand, offer = state.offer, starter = state.starter, g = game) {

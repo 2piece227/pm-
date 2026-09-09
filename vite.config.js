@@ -4,4 +4,9 @@ import { defineConfig } from 'vite';
 // base를 리포 이름으로 맞춰야 빌드된 JS/에셋 경로가 안 깨진다.
 export default defineConfig({
   base: '/pm-/',
+  build: {
+    rolldownOptions: {
+      input: { main: 'index.html', trainer_sim: 'trainer_sim_v2.html' },
+    },
+  },
 });

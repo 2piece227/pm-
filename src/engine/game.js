@@ -22,6 +22,8 @@ import { locationById } from '../data/routes.js';
 import { SPECIES_KO, ko, iGa } from '../data/ko.js';
 
 export const GAME_CONFIG = {
+  // 대회 설계를 다시 정할 때까지 실제 플레이에서는 개최/참가하지 않는다.
+  tournamentsEnabled: false,
   /* 대회 일정 — 등급마다 7일 주기, 요일을 어긋나게 둬서 매주 세 번 기회가 온다 */
   schedule: { rookie: 3, open: 5, elite: 7 },
   scheduleCycle: 7,
@@ -137,6 +139,7 @@ export const playerRoster = (game) => playerAgency(game).roster;
 
 /** 그 날짜에 열리는 대회 등급 (없으면 null) */
 export function tournamentOn(day) {
+  if (!GAME_CONFIG.tournamentsEnabled) return null;
   for (const tier of LOCAL_TOURNAMENT_TIERS) {
     const offset = GAME_CONFIG.schedule[tier.id];
     if (day >= offset && (day - offset) % GAME_CONFIG.scheduleCycle === 0) return tier;
@@ -277,7 +280,7 @@ async function trainParty(game, trainer, amount, report) {
  * 하루를 넘긴다. 이 함수 하나가 게임의 심장.
  * @returns 그날 리포트 (UI가 그대로 보여준다)
  */
-export async function advanceDay(game) {
+export async function advanceDay(game, { onProgress = async () => {} } = {}) {
   if (game.gameOver) return game.lastReport;
 
   const report = {
@@ -296,23 +299,29 @@ export async function advanceDay(game) {
   const league = game.league;
   const player = playerAgency(game);
   const tier = tournamentOn(game.day);
+  league.day = game.day;
+  league.week = Math.floor((game.day - 1) / 7);
 
   /* 하루 시작 시점을 먼저 잡아둬야 상금/참가비/경비의 순증감을 제대로 잴 수 있다 */
   const fundsAtStart = player.funds;
-  const newsAtStart = league.newsFeed.length;
+  const newsAtStart = new Set(league.newsFeed);
+  await onProgress({ id: 'activities', state: 'running', label: '오늘의 활동 진행', detail: `${player.roster.length}명의 일정 확인` });
 
   /* --- 1. 플레이어 트레이너의 배정 행동 실행 (대회 출전은 아래에서 따로) --- */
   const myEntrants = [];
   for (const t of player.roster) {
     const action = game.actions[t.id] || 'rest';
+    await onProgress({ id: `trainer-${t.id}`, state: 'running', label: t.name, detail: describeAction(action) });
     t.lastAction = action;
 
     if (action.startsWith('enter:')) {
       if (tier && action === `enter:${tier.id}` && isEligible(t, { ratingBand: tier.ratingBand })) {
         myEntrants.push(t);
+        await onProgress({ id: `trainer-${t.id}`, state: 'done', label: t.name, detail: `${tier.name} 참가 접수` });
         continue;
       }
       t.lastAction = 'rest';
+      await onProgress({ id: `trainer-${t.id}`, state: 'done', label: t.name, detail: '참가 자격 미충족 · 휴식' });
       continue;
     }
 
@@ -320,17 +329,22 @@ export async function advanceDay(game) {
     const ex = parseExplore(action);
     if (ex) {
       const r = await explore(game, t, ex.locationId, ex.mode);
+      t.locationId = ex.locationId;
       if (r.caught) player.box.push(r.caught);
       if (r.money) player.funds += r.money;
       /* 배틀을 뛰면 트레이너 실력도 조금 는다 */
       if (r.won !== null) for (const k of STAT_KEYS) growStat(t, k, GAME_CONFIG.growth.battleRate);
       report.explored.push({ trainerId: t.id, name: t.name, location: r.location?.name, lines: r.lines, won: r.won });
-      league.newsFeed.push({ day: game.day, text: r.lines.join(' '), kind: 'explore', trainerId: t.id });
+      league.newsFeed.unshift({ day: game.day, text: r.lines.join(' / '), kind: 'explore', trainerId: t.id });
+      await onProgress({ id: `trainer-${t.id}`, state: 'done', label: `${t.name} · 활동 완료`, detail: r.lines.slice(1).join(' ') });
       continue;
     }
 
     report.rested.push(t.name);
+    await onProgress({ id: `trainer-${t.id}`, state: 'done', label: t.name, detail: '휴식 완료' });
   }
+  await onProgress({ id: 'activities', state: 'done', label: '오늘의 활동 완료' });
+  await onProgress({ id: 'league', state: 'running', label: '소속사 활동 정리', detail: '트레이너의 하루 기록 확인' });
 
   /* --- 2. NPC 트레이너: 대회에 안 나가면 알아서 회복 --- */
   /* --- 3. 오늘 대회가 있으면 개최 --- */
@@ -380,18 +394,23 @@ export async function advanceDay(game) {
   }
 
   /* --- 4. 정산: 상금·참가비는 runTournament가 이미 반영했고, 여기선 일일 경비 --- */
-  const upkeep = player.roster.reduce((n, t) => n + (t.salary || 0), 0);
+  await onProgress({ id: 'league', state: 'done', label: '소속사 활동 정리 완료', detail: '활동 기록을 반영했습니다' });
+  await onProgress({ id: 'finance', state: 'running', label: '재무 정산' });
+  // Youth contracts quote weekly wages; legacy non-contract salaries remain daily.
+  const upkeep = player.roster.reduce((n, t) => n + (t.contract?.wage != null
+    ? (game.day % 7 === 0 ? t.contract.wage : 0) : (t.salary || 0)), 0);
   player.funds -= upkeep;
   report.upkeep = upkeep;
   report.net = player.funds - fundsAtStart;      // 그날 자금 순증감
   report.prize = report.net + upkeep;            // 경비를 빼기 전 = 대회에서 번 돈(참가비 차감 후)
+  await onProgress({ id: 'finance', state: 'done', label: '재무 정산 완료', detail: `급여 지급 ${upkeep} · 오늘 수지 ${report.net >= 0 ? '+' : ''}${report.net}` });
 
   /* --- 5. 시장 갱신 --- */
-  if (game.day % GAME_CONFIG.market.refreshDays === 0) refreshMarket(game);   // 비동기지만 결과를 기다릴 필요 없다
+  await onProgress({ id: 'reports', state: 'running', label: '소식 및 스카우팅 보고서 정리' });
+  if (game.day % GAME_CONFIG.market.refreshDays === 0) await refreshMarket(game);
 
   /* --- 6. 뉴스 — 이번 하루 동안 새로 생긴 것만 (league 쪽은 day를 안 찍으므로 여기서 찍는다) */
-  const fresh = league.newsFeed.length - newsAtStart;
-  report.news = league.newsFeed.slice(0, Math.max(0, fresh));
+  report.news = league.newsFeed.filter((n) => !newsAtStart.has(n));
   for (const n of report.news) if (n.day === undefined) n.day = game.day;
 
   /* --- 7. 파산 판정 (§3.3 자체 소속사는 경질이 아니라 파산) --- */
@@ -404,6 +423,7 @@ export async function advanceDay(game) {
   game.lastReport = report;
   game.log.unshift(report);
   if (game.log.length > 60) game.log.pop();
+  await onProgress({ id: 'reports', state: 'done', label: '일일 보고서 작성 완료', detail: `${report.news.length}건의 새로운 소식` });
   return report;
 }
 
@@ -485,7 +505,7 @@ export function releaseTrainer(game, trainerId) {
 /* ---------------- 조회용 ---------------- */
 
 export function dailyUpkeep(game) {
-  return playerRoster(game).reduce((n, t) => n + (t.salary || 0), 0);
+  return playerRoster(game).reduce((n, t) => n + (t.contract?.wage != null ? t.contract.wage / 7 : (t.salary || 0)), 0);
 }
 
 export { trainerRating, allTrainers, findTrainer, findAgency, LOCAL_TOURNAMENT_TIERS };

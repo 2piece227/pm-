@@ -7,14 +7,15 @@
  *
  *   node test/replay-consistency.mjs
  */
-import { createGame, advanceDay, assignAction, playerRoster, tournamentOn, findTrainer } from '../src/engine/game.js';
-import { replayMatch } from '../src/engine/league.js';
+import assert from 'node:assert/strict';
+import { createLeague, advanceWeek, findTrainer, replayMatch } from '../src/engine/league.js';
 
-const game = await createGame({ seed: 20260905 });
-for (let d = 0; d < 20; d++) {
-  const tier = tournamentOn(game.day);
-  for (const t of playerRoster(game)) assignAction(game, t.id, tier ? `enter:${tier.id}` : 'train:judge');
-  await advanceDay(game);
+// Legacy replay compatibility is tested directly; active gameplay no longer hosts tournaments.
+const game = { league: await createLeague({ seed: 20260905 }) };
+for (let week = 0; week < 2; week++) advanceWeek(game.league);
+for (const a of game.league.agencies) for (const t of a.roster) {
+  t.stats.judge = 1;
+  t.party.forEach(m=>{ m.level = 5; });
 }
 
 let total = 0, mismatch = 0, turnMismatch = 0;
@@ -31,6 +32,7 @@ for (const tour of game.league.tournaments) {
   }
 }
 console.log(`\n총 ${total}경기 — 승자 불일치 ${mismatch}건 / 턴수 불일치 ${turnMismatch}건`);
+assert(total > 0, 'no replay fixtures were exercised');
 if (mismatch === 0 && turnMismatch === 0) {
   console.log('✅ 브래킷과 관전 결과가 완전히 일치');
 } else {
