@@ -15,12 +15,13 @@ const game = await createGame({seed:42,startEmpty:true,playerName:'활동검증'
 const trainer = createTrainer({id:'explore-test',name:'오성',stats,potential:stats,party:[
   await createPokemon({species:'Charmander',level:5,rng:makeRng(7)})]});
 signYouth(game,trainer,{wage:7,signing:0,years:3});
-assert.equal(parseExplore('explore:route1:catch').activities,8,'old saves default to eight');
-assert.equal(parseExplore(exploreAction('route1','mixed',10)).activities,10);
+trainer.bag={pokeBall:100,potion:0};
+assert.equal(parseExplore('explore:route1:catch').activities,6,'old saves default to six');
+assert.equal(parseExplore(exploreAction('route1','mixed',10)).activities,8);
 assert.equal(parseExplore('explore:route1:mixed:11'),null);
 
 // Every day includes centers inside the limit, including a forced center in the first slot.
-for (const budget of [6,8,10]) {
+for (const budget of [6,7,8]) {
   trainer.party[0].fieldState={...fieldState(trainer.party[0]),hp:0};
   assignAction(game,trainer.id,exploreAction('route1','mixed',budget));
   const copy=restoreGame(snapshotGame(game));

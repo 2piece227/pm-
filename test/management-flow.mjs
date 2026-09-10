@@ -12,6 +12,7 @@ const starter = await createPokemon({ species: 'Charmander', level: 5, rng: make
 const stats = { judge: 12, ops: 10, focus: 9, know: 14, mental: 20 };
 const trainer = createTrainer({ id:'y-test', name:'오성', stats, potential:stats, party:[starter] });
 signYouth(game, trainer, { wage:7, signing:0, years:3 });
+trainer.bag={pokeBall:30,potion:0};
 assert.equal(trainer.party.length, 1);
 assert.equal(trainer.party[0].level, 5);
 assert.equal(partyToBox(game, trainer.id, 0).ok, false);

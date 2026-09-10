@@ -162,7 +162,7 @@ export function realStats(mon) {
     const iv = mon.ivs[k] ?? 0;
     const ev = Math.floor((mon.evs[k] ?? 0) / 4);
     if (k === 'hp') {
-      out.hp = Math.floor(((2 * base + iv + ev) * mon.level) / 100) + mon.level + 10;
+      out.hp = base === 1 ? 1 : Math.floor(((2 * base + iv + ev) * mon.level) / 100) + mon.level + 10;
     } else {
       let v = Math.floor(((2 * base + iv + ev) * mon.level) / 100) + 5;
       if (nat?.plus === k) v = Math.floor(v * 1.1);

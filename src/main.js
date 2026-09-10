@@ -8,3 +8,5 @@ import { bootOpening } from './ui/opening.js';
 import './ui/management.css';
 
 bootOpening();
+
+import './ui/pokemon-management.css';

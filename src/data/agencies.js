@@ -205,6 +205,9 @@ export function createTrainer({ id, name, agencyId, stats, potential, party = []
 
     /* §4.5 컨디션 — 대회/훈련으로 깎이고 휴식으로 회복. 낮으면 배틀 능력이 떨어진다 */
     condition: 100,
+    fatigue: 0,
+    bag: {pokeBall:0,potion:0},
+    badges: [],
     satisfaction: 70,
     mentalDebuff: 0,
     lossStreak: 0,
@@ -247,7 +250,7 @@ export const STAT_KEYS = ['judge', 'ops', 'focus', 'know', 'mental'];
 export function effectiveStats(trainer) {
   const debuff = trainer.mentalDebuff || 0;
   const out = {};
-  for (const k of STAT_KEYS) out[k] = Math.max(1, trainer.stats[k] - debuff);
+  for (const k of STAT_KEYS) out[k] = Math.max(1, trainer.stats[k] - debuff - Math.max(0,(trainer.fatigue||0)-35)*0.025);
   return out;
 }
 

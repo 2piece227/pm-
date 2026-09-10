@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import {candidateProposal,evaluateOffer,CONTRACT_MODEL} from '../src/engine/contract.js';
+import {YOUTH_CANDIDATES} from '../src/data/youth-candidates.js';
+import {createGame,playerAgency,advanceDay} from '../src/engine/game.js';
+import {agreeYouth,completeStarter} from '../src/engine/youth-contract.js';
+import {snapshotGame,restoreGame} from '../src/engine/checkpoint.js';
+const agency={funds:30000,reputation:20};
+for(const c of YOUTH_CANDIDATES){
+ const proposed=candidateProposal(c,agency);assert(evaluateOffer(c,proposed,agency).accept,`${c.name} must accept own opening proposal`);
+ console.log(`${c.name} opening:`,proposed);
+ assert(!evaluateOffer(c,{...proposed,wage:NaN},agency).accept);
+ assert(!evaluateOffer(c,{...proposed,signing:-1},agency).accept);
+ assert(!evaluateOffer(c,{...proposed,years:1.5},agency).accept);
+}
+const blue=YOUTH_CANDIDATES.find(c=>c.name==='블루');
+const low={...candidateProposal(blue,agency),wage:5,signing:400};
+const rich={...low,signing:4000};
+assert(!evaluateOffer(blue,low,agency).accept);
+const compensation=evaluateOffer(blue,rich,agency);assert(compensation.accept);assert(compensation.reasons[0].includes('영입 개런티'));
+assert(!evaluateOffer(blue,rich,{...agency,funds:3999}).accept);
+const chaea=YOUTH_CANDIDATES.find(c=>c.name==='채아'),base=candidateProposal(chaea,agency);
+const noBadge=evaluateOffer(chaea,{...base,badgeBonus:0},agency),noSigning=evaluateOffer(chaea,{...base,signing:0},agency);
+assert(noSigning.score>noBadge.score,'preferred performance bonus matters much more than minor signing preference');
+assert(!noBadge.accept);assert.equal(CONTRACT_MODEL.weightPower,2);
+const g=await createGame({seed:70,startEmpty:true});playerAgency(g).funds=30000;playerAgency(g).reputation=20;
+const trainer=agreeYouth(g,blue,rich);
+assert.equal(playerAgency(g).funds,26000);assert.equal(trainer.party.length,0);assert(g.pendingStarter);
+assert.throws(()=>agreeYouth(g,blue,rich));assert.equal(playerAgency(g).funds,26000);
+await assert.rejects(()=>advanceDay(g),/파트너/);
+const resumed=restoreGame(snapshotGame(g));assert(resumed.pendingStarter);
+await assert.rejects(()=>completeStarter(resumed,'Mewtwo'));
+await completeStarter(resumed,'Charmander');
+assert(!resumed.pendingStarter);assert.equal(playerAgency(resumed).roster.length,1);assert.equal(playerAgency(resumed).funds,26000);
+assert.equal(playerAgency(resumed).roster[0].party[0].species,'Charmander');assert.equal(playerAgency(resumed).roster[0].party[0].level,5);
+await assert.rejects(()=>completeStarter(resumed,'Squirtle'));
+assert.deepEqual(snapshotGame(restoreGame(snapshotGame(resumed))),snapshotGame(resumed));
+console.log('PASS: candidate first proposals, strong preference weighting, low wage/high signing compensation, input/funds validation, signed pause/save/resume, one starter, no duplicate charge');

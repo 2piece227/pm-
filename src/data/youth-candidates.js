@@ -30,7 +30,7 @@ export const YOUTH_CANDIDATES = [
       reputation: { want: 10, weight: 0, kind: 'more' },
       wage: { want: 7, weight: 3, kind: 'more' },
       signing: { want: 0, weight: 0, kind: 'more' },
-      proRaise: { want: 100, weight: 0, kind: 'more' },
+      proRaise: { want: 0, weight: 0, kind: 'more' },
       badgeBonus: { want: 0, weight: 0, kind: 'more' },
       years: { want: 3, weight: 1, kind: 'near' },
     },

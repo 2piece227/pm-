@@ -109,3 +109,12 @@ HGSS 원본을 ENLS가 편집한 도트 타운맵이다. 원본 파일은 그대
 
 이 프로젝트는 **비영리 팬 프로젝트**다. Pokémon 및 관련 명칭·이미지는
 Nintendo / Creatures Inc. / GAME FREAK Inc.의 상표이자 저작물이다.
+
+
+## 체육관 관장 파티 데이터
+
+- 관동 첫 도전: [pret/pokefirered — trainer_parties.h](https://github.com/pret/pokefirered/blob/master/src/data/trainer_parties.h)의 FRLG 관장 데이터.
+- 성도 첫 도전 및 진심 파티 15명: [pret/pokeheartgold — trainers.json](https://github.com/pret/pokeheartgold/blob/master/files/poketool/trainer/trainers.json)의 HGSS 데이터. 독수의 진심 파티는 사천왕 재대결.
+- 위 프로젝트는 원작 데이터 복원 프로젝트다. 게임 종족/기술/레벨 구성을 참고해 `src/data/gyms.js`로 정리했으며 ROM이나 게임 실행 코드는 포함하지 않는다. Pokémon 관련 원작 권리는 Nintendo / Creatures Inc. / GAME FREAK Inc.에 있다.
+- 비주기의 진심 파티는 이번 프로젝트의 임시 자체 편성으로 명시한다. 원작 PWT 파티를 복제한 것으로 표시하지 않는다.
+- 변환 재현: 위 원본 두 파일을 같은 폴더에 `pm-fr-parties.h`, `pm-hg-trainers.json` 이름으로 저장한 뒤 `node tools/import-gym-data.mjs <그 폴더>` 실행. 결과의 종족·기술 유효성과 16명 레벨 배열은 `test/pokemon-management.mjs`에서 검사한다.

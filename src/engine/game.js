@@ -19,6 +19,9 @@ import { STAT_KEYS } from '../data/agencies.js';
 import { gainExp } from '../data/pokemon.js';
 import { explore } from './explore.js';
 import { healParty } from './field-state.js';
+import { tickTraining, MANAGEMENT } from './pokemon-management.js';
+import { challengeGym } from './gyms.js';
+import { gymById } from '../data/gyms.js';
 import { locationById } from '../data/routes.js';
 import { SPECIES_KO, ko, iGa } from '../data/ko.js';
 
@@ -192,10 +195,10 @@ export function availableActions(game, trainer) {
 }
 
 /** 탐험 행동 문자열 만들기/풀기 */
-export const exploreAction = (locationId, mode, activities = 8) => `explore:${locationId}:${mode}:${Math.max(6,Math.min(10,Math.round(Number(activities)||8)))}`;
+export const exploreAction = (locationId, mode, activities = 6) => `explore:${locationId}:${mode}:${Math.max(6,Math.min(8,Math.round(Number(activities)||6)))}`;
 export function parseExplore(action) {
   const m = /^explore:([^:]+):(catch|battle|mixed)(?::(6|7|8|9|10))?$/.exec(action || '');
-  return m ? { locationId: m[1], mode: m[2], activities: Number(m[3] || 8) } : null;
+  return m ? { locationId: m[1], mode: m[2], activities: Math.min(8,Number(m[3] || 6)) } : null;
 }
 
 /** 오늘 배정된 일을 사람 말로 */
@@ -205,6 +208,7 @@ export function describeAction(action) {
     const loc = locationById(ex.locationId);
     return `${loc?.name || ex.locationId} · ${ex.mode === 'catch' ? '포획 중심' : ex.mode === 'mixed' ? '포획·배틀 병행' : '배틀 중심'} · ${ex.activities}회 (센터 포함)`;
   }
+  if(action?.startsWith('gym:')) return `${gymById(action.slice(4))?.name || ''} 체육관 도전 · 자동 관전`;
   if (!action || action === 'rest') return '휴식';
   if (action.startsWith('enter:')) return '대회 출전';
   return action;
@@ -215,8 +219,9 @@ export function describeAction(action) {
 /** 박스 → 파티 (6마리까지) */
 export function boxToParty(game, trainerId, index) {
   const a = playerAgency(game);
-  const t = findTrainer(game.league, trainerId);
+  const t = a.roster.find(t=>t.id===trainerId);
   if (!t || !a.box[index]) return { ok: false, msg: '없는 포켓몬입니다.' };
+  if(a.box[index].training) return {ok:false,msg:'훈련 완료 또는 취소 후 합류할 수 있습니다.'};
   if ((t.party || []).length >= 6) return { ok: false, msg: '파티는 6마리까지입니다.' };
   const [mon] = a.box.splice(index, 1);
   t.party.push(mon);
@@ -226,7 +231,7 @@ export function boxToParty(game, trainerId, index) {
 /** 파티 → 박스 (마지막 한 마리는 못 뺀다) */
 export function partyToBox(game, trainerId, index) {
   const a = playerAgency(game);
-  const t = findTrainer(game.league, trainerId);
+  const t = a.roster.find(t=>t.id===trainerId);
   if (!t || !t.party?.[index]) return { ok: false, msg: '없는 포켓몬입니다.' };
   if (t.party.length <= 1) return { ok: false, msg: '마지막 한 마리는 뺄 수 없습니다.' };
   const [mon] = t.party.splice(index, 1);
@@ -282,6 +287,7 @@ async function trainParty(game, trainer, amount, report) {
  * @returns 그날 리포트 (UI가 그대로 보여준다)
  */
 export async function advanceDay(game, { onProgress = async () => {} } = {}) {
+  if (game.pendingStarter) throw new Error('첫 파트너를 선택한 뒤 하루를 진행하세요.');
   if (game.gameOver) return game.lastReport;
 
   const report = {
@@ -326,6 +332,12 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
       continue;
     }
 
+    if(action.startsWith('gym:')) {
+      const match=await challengeGym(game,t,action.slice(4));
+      (report.gyms??=[]).push(match);
+      await onProgress({id:`trainer-${t.id}`,state:'done',label:`${t.name} · 체육관 도전 완료`,detail:'이어서 관장전 관전을 시작합니다.'});
+      continue;
+    }
     /* 탐험 — 포켓몬 포획 / NPC 배틀. 결과는 글로 받은 메시지함에 들어간다 */
     const ex = parseExplore(action);
     if (ex) {
@@ -346,10 +358,15 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
     }
 
     healParty(t);
+    t.fatigue=Math.max(0,(t.fatigue||0)-MANAGEMENT.restRecovery);
     t.mentalDebuff = Math.max(0, (t.mentalDebuff || 0) - (0.4 + t.stats.mental * 0.04));
     report.rested.push(t.name);
-    await onProgress({ id: `trainer-${t.id}`, state: 'done', label: t.name, detail: '포켓몬 전원 회복 · 트레이너 자신감 회복' });
+    await onProgress({ id: `trainer-${t.id}`, state: 'done', label: t.name, detail: '포켓몬 전원 회복 · 트레이너 피로·자신감 회복' });
   }
+  const trainingCount=player.box.filter(m=>m.training).length;
+  report.training=tickTraining(game);
+  for(const row of report.training) league.newsFeed.unshift({day:game.day,text:`${ko(SPECIES_KO,row.species)} · ${row.text}`,kind:'training'});
+  await onProgress({id:'training',state:'done',label:'포켓몬 트레이닝 센터',detail:report.training.length?report.training.map(r=>r.text).join(' / '):trainingCount?`${trainingCount}마리 장기 훈련 1일 진행`:'배정된 훈련 없음'});
   await onProgress({ id: 'activities', state: 'done', label: '오늘의 활동 완료' });
   await onProgress({ id: 'league', state: 'running', label: '소속사 활동 정리', detail: '트레이너의 하루 기록 확인' });
 
