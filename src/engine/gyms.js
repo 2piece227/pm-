@@ -35,11 +35,16 @@ export async function challengeGym(game, trainer, gymId) {
   if(won) applyWin(trainer);else applyLoss(trainer);
   trainer.badges??=[];
   const firstWin=won&&!trainer.badges.includes(gym.id);
-  let reward=0;
+  let reward=0,bonusPaid=0;
+  const growth=[];
   if(firstWin){
     trainer.badges.push(gym.id);reward=500+gym.order*150;agency.funds+=reward;
-    agency.funds-=Number(trainer.contract?.badgeBonus||0);
-    for(const m of trainer.party) await gainExp(m,Math.round(gym.party.reduce((n,p)=>n+p.level*40,0)/trainer.party.length));
+    bonusPaid=Number(trainer.contract?.badgeBonus||0);agency.funds-=bonusPaid;
+    for(const m of trainer.party){
+      const before=m.level,experience=Math.round(gym.party.reduce((n,p)=>n+p.level*40,0)/trainer.party.length);
+      const result=await gainExp(m,experience);
+      growth.push({species:m.species,before,level:m.level,experience,learned:result.learned});
+    }
     if(trainer.isYouth && GYMS.filter(g=>g.region===gym.region&&trainer.badges.includes(g.id)).length===8){
       trainer.isYouth=false;
       if(trainer.contract?.wage!=null) trainer.contract.wage=Math.round(trainer.contract.wage*(1+Number(trainer.contract.proRaise||0)/100));
@@ -55,7 +60,7 @@ export async function challengeGym(game, trainer, gymId) {
     if(ready.length===1){const r=await evolvePokemon(mon,ready[0].species);if(r.ok)evolutions.push(r);}
   }
   for(const e of evolutions) game.league.newsFeed.unshift({day:game.day,kind:'evolution',text:`${trainer.name}의 ${ko(SPECIES_KO,e.before)} → ${ko(SPECIES_KO,e.after)} 진화!`});
-  const entry={evolutions,id:`gym-${game.day}-${trainer.id}`,day:game.day,gymId,trainerId:trainer.id,trainerName:trainer.name,
+  const entry={evolutions,growth,bonusPaid,badge:gym.badge,id:`gym-${game.day}-${trainer.id}`,day:game.day,gymId,trainerId:trainer.id,trainerName:trainer.name,
     agencyName:agency.name,gymName:gym.name,won,firstWin,reward,log:result.log,turns:result.turns,
     party:structuredClone(gym.party)};
   (game.gymHistory??=[]).unshift(entry);

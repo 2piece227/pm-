@@ -1,3 +1,4 @@
+import { Dex } from '@pkmn/dex';
 import { realStats } from '../data/pokemon.js';
 
 /** Only Pokémon have HP. A trainer's morale is a separate, persistent value. */
@@ -19,4 +20,13 @@ export function partyCondition(trainer) {
     exhausted: (trainer.party || []).some((m, i) => states[i].hp > 0 && m.moves.every(move =>
       states[i].pp[move.toLowerCase().replace(/[^a-z0-9]/g, '')] === 0)),
   };
+}
+
+/** Match the existing Gen9 simulator's PP capacity; no PP policy is changed here. */
+export function movePP(mon, moveName) {
+  const move=Dex.moves.get(moveName||'');
+  if(!move.exists)return {current:0,max:0};
+  const max=move.pp*(move.noPPBoosts||move.id==='trumpcard'?1:8/5);
+  const spent=mon?.fieldState?.pp?.[move.id];
+  return {current:Number.isFinite(spent)?Math.max(0,Math.min(max,spent)):max,max};
 }

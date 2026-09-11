@@ -22,6 +22,7 @@ import { healParty } from './field-state.js';
 import { tickTraining, MANAGEMENT } from './pokemon-management.js';
 import { challengeGym } from './gyms.js';
 import { gymById } from '../data/gyms.js';
+import { badgeProgress } from './gym-progress.js';
 import { locationById } from '../data/routes.js';
 import { SPECIES_KO, ko, iGa } from '../data/ko.js';
 
@@ -114,10 +115,12 @@ export function rosterLock(game) {
   if (!playerAgency(game).roster.length) return null;
   const t = game.opening?.firstTrainerId
     ? findTrainer(game.league, game.opening.firstTrainerId) : null;
-  const badges = t?.badges?.length ?? 0;
+  const progress = badgeProgress(t);
+  const badges = progress.best;
   return {
     locked: true,
     badges,
+    progress,
     needed: game.opening?.badgesNeeded ?? BADGES_TO_UNLOCK,
     trainer: t,
   };

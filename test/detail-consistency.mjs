@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import {Battle,Teams} from '@pkmn/sim';
+import {badgeProgress} from '../src/engine/gym-progress.js';
+import {GYMS} from '../src/data/gyms.js';
+import {movePP} from '../src/engine/field-state.js';
+import {createGame,playerAgency,rosterLock} from '../src/engine/game.js';
+import {createTrainer} from '../src/data/agencies.js';
+import {renderGyms,renderSupport} from '../src/ui/management-pages.js';
+const mixed=[...GYMS.filter(g=>g.region==='kanto').slice(0,4),...GYMS.filter(g=>g.region==='johto').slice(0,4)].map(g=>g.id);
+assert.deepEqual(badgeProgress({badges:[...mixed,mixed[0],'unknown']}),{kanto:4,johto:4,best:4});
+const g=await createGame({seed:33,startEmpty:true}),a=playerAgency(g);
+const first=createTrainer({id:'first',name:'첫째',party:[{species:'Charmander'}]}),second=createTrainer({id:'second',name:'둘째',party:[{species:'Squirtle'}]});
+a.roster=[first,second];g.opening.firstTrainerId=first.id;first.badges=mixed;
+assert.equal(rosterLock(g).badges,4);
+first.badges=GYMS.filter(g=>g.region==='kanto').map(g=>g.id);g.opening.done=true;
+assert.equal(rosterLock(g),null);assert.equal(badgeProgress(first).best,8);
+g.actions.second='gym:brock';
+const html=renderGyms(g,'second');assert.match(html,/<option value="second" selected>/);assert.match(html,/✓ 오늘 도전 배정됨/);
+a.funds=0;assert.match(renderSupport(g),/data-buy="pokeBall" data-owner="first" disabled/);
+g.pendingStarter={trainerId:'second'};assert.match(renderGyms(g,'second'),/data-gym="brock" disabled/);
+const battle=new Battle({formatid:'gen9customgame',seed:[1,2,3,4]});
+const team=Teams.pack([{species:'Mew',moves:['Tackle','Growl','Sketch','Trump Card']}]);
+battle.setPlayer('p1',{name:'A',team});battle.setPlayer('p2',{name:'B',team});
+for(const slot of battle.p1.pokemon[0].moveSlots){assert.equal(movePP({},slot.move).max,slot.maxpp);assert.equal(movePP({fieldState:{pp:{[slot.id]:0}}},slot.move).current,0);}
+battle.destroy();
+assert.equal(movePP({fieldState:{pp:{tackle:3}}},'Tackle').current,3);
+console.log('PASS: regional badge counts and completed progress, selected gym trainer, disabled unavailable purchases/challenges, visible PP matches actual engine including non-boostable moves');
