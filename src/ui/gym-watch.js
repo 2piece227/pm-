@@ -1,6 +1,7 @@
 import { playBattleLog, resetScene, stopPlayback, setSpeedSource, setPaused, isPaused } from './battle-view.js';
 import { mountBattleAmbience } from './battle-ambience.js';
 import * as sfx from './sfx.js';
+import { renderBattleAnalysis } from './battle-analysis.js';
 
 /** Playback uses the already resolved protocol, never a second battle calculation. */
 export function watchGymMatch(match) {
@@ -8,6 +9,9 @@ export function watchGymMatch(match) {
     const $=id=>document.getElementById(id);
     const overlay=$('watch-ov'), app=$('app');
     overlay.hidden=false;$('watch-panel').style.display='';app.inert=true;
+    const analysisPanel=document.createElement('section');
+    analysisPanel.innerHTML=renderBattleAnalysis(match.analysis);
+    $('watch-panel').append(analysisPanel);
     $('watch-title').textContent=`${match.trainerName} vs ${match.gymName} · 체육관 도전`;
     $('watch-close').textContent='관전 건너뛰기';
     $('watch-pause').textContent='⏸ 일시정지';
@@ -15,7 +19,7 @@ export function watchGymMatch(match) {
     const ambience=mountBattleAmbience($('scene'),match);
     let closed=false;
     const close=()=>{
-      if(closed)return;closed=true;ambience.dispose();stopPlayback();sfx.stopAll();overlay.hidden=true;app.inert=false;
+      if(closed)return;closed=true;analysisPanel.remove();ambience.dispose();stopPlayback();sfx.stopAll();overlay.hidden=true;app.inert=false;
       document.removeEventListener('keydown',key);resolve();
     };
     const key=e=>{if(e.key==='Escape'){e.preventDefault();close();}};

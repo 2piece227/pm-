@@ -4,6 +4,8 @@ import { GYMS } from '../data/gyms.js';
 import { SPECIES_KO, ko } from '../data/ko.js';
 import { monImage, escapeHtml as esc } from './management-widgets.js';
 import { TYPE_KO } from './pokemon-panel.js';
+import { BATTLE_POLICIES, policyId } from '../data/battle-policy.js';
+import { renderBattleAnalysis } from './battle-analysis.js';
 const K=s=>ko(SPECIES_KO,s);
 export function fatigueIcon(t){const f=fatigueOf(t);return `<span class="fatigue ${f.color}" role="img" aria-label="${f.label}" title="${f.label} · 휴식일에 회복">${f.face}</span>`;}
 
@@ -24,12 +26,14 @@ export function renderGyms(game,selectedId=null){
   const selected=roster.find(t=>t.id===selectedId)||roster[0];
   const canChallenge=!!selected?.party.length&&!game.pendingStarter;
   return `<div class="page-h"><h2>체육관 순회</h2><span class="muted">관장 도전은 하루 일정 전체를 사용합니다</span></div><p class="muted">센터에서 준비한 뒤 도전하며, 하루 진행 후 관전이 자동으로 열립니다. 관동은 FRLG, 성도는 HGSS 첫 도전 파티입니다. 한 지방 배지 8개를 모으면 추가 계약이 열립니다.</p>
-  <label class="gym-trainer">도전 트레이너<select id="gym-trainer">${roster.map(t=>`<option value="${t.id}" ${t.id===selected?.id?'selected':''}>${esc(t.name)} · 관동 ${badgeProgress(t).kanto}/8 · 성도 ${badgeProgress(t).johto}/8</option>`).join('')}</select></label><div id="management-notice" role="status"></div>
+  <label class="gym-trainer">도전 트레이너<select id="gym-trainer">${roster.map(t=>`<option value="${t.id}" ${t.id===selected?.id?'selected':''}>${esc(t.name)} · 관동 ${badgeProgress(t).kanto}/8 · 성도 ${badgeProgress(t).johto}/8</option>`).join('')}</select></label><section class="card"><label>사전 운영 방침 · 관장전<select id="battle-policy" ${selected?'':'disabled'}>${Object.entries(BATTLE_POLICIES).map(([id,p])=>`<option value="${id}" ${policyId(selected?.battlePolicy)===id?'selected':''}>${p.name}</option>`).join('')}</select></label><p>${BATTLE_POLICIES[policyId(selected?.battlePolicy)].hint}</p><small class="muted">성향·순응도·판단력에 따라 반영됩니다. 배틀 중 명령이 아니며 탐험에는 아직 적용되지 않습니다.</small></section><div id="management-notice" role="status"></div>
   ${['kanto','johto'].map(region=>`<h3 class="gym-region">${region==='kanto'?'관동':'성도'}</h3><div class="gym-grid">${GYMS.filter(g=>g.region===region).map(g=>`<section class="card gym-card"><div class="gym-title"><span class="gym-badge">${g.order}</span><div><h3>${g.name} · ${TYPE_KO[g.type]}</h3><small>${g.source} · ${g.badge}</small></div></div><div class="gym-party">${g.party.map(p=>`<div>${monImage(p.species)}<b>${K(p.species)}</b><small>Lv.${p.level}</small></div>`).join('')}</div><p class="muted">획득: ${roster.filter(t=>(t.badges||[]).includes(g.id)).map(t=>esc(t.name)).join(', ')||'아직 없음'}</p><button data-gym="${g.id}" ${canChallenge?'':'disabled'}>${!canChallenge?'첫 파트너 선택 필요':game.actions[selected.id]===`gym:${g.id}`?'✓ 오늘 도전 배정됨':'관장전 일정 배정'}</button><details><summary>진심 파티 · 향후 PWT용</summary><small>${g.seriousSource}</small><p>${g.seriousParty.map(p=>`${K(p.species)} Lv.${p.level}`).join(' / ')}</p></details></section>`).join('')}</div>`).join('')}
-  <h3>지난 관장전</h3>${(game.gymHistory||[]).slice(0,20).map(m=>`<button class="gym-history ghost" data-watch-gym="${m.id}">${m.day}일차 · ${esc(m.trainerName)} vs ${m.gymName} · ${m.won?'승리':'패배'} · 다시 보기</button>`).join('')||'<p class="muted">첫 도전을 기다리고 있습니다.</p>'}`;
+  <h3>지난 관장전</h3>${(game.gymHistory||[]).slice(0,20).map(m=>`<button class="gym-history ghost" data-watch-gym="${m.id}">${m.day}일차 · ${esc(m.trainerName)} vs ${m.gymName} · ${m.won?'승리':'패배'} · 다시 보기</button>${renderBattleAnalysis(m.analysis)}`).join('')||'<p class="muted">첫 도전을 기다리고 있습니다.</p>'}`;
 }
 
 export function wireManagementPages(root,game,refresh,watch,selectTrainer=()=>{}){
+  const policy=root.querySelector('#battle-policy');
+  if(policy) policy.onchange=()=>{const t=agencyOf(game).roster.find(t=>t.id===root.querySelector('#gym-trainer')?.value);if(t){t.battlePolicy=policyId(policy.value);refresh();}};
   const gymTrainer=root.querySelector('#gym-trainer');if(gymTrainer)gymTrainer.onchange=()=>selectTrainer(gymTrainer.value);
   const notice=msg=>{const node=root.querySelector('#management-notice');if(node)node.textContent=msg;};
   root.querySelectorAll('.supply-qty').forEach(input=>input.oninput=()=>{

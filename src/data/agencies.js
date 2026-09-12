@@ -194,7 +194,7 @@ export function createTrainer({ id, name, agencyId, stats, potential, party = []
 
     /* §4.4 천성 — 스타일은 AI에 실제로 연결돼 있다 */
     nature: {
-      compliance: null,     // 순응도 (미연결)
+      compliance: 0.5,      // 순응도 0..1; 초기 임시 기본값
       preferredType: null,  // 선호 타입 (미연결)
       style: '균형형',
       stardom: null,
@@ -202,6 +202,7 @@ export function createTrainer({ id, name, agencyId, stats, potential, party = []
 
     /* 보유 포켓몬 — 레벨 5부터 직접 키운다 (data/pokemon.js) */
     party,
+    battlePolicy: 'balanced',
 
     /* §4.5 컨디션 — 대회/훈련으로 깎이고 휴식으로 회복. 낮으면 배틀 능력이 떨어진다 */
     condition: 100,

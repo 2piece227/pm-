@@ -33,6 +33,7 @@ import { renderSupport, renderTraining, renderGyms, wireManagementPages, fatigue
 import { watchGymMatch } from './gym-watch.js';
 import { GYMS } from '../data/gyms.js';
 import { badgeProgress } from '../engine/gym-progress.js';
+import { renderBattleAnalysis } from './battle-analysis.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -164,7 +165,7 @@ function renderDailySummary(rep, detailed = true) {
   ${(rep.explored || []).map(r=>`<div class="report-activity"><b>${esc(r.name)} · ${esc(r.location)}</b>
     ${r.events ? `<div class="activity-totals"><span>${r.events.length}/${r.budget} 활동</span><span>${r.wins}승 ${r.losses}패</span><span>포획 ${r.caught}마리</span><span>센터 ${r.centers}회</span><span>상금 +${won(r.money)}</span></div>
       <details class="activity-details" ${detailed?'open':''}><summary>시간순 활동 기록</summary><ol class="activity-timeline">${r.events.map(e=>`<li class="activity-${e.kind}"><time>${e.time}<small>${e.slot}번째 활동</small></time><div><b>${e.kind==='center'?'포켓몬센터':e.kind==='potion'?'상처약 사용':e.kind==='catch'?'야생 포켓몬 탐색':'트레이너 배틀'} ${e.won===false?'· 패배':''}</b>${e.lines.map(l=>`<p>${esc(l)}</p>`).join('')}<small class="muted">파티 HP ${e.before.reduce((n,p)=>n+p.hp,0)} → ${e.after.reduce((n,p)=>n+p.hp,0)} / ${e.after.reduce((n,p)=>n+p.maxhp,0)}</small></div></li>`).join('')}</ol></details>` : `<ul>${r.lines.slice(1).map(l=>`<li>${esc(l)}</li>`).join('')}</ul>`}</div>`).join('')}
-  ${(rep.gyms||[]).map(m=>`<div class="report-activity"><p><b>${esc(m.trainerName)} vs ${m.gymName} · ${m.won?'승리':'패배'}</b> <button class="ghost" data-watch-gym="${m.id}">관장전 다시 보기</button></p>${m.firstWin?`<p>${m.badge||'배지'} 획득 · 상금 +${won(m.reward)}${m.bonusPaid?` · 계약 배지 보너스 −${won(m.bonusPaid)}`:''}</p>`:m.won?'<p class="muted">이미 획득한 배지입니다. 첫 도전 보상은 중복 지급되지 않습니다.</p>':''}${(m.growth||[]).map(g=>`<p>${esc(K(g.species))} · 경험치 +${g.experience}${g.level>g.before?` · Lv.${g.before} → ${g.level}`:''}${g.learned.length?` · ${g.learned.map(x=>esc(M(x))).join(', ')} 습득`:''}</p>`).join('')}${(m.evolutions||[]).map(e=>`<p>${esc(K(e.before))} → ${esc(K(e.after))} 진화</p>`).join('')}</div>`).join('')}
+  ${(rep.gyms||[]).map(m=>`<div class="report-activity">${renderBattleAnalysis(m.analysis)}<p><b>${esc(m.trainerName)} vs ${m.gymName} · ${m.won?'승리':'패배'}</b> <button class="ghost" data-watch-gym="${m.id}">관장전 다시 보기</button></p>${m.firstWin?`<p>${m.badge||'배지'} 획득 · 상금 +${won(m.reward)}${m.bonusPaid?` · 계약 배지 보너스 −${won(m.bonusPaid)}`:''}</p>`:m.won?'<p class="muted">이미 획득한 배지입니다. 첫 도전 보상은 중복 지급되지 않습니다.</p>':''}${(m.growth||[]).map(g=>`<p>${esc(K(g.species))} · 경험치 +${g.experience}${g.level>g.before?` · Lv.${g.before} → ${g.level}`:''}${g.learned.length?` · ${g.learned.map(x=>esc(M(x))).join(', ')} 습득`:''}</p>`).join('')}${(m.evolutions||[]).map(e=>`<p>${esc(K(e.before))} → ${esc(K(e.after))} 진화</p>`).join('')}</div>`).join('')}
   ${(rep.training||[]).map(t=>`<p>${esc(K(t.species))} · ${esc(t.text)}</p>`).join('')}
   ${rep.rested.length ? `<p class="muted">휴식 완료 · ${esc(rep.rested.join(', '))}</p>` : ''}
   <div class="report-foot">급여 지급 ${won(rep.upkeep)} · 새로운 소식 ${rep.news.length}건</div></section>`;

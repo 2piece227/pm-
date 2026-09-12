@@ -21,6 +21,8 @@ export function createTrainerAI(def, style, rng) {
     stats: def.stats,
     style,
     styleVec: STYLES[style] || STYLES['균형형'],
+    policy: def.battlePolicy,
+    compliance: def.nature?.compliance,
     rng,
   });
 }

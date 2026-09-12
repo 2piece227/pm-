@@ -20,6 +20,7 @@ import {
   stageMul,
   typeEff,
 } from './estimate.js';
+import { policyId, policyWeight, policyAdjustment } from '../data/battle-policy.js';
 
 /** 재현 가능한 시뮬을 위한 소형 PRNG (mulberry32) */
 export function makeRng(seed = 1) {
@@ -58,13 +59,15 @@ const MAX_STAT = 20;
 const MAX_TEMPERATURE = 14;
 
 export class TrainerAI {
-  constructor({ gen, name, stats, style, styleVec, rng = Math.random }) {
+  constructor({ gen, name, stats, style, styleVec, policy = 'balanced', compliance = null, rng = Math.random }) {
     this.gen = gen;
     this.name = name;
     this.stats = stats;
     this.style = style;
     this.sty = styleVec;
     this.rng = rng;
+    this.policy = policyId(policy);
+    this.policyWeight = policyWeight(stats, compliance);
     this.reset();
   }
 
@@ -174,12 +177,18 @@ export class TrainerAI {
       if (rm.disabled) return;
       const move = gen.moves.get(rm.id);
       if (!move) return;
+      this.lastPerception = null;
       opts.push({
         kind: 'move',
+        category: move.category,
+        accuracy: move.accuracy === true ? 100 : move.accuracy,
+        role: move.heal ? 'heal' : selfBoostsOf(move) ? 'setup' : move.status ? 'status' : 'attack',
+        typeEffect: move.category !== 'Status' ? typeEff(gen, move.type, foe.getTypes()) : null,
         label: move.name, // 영문 id 그대로. 한글 변환은 표시 레이어의 몫이다.
         choice: `move ${i + 1}`,
         score: this.scoreMove(move, me, foe, { myBest, R, turnsSurvive, turnsToKO }),
       });
+      opts.at(-1).perception = this.lastPerception;
     });
 
     if (!active.trapped && !active.maybeTrapped) {
@@ -189,6 +198,7 @@ export class TrainerAI {
           kind: 'switch',
           label: bench.name,
           choice: `switch ${opt.slot}`,
+          safer: bestDamagePct(gen, foe, bench)/Math.max(1,hpPct(bench)) < foeBest/Math.max(1,hpPct(me)),
           score: this.scoreSwitch(me, foe, bench),
         });
       }
@@ -196,11 +206,17 @@ export class TrainerAI {
 
     if (!opts.length) return { choice: 'default', think: null };
 
+    for (const option of opts) {
+      option.baseScore = option.score;
+      option.score += policyAdjustment(this.policy, option, this.policyWeight);
+    }
     const T = this.temperature(battle.turn);
     const { index, probs } = this.softmaxPick(opts.map((o) => o.score), T);
     return {
       choice: opts[index].choice,
-      think: this.formatThink(T, opts, probs),
+      think: { ...this.formatThink(T, opts, probs), selected: index, policy: this.policy,
+        focusAffected: T > this.temperature(0), shock: this.shock > 0,
+        vulnerable: turnsSurvive <= 1, pressure: myBest < foeBest },
     };
   }
 
@@ -212,6 +228,7 @@ export class TrainerAI {
       /* 상성을 뺀 맨몸 데미지에 "체감" 상성을 곱한다 — 이 순서를 뒤집으면 지식 스탯이 죽는다 */
       const trueEff = typeEff(gen, move.type, foe.getTypes());
       const felt = this.perceive(trueEff);
+      this.lastPerception = { trueEff, felt };
       const adj = neutralDamagePct(me, foe, move) * felt;
       let score = adj * (move.category === 'Physical' ? sty.phys : sty.spec);
       if (adj >= hpPct(foe)) score += KO_BONUS;
@@ -281,7 +298,7 @@ export class TrainerAI {
     if (!opts.length) return { choice: 'default', think: null };
     const T = this.temperature(battle.turn);
     const { index, probs } = this.softmaxPick(opts.map((o) => o.score), T);
-    return { choice: opts[index].choice, think: this.formatThink(T, opts, probs) };
+    return { choice: opts[index].choice, think: { ...this.formatThink(T, opts, probs), selected: index, forced: true } };
   }
 
   switchOptions(battle, sideId) {
@@ -300,7 +317,7 @@ export class TrainerAI {
     return {
       trainer: this.name,
       temperature: T,
-      options: opts.map((o, i) => ({ kind: o.kind, label: o.label, prob: probs[i] })),
+      options: opts.map((o, i) => ({ ...o, prob: probs[i] })),
     };
   }
 }

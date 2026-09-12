@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import { createTrainerAI, runBattle, makeRng } from '../src/engine/run-battle.js';
+import { analyseBattle } from '../src/engine/battle-analysis.js';
+import { snapshotGame, restoreGame } from '../src/engine/checkpoint.js';
+import { policyWeight } from '../src/data/battle-policy.js';
+import { renderBattleAnalysis } from '../src/ui/battle-analysis.js';
+import { createGame, playerAgency, signYouth } from '../src/engine/game.js';
+import { createTrainer } from '../src/data/agencies.js';
+import { createPokemon } from '../src/data/pokemon.js';
+import { challengeGym } from '../src/engine/gyms.js';
+const teamA=`Charizard\nAbility: Blaze\nLevel: 50\n- Flamethrower\n- Fire Blast\n- Dragon Claw\n- Swords Dance\n\nBlastoise\nAbility: Torrent\nLevel: 50\n- Surf\n- Ice Beam`;
+const teamB=`Tyranitar\nAbility: Sand Stream\nLevel: 50\n- Rock Slide\n- Crunch\n- Earthquake\n\nVenusaur\nAbility: Overgrow\nLevel: 50\n- Energy Ball\n- Sludge Bomb`;
+const stats=v=>({judge:v,ops:v,focus:v,know:v,mental:v});
+function battle(seed,policy='balanced',skill=16,collectThink=true,compliance=1){
+ return runBattle({trainerA:createTrainerAI({name:'검증',stats:stats(skill),battlePolicy:policy,nature:{compliance}},'균형형',makeRng(seed+1)),
+ trainerB:createTrainerAI({name:'상대',stats:stats(18)},'균형형',makeRng(seed+2)),teamA,teamB,seed,collectThink});
+}
+const events = r=>r.log.filter(line=>!line.startsWith('|t:|'));
+let changed=0,lowConcern=0,highConcern=0;
+for(let seed=1;seed<=30;seed++){
+ const baseline=battle(seed),quiet=battle(seed,'balanced',16,false);
+ assert.deepEqual(events(baseline),events(quiet),'observation must not consume random draws');
+ const a=battle(seed,'aggressive'),s=battle(seed,'safe');
+ if(JSON.stringify(events(a))!==JSON.stringify(events(s))) changed++;
+ assert.deepEqual(events(battle(seed,'safe',16,true,0)),events(baseline),'zero compliance keeps base policy');
+ lowConcern+=analyseBattle(battle(seed,'balanced',8)).counts.concern;
+ highConcern+=analyseBattle(battle(seed,'balanced',25)).counts.concern;
+ const before=JSON.stringify(baseline);
+ const report=analyseBattle(baseline,{policy:'balanced',mentalDebuff:1,lossStreak:3});
+ assert.equal(JSON.stringify(baseline),before);
+ assert(report.mentalAffected);assert.equal(report.lossStreak,3);
+ const html=renderBattleAnalysis(report);
+ assert(!html.includes('temperature'));assert(!html.includes('prob:'));
+}
+assert(changed>0,'policies must change actual battles');
+assert(lowConcern>highConcern,'skill cohorts should produce distinguishable reports');
+assert(policyWeight(stats(8),1)<policyWeight(stats(20),1));
+const legacy={snapshotVersion:1,league:{agencies:[{roster:[{nature:{compliance:null}}]}]},rngState:42,gymHistory:[{log:['saved battle'],won:true}]};
+const restored=restoreGame(legacy);
+assert.equal(restored.league.agencies[0].roster[0].battlePolicy,'balanced');
+assert.equal(restored.league.agencies[0].roster[0].nature.compliance,0.5);
+assert.deepEqual(restored.gymHistory,legacy.gymHistory);
+assert.equal(legacy.snapshotVersion,1);
+assert.deepEqual(snapshotGame(restoreGame(snapshotGame(restored))),snapshotGame(restored));
+assert.throws(()=>restoreGame({...legacy,snapshotVersion:999}));
+const game=await createGame({seed:234,startEmpty:true});
+const mon=await createPokemon({species:'Bulbasaur',level:10,rng:makeRng(12)});
+const trainer=createTrainer({id:'report-test',name:'보고서 검증',stats:stats(16),potential:stats(20),party:[mon]});
+signYouth(game,trainer,{wage:7,signing:0});trainer.battlePolicy='safe';
+const match=await challengeGym(game,trainer,'brock');
+assert.equal(match.analysis.policy,'safe');
+const saved=restoreGame(snapshotGame(game));
+const savedMatch=JSON.stringify(saved.gymHistory[0]);
+playerAgency(saved).roster[0].battlePolicy='aggressive';
+playerAgency(saved).roster[0].stats.judge=1;
+renderBattleAnalysis(saved.gymHistory[0].analysis);
+assert.equal(JSON.stringify(saved.gymHistory[0]),savedMatch,'old report never follows current trainer state');
+const observation=analyseBattle({log:[],think:[{turn:3,side:'p1',think:{selected:0,options:[{kind:'move',label:'Earthquake',category:'Physical',role:'attack',score:1,perception:{trueEff:0,felt:1}},{kind:'move',label:'Surf',score:30,perception:{trueEff:2,felt:2}}]}}]});
+assert(observation.observations.some(o=>o.kind==='knowledge'));
+assert(observation.observations.some(o=>o.text.includes('실제 사용 기록 없음')));
+console.log(`PASS: policies changed ${changed}/30 battles; review choices low=${lowConcern}, high=${highConcern}; RNG, report purity, compliance, legacy migration`);

@@ -7,6 +7,7 @@ import { createTrainerAI, runBattle, makeRng } from './run-battle.js';
 import { healParty } from './field-state.js';
 import { applyLoss, applyWin } from './explore.js';
 import { agencyOf, evolutionOptions, evolvePokemon } from './pokemon-management.js';
+import { analyseBattle } from './battle-analysis.js';
 
 export async function challengeGym(game, trainer, gymId) {
   const gym=gymById(gymId), agency=agencyOf(game);
@@ -24,9 +25,11 @@ export async function challengeGym(game, trainer, gymId) {
   }
   healParty(trainer); // A dedicated gym day includes preparation at the center.
   const stats={judge:15,ops:15,focus:15,know:15,mental:16};
-  const result=runBattle({trainerA:createTrainerAI({name:trainer.name,stats:effectiveStats(trainer)},trainer.nature?.style,makeRng(seed+1)),
+  const analysisContext={policy:trainer.battlePolicy,mentalDebuff:trainer.mentalDebuff,lossStreak:trainer.lossStreak};
+  const result=runBattle({trainerA:createTrainerAI({...trainer,stats:effectiveStats(trainer)},trainer.nature?.style,makeRng(seed+1)),
     trainerB:createTrainerAI({name:gym.name,stats},'균형형',makeRng(seed+2)),
-    teamA:partyToTeam(trainer.party),teamB:partyToTeam(party),seed});
+    teamA:partyToTeam(trainer.party),teamB:partyToTeam(party),seed,collectThink:true});
+  const analysis=analyseBattle(result,analysisContext);
   trainer.party.forEach((m,i)=>{m.fieldState=result.hpAfter.p1[i];});
   trainer.lastGymDay=game.day;trainer.locationId=gym.location;
   trainer.fatigue=Math.min(100,(trainer.fatigue||0)+24);
@@ -60,7 +63,7 @@ export async function challengeGym(game, trainer, gymId) {
     if(ready.length===1){const r=await evolvePokemon(mon,ready[0].species);if(r.ok)evolutions.push(r);}
   }
   for(const e of evolutions) game.league.newsFeed.unshift({day:game.day,kind:'evolution',text:`${trainer.name}의 ${ko(SPECIES_KO,e.before)} → ${ko(SPECIES_KO,e.after)} 진화!`});
-  const entry={evolutions,growth,bonusPaid,badge:gym.badge,id:`gym-${game.day}-${trainer.id}`,day:game.day,gymId,trainerId:trainer.id,trainerName:trainer.name,
+  const entry={analysis,evolutions,growth,bonusPaid,badge:gym.badge,id:`gym-${game.day}-${trainer.id}`,day:game.day,gymId,trainerId:trainer.id,trainerName:trainer.name,
     agencyName:agency.name,gymName:gym.name,won,firstWin,reward,log:result.log,turns:result.turns,
     party:structuredClone(gym.party)};
   (game.gymHistory??=[]).unshift(entry);
