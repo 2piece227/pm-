@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {BattleMusic} from '../src/ui/battle-music.js';
+import {battleAmbience} from '../src/data/battle-ambience.js';
+const audio={paused:true,volume:0,plays:0,pause(){this.paused=true;},play(){this.paused=false;this.plays++;return Promise.resolve();},removeAttribute(k){delete this[k];},load(){this.unloaded=true;}};
+const music=new BattleMusic('test.mp3',{audioFactory:()=>audio});music.sync();assert(!audio.paused);assert(audio.loop);
+music.setPaused(true);assert(audio.paused);music.setEnabled(false);music.setPaused(false);assert(audio.paused);
+music.setEnabled(true);assert(!audio.paused);music.setHidden(true);assert(audio.paused);music.setHidden(false);assert(!audio.paused);
+music.setVolume(.35);assert.equal(audio.volume,.35);music.dispose();const calls=audio.plays;music.setEnabled(true);assert.equal(audio.plays,calls);assert(audio.paused);assert(audio.unloaded);
+assert.equal(battleAmbience({gymId:'brock'}).biome,'cave');assert.equal(battleAmbience({gymId:'misty'}).biome,'lake');assert.equal(battleAmbience({gymId:'erika'}).biome,'forest');assert.match(battleAmbience({gymId:'falkner'}).music,/battle_johto_gym/);
+console.log('PASS: battle themes, regional BGM, independent volume, pause/mute/hidden/resume, no replay after dispose');

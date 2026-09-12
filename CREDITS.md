@@ -118,3 +118,11 @@ Nintendo / Creatures Inc. / GAME FREAK Inc.의 상표이자 저작물이다.
 - 위 프로젝트는 원작 데이터 복원 프로젝트다. 게임 종족/기술/레벨 구성을 참고해 `src/data/gyms.js`로 정리했으며 ROM이나 게임 실행 코드는 포함하지 않는다. Pokémon 관련 원작 권리는 Nintendo / Creatures Inc. / GAME FREAK Inc.에 있다.
 - 비주기의 진심 파티는 이번 프로젝트의 임시 자체 편성으로 명시한다. 원작 PWT 파티를 복제한 것으로 표시하지 않는다.
 - 변환 재현: 위 원본 두 파일을 같은 폴더에 `pm-fr-parties.h`, `pm-hg-trainers.json` 이름으로 저장한 뒤 `node tools/import-gym-data.mjs <그 폴더>` 실행. 결과의 종족·기술 유효성과 16명 레벨 배열은 `test/pokemon-management.mjs`에서 검사한다.
+
+
+## 배틀 배경과 BGM (2026-09-12)
+
+- 출처: [pagefaultgames/pokerogue-assets](https://github.com/pagefaultgames/pokerogue-assets/tree/cc5326700576bb2f749f0258f9044bc8c6ca4ce5), 고정 리비전 `cc5326700576bb2f749f0258f9044bc8c6ca4ce5`. 이미지/음악은 외부 URL로 참조하며 이 저장소에 재배포하지 않는다.
+- 도트 배경/발판: `images/arenas/{dojo,cave,forest,lake}_{bg,b}.png`. 원본 비트맵은 수정하지 않고 발판의 투명 여백만 SVG 표시 영역으로 잘라 배치한다. 배경팩 출처는 Pagefault Games/PokéRogue. 해당 경로의 개별 저작자·라이선스는 확인한 REUSE 주석에서 특정되지 않아 일괄 AGPL 에셋이라고 표기하지 않는다.
+- BGM: `audio/bgm/battle_kanto_gym.mp3`, `battle_johto_gym.mp3`, 일반전 예비 경로 `battle_trainer.mp3`. 상류 [audio/REUSE.toml](https://github.com/pagefaultgames/pokerogue-assets/blob/cc5326700576bb2f749f0258f9044bc8c6ca4ce5/audio/REUSE.toml)은 Nintendo / Creatures Inc. / GAME FREAK Inc., `LicenseRef-FAIR-USE`로 명시한다. 이는 AGPL 음악이라는 뜻이 아니다.
+- 배경/음악별 권리와 프로젝트 코드 라이선스는 별개이며, 포켓몬 원작 관련 권리는 기존 원권리자에게 있다.

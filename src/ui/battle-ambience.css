@@ -1,0 +1,10 @@
+.scene .battle-backdrop{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;image-rendering:pixelated;pointer-events:none}
+.scene .plat.pixel-platform{background:transparent;border-radius:0;height:11%}
+.plat.pixel-platform svg{width:100%;height:100%;display:block;overflow:hidden;image-rendering:pixelated}
+.bgm-control{display:inline-flex;align-items:center;gap:6px;font-size:12px}
+#bgm-volume{width:80px;accent-color:var(--accent)}
+#bgm-status{font-size:11px;color:var(--sub)}
+@media(prefers-reduced-motion:reduce){.scene[data-weather]::after{animation:none}}
+/* Anchor variable-size sprites by their feet, not by their top-left corner. */
+.scene[data-arena] .spr.foe{left:76%;right:auto;top:auto;bottom:52%;translate:-50% 0}
+.scene[data-arena] .spr.me{left:25%;right:auto;bottom:18%;translate:-50% 0}

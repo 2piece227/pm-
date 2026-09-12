@@ -10,3 +10,5 @@ import './ui/management.css';
 bootOpening();
 
 import './ui/pokemon-management.css';
+
+import './ui/battle-ambience.css';
