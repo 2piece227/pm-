@@ -75,3 +75,12 @@ export function youthStats(candidate) {
   }
   return stats;
 }
+
+/** Reuse the weekly market's generated identities, but sign youths with a Lv5 partner. */
+export function youthCandidates(game){
+  const generated=(game.market||[]).map(({trainer:t})=>({
+    id:`generated-${t.id}`,name:t.name,tag:'스카우트 추천',blurb:'기회를 찾고 있는 신인입니다. 제 조건을 들어주세요.',potential:{...t.potential},
+    pref:{reputation:{want:25,weight:1,kind:'more'},wage:{want:12,weight:3,kind:'more'},signing:{want:150,weight:2,kind:'more'},proRaise:{want:100,weight:2,kind:'more'},badgeBonus:{want:30,weight:1,kind:'more'},years:{want:3,weight:2,kind:'near'}},
+  }));
+  return [...YOUTH_CANDIDATES,...generated];
+}

@@ -1,3 +1,4 @@
+import {callUp, proEligible} from '../src/engine/career.js';
 import assert from 'node:assert/strict';
 import { Dex } from '@pkmn/dex';
 import { createGame, signYouth, playerAgency, advanceDay, assignAction, boxToParty, rosterLock, parseExplore } from '../src/engine/game.js';
@@ -75,7 +76,7 @@ const growing=await createPokemon({species:'Charmander',level:15,rng:makeRng(2)}
 growing.autoEvolve=true;growing.exp=expForLevel(16)-1;
 const escort=await createPokemon({species:'Kyogre',level:100,rng:makeRng(3)});escort.moves=['Surf'];
 autoTrainer.party=[escort,growing];autoGame.opening.done=true;autoGame.opening.firstTrainerId='another-trainer';autoTrainer.badges=GYMS.filter(g=>g.region==='kanto'&&g.id!=='brock').map(g=>g.id);
-const autoMatch=await challengeGym(autoGame,autoTrainer,'brock');assert(autoMatch.won);assert.equal(growing.species,'Charmeleon');assert.equal(autoMatch.evolutions.length,1);assert.equal(autoTrainer.contract.wage,25,'later recruits also receive their contracted promotion raise');assert(!autoTrainer.isYouth);
+const autoMatch=await challengeGym(autoGame,autoTrainer,'brock');assert(autoMatch.won);assert.equal(growing.species,'Charmeleon');assert.equal(autoMatch.evolutions.length,1);assert.equal(autoTrainer.contract.wage,10);assert(autoTrainer.isYouth);assert(callUp(autoGame,autoTrainer.id).ok);assert.equal(autoTrainer.contract.wage,25);assert(!autoTrainer.isYouth);
 const loseGame=restoreGame(snapshotGame(game)),loseTrainer=playerAgency(loseGame).roster[0];
 loseTrainer.party=[await createPokemon({species:'Magikarp',level:1,rng:makeRng(3)})];loseTrainer.party[0].moves=['Splash'];
 const lost=await challengeGym(loseGame,loseTrainer,'brock');assert(!lost.won);assert.equal(lost.reward,0);assert.equal(loseTrainer.badges.length,0);assert(lost.log.includes('|win|웅'));
@@ -90,7 +91,7 @@ for(const [i,g] of GYMS.entries()){
   assignAction(game,trainer.id,`gym:${g.id}`);const rep=await advanceDay(game);
   const match=rep.gyms[0];assert(match.won,g.name);assert(match.log.some(l=>l===`|win|${trainer.name}`));
   assert.deepEqual(match.party,g.party);assert.equal(game.pendingGymWatches.at(-1),match.id);
-  if(i===6)assert(rosterLock(game));if(i===7)assert.equal(rosterLock(game),null);
+  if(i===6)assert(!proEligible(trainer));if(i===7){assert(proEligible(trainer));assert(trainer.isYouth);assert(callUp(game,trainer.id).ok);}
   trainer.fatigue=0;
 }
 assert.equal(trainer.badges.length,16);assert.equal(trainer.contract.wage,25,'150% raise applied once');

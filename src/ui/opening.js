@@ -156,6 +156,7 @@ async function buildGame() {
     playerName: state.playerName,
     agencyChoiceId: state.agencyId,
     startEmpty: true,   // §3.10 — 트레이너 0명으로 시작해 첫 계약으로 1명을 채운다
+    careerStart: true,
   });
 }
 

@@ -11,7 +11,7 @@ assert.deepEqual(badgeProgress({badges:[...mixed,mixed[0],'unknown']}),{kanto:4,
 const g=await createGame({seed:33,startEmpty:true}),a=playerAgency(g);
 const first=createTrainer({id:'first',name:'첫째',party:[{species:'Charmander'}]}),second=createTrainer({id:'second',name:'둘째',party:[{species:'Squirtle'}]});
 a.roster=[first,second];g.opening.firstTrainerId=first.id;first.badges=mixed;
-assert.equal(rosterLock(g).badges,4);
+assert.equal(rosterLock(g),null,'badges no longer block recruitment below youth capacity');
 first.badges=GYMS.filter(g=>g.region==='kanto').map(g=>g.id);g.opening.done=true;
 assert.equal(rosterLock(g),null);assert.equal(badgeProgress(first).best,8);
 g.actions.second='gym:brock';

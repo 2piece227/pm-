@@ -25,6 +25,7 @@ import { gymById } from '../data/gyms.js';
 import { badgeProgress } from './gym-progress.js';
 import { locationById } from '../data/routes.js';
 import { SPECIES_KO, ko, iGa } from '../data/ko.js';
+import { setupCareerStart, youthCount, youthCapacity } from './career.js';
 
 export const GAME_CONFIG = {
   // 대회 설계를 다시 정할 때까지 실제 플레이에서는 개최/참가하지 않는다.
@@ -70,10 +71,11 @@ export async function createGame({
   playerName = null,
   agencyChoiceId = null,
   startEmpty = false,   // 오프닝을 거치면 로스터를 비운 채 시작한다 (§3.10)
+  careerStart = false,
 } = {}) {
   const league = await createLeague({ seed, playerAgencyId: agencyChoiceId });
   const player = league.agencies.find((a) => a.isPlayer);
-  if (startEmpty) player.roster = [];
+  if (startEmpty && !careerStart) player.roster = [];
 
   const game = {
     seed,
@@ -95,12 +97,13 @@ export async function createGame({
      * 로스터를 못 늘린다. 스키마만 두고 체육관 도전 자체는 아직 안 붙였다 (§0.2).
      */
     opening: {
-      done: !startEmpty,   // 개발자 모드로 바로 들어오면 이미 끝난 것으로 친다
+      done: true,   // Recruitment now depends on youth capacity, not the first trainer's badges.
       badgesNeeded: BADGES_TO_UNLOCK,
       firstTrainerId: null,
     },
   };
 
+  if(careerStart) await setupCareerStart(game);
   await refreshMarket(game);
   return game;
 }
@@ -110,25 +113,14 @@ export const BADGES_TO_UNLOCK = 8;
 
 /** 지금 시장에서 계약할 수 있나 — 오프닝이 안 끝났으면 잠긴다 (§3.10) */
 export function rosterLock(game) {
-  if (game.opening?.done) return null;
-  /* 아직 한 명도 없으면 잠글 게 없다 — 첫 계약은 해야 시작이 된다 */
-  if (!playerAgency(game).roster.length) return null;
-  const t = game.opening?.firstTrainerId
-    ? findTrainer(game.league, game.opening.firstTrainerId) : null;
-  const progress = badgeProgress(t);
-  const badges = progress.best;
-  return {
-    locked: true,
-    badges,
-    progress,
-    needed: game.opening?.badgesNeeded ?? BADGES_TO_UNLOCK,
-    trainer: t,
-  };
+  const agency=playerAgency(game),count=youthCount(agency),capacity=youthCapacity(agency);
+  return count>=capacity?{locked:true,count,capacity,msg:`유스 정원 ${count}/${capacity}명입니다. 콜업 또는 판매로 자리를 확보하세요.`}:null;
 }
 
 /** 협상이 끝난 유스를 로스터에 넣는다 (§5.3) */
 export function signYouth(game, trainer, contract) {
   const a = playerAgency(game);
+  if(rosterLock(game)||game.league.agencies.some(a=>a.roster.some(t=>t.id===trainer.id)))throw new Error('유스 정원이 가득 찼거나 이미 계약한 트레이너입니다.');
   trainer.agencyId = a.id;
   trainer.contract = { ...trainer.contract, ...contract };
   trainer.salary = contract.wage;
@@ -136,6 +128,7 @@ export function signYouth(game, trainer, contract) {
   a.roster.push(trainer);
   a.funds -= contract.signing || 0;
   if (!game.opening.firstTrainerId) game.opening.firstTrainerId = trainer.id;
+  game.opening.tutorialContractNeeded=false;
   return trainer;
 }
 
@@ -290,6 +283,7 @@ async function trainParty(game, trainer, amount, report) {
  * @returns 그날 리포트 (UI가 그대로 보여준다)
  */
 export async function advanceDay(game, { onProgress = async () => {} } = {}) {
+  if(game.opening?.tutorialContractNeeded)throw new Error('첫 유스 계약을 완료한 뒤 하루를 진행하세요.');
   if (game.pendingStarter) throw new Error('첫 파트너를 선택한 뒤 하루를 진행하세요.');
   if (game.gameOver) return game.lastReport;
 

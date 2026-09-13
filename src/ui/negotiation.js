@@ -8,7 +8,7 @@
  * 판정 자체는 engine/contract.js가 한다 — 이 파일은 그걸 말로 옮기는 층이다.
  */
 import { OFFER_FIELDS, DEFAULT_OFFER, evaluateOffer, contractFrom, candidateProposal } from '../engine/contract.js';
-import { YOUTH_CANDIDATES } from '../data/youth-candidates.js';
+import { YOUTH_CANDIDATES, youthCandidates } from '../data/youth-candidates.js';
 import { playerAgency, signYouth } from '../engine/game.js';
 import { createTrainer, STAT_KEYS } from '../data/agencies.js';
 import { makeStarterParty } from '../engine/team-builder.js';
@@ -76,7 +76,7 @@ function view() {
   const a = playerAgency(game);
   const c = state.candidate;
 
-  const list = YOUTH_CANDIDATES.filter(x=>!a.roster.some(t=>t.id===`y-${x.id}`)).map((x) => `
+  const list = youthCandidates(game).filter(x=>!game.league.agencies.some(a=>a.roster.some(t=>t.id===`y-${x.id}`))).map((x) => `
     <button class="card ${state.candidate?.id === x.id ? 'sel' : ''}" data-c="${x.id}" style="text-align:left">
       <h3>${esc(x.name)}${x.tag ? ` <span class="note">${esc(x.tag)}</span>` : ''}</h3>
       <div class="note" style="margin-bottom:6px">${esc(x.blurb)}</div>
@@ -132,7 +132,7 @@ function draw() {
   if (search) search.oninput = () => {
     let visible = 0;
     root.querySelectorAll('button[data-c]').forEach(b => {
-      const c = YOUTH_CANDIDATES.find(x=>x.id===b.dataset.c);
+      const c = youthCandidates(game).find(x=>x.id===b.dataset.c);
       b.hidden = !c.name.includes(search.value.trim());
       if(!b.hidden) visible++;
     });
@@ -142,7 +142,7 @@ function draw() {
   if (chat) chat.scrollTop = chat.scrollHeight;
 
   root.querySelectorAll('button[data-c]').forEach((b) => {
-    b.onclick = () => { openCandidate(YOUTH_CANDIDATES.find((x) => x.id === b.dataset.c)); draw(); };
+    b.onclick = () => { openCandidate(youthCandidates(game).find((x) => x.id === b.dataset.c)); draw(); };
   });
 
   root.querySelectorAll('input[data-k]').forEach((inp) => {

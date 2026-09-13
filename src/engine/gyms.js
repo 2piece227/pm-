@@ -8,6 +8,7 @@ import { healParty } from './field-state.js';
 import { applyLoss, applyWin } from './explore.js';
 import { agencyOf, evolutionOptions, evolvePokemon } from './pokemon-management.js';
 import { analyseBattle } from './battle-analysis.js';
+import { markGraduation } from './career.js';
 
 export async function challengeGym(game, trainer, gymId) {
   const gym=gymById(gymId), agency=agencyOf(game);
@@ -48,13 +49,7 @@ export async function challengeGym(game, trainer, gymId) {
       const result=await gainExp(m,experience);
       growth.push({species:m.species,before,level:m.level,experience,learned:result.learned});
     }
-    if(trainer.isYouth && GYMS.filter(g=>g.region===gym.region&&trainer.badges.includes(g.id)).length===8){
-      trainer.isYouth=false;
-      if(trainer.contract?.wage!=null) trainer.contract.wage=Math.round(trainer.contract.wage*(1+Number(trainer.contract.proRaise||0)/100));
-      const unlock=game.opening && !game.opening.done && trainer.id===game.opening.firstTrainerId;
-      if(unlock)game.opening.done=true;
-      game.league.newsFeed.unshift({day:game.day,text:`${trainer.name}, ${gym.region==='kanto'?'관동':'성도'} 배지 8개 달성! 정식 승급${unlock?' · 추가 유스 계약이 열렸습니다.':''}`});
-    }
+    markGraduation(game,trainer);
   }
   const evolutions=[];
   if(won) for(const mon of trainer.party) {

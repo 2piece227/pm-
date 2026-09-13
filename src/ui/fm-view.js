@@ -1,3 +1,5 @@
+import { youthCount, youthCapacity, careerLabel, isRegisteredPro } from '../engine/career.js';
+import { renderCareer, wireCareer } from './career.js';
 /**
  * FM식 화면 — 상단바(날짜·자금·계속) + 좌측 메뉴 + 본문 하나.
  *
@@ -108,8 +110,8 @@ function renderTop() {
   $('tb-funds').innerHTML = `<span class="${a.funds < upkeep * 5 ? 'neg' : ''}">${won(a.funds)}</span>`;
   $('tb-wage').textContent = `${won(upkeep * 7)} / 주`;
   $('tb-rep').textContent = Math.round(a.reputation);
-  $('tb-continue').disabled = !!game.gameOver || busy || !!game.pendingStarter || !playerRoster(game).length;
-  $('tb-continue').textContent = game.gameOver ? '운영 종료' : game.pendingStarter ? '파트너 선택 대기' : !playerRoster(game).length ? '첫 계약이 필요합니다' : '계속 ▷';
+  $('tb-continue').disabled = !!game.gameOver || busy || !!game.pendingStarter || game.opening?.tutorialContractNeeded || !playerRoster(game).length;
+  $('tb-continue').textContent = game.gameOver ? '운영 종료' : game.pendingStarter ? '파트너 선택 대기' : game.opening?.tutorialContractNeeded || !playerRoster(game).length ? '첫 유스 계약이 필요합니다' : '계속 ▷';
 }
 
 /* ---------------- 받은 메시지함 ---------------- */
@@ -119,13 +121,8 @@ function inboxItems() {
   const out = [];
   const lock = rosterLock(game);
 
-  if (lock) {
-    out.push({
-      key: 'opening', day: game.day, title: '첫 시즌의 육성 계획',
-      body: `${lock.trainer ? `담당 유스 ${lock.trainer.name}의 목표는 ` : ''}지역 뱃지 8개입니다. 모두 모으면 `
-        + `추가 계약이 열립니다. 현재 관동 ${lock.progress.kanto}개 · 성도 ${lock.progress.johto}개입니다.`,
-    });
-  }
+  if (lock) out.push({key:`youth-full-${game.day}`,day:game.day,title:'유스 정원이 가득 찼습니다',body:lock.msg});
+  for(const t of playerRoster(game)) if(t.isYouth&&t.graduation?.decision==='pending') out.push({key:`graduation-${t.id}`,day:t.graduation.qualifiedDay,title:`${t.name}의 진로를 결정해주세요`,needsDecision:true,careerTrainerId:t.id,body:'트레이너 상세에서 프로 콜업·판매·보류를 선택할 수 있습니다.'});
 
   /* 오늘 배정이 비어 있으면 알려준다 — FM의 "할 일" 메시지 */
   const idle = playerRoster(game).filter((t) => !game.actions[t.id]);
@@ -137,6 +134,7 @@ function inboxItems() {
   }
 
   for (const n of [...(game.league.newsFeed || [])].sort((a,b)=>(b.day||0)-(a.day||0)).slice(0,40)) {
+    if(n.kind==='graduation' && playerRoster(game).some(t=>t.id===n.trainerId&&t.graduation?.decision==='pending'))continue;
     if (n.kind === 'explore') {
       const [first, ...rest] = n.text.split(' / ');
       out.push({ key: `n-${n.day}-${n.trainerId}-${n.text.length}`, day: n.day, trainerId: n.trainerId, title: first.replace('탐험을 시작했다.', '탐험 보고'), body: rest.join('\n'), preview: rest.at(-1) });
@@ -144,16 +142,17 @@ function inboxItems() {
       out.push({ key: `n-${n.day}-${n.text}`, day: n.day, title: n.text, body: '', reportDay:['gym','training'].includes(n.kind)?n.day:null });
     }
   }
-  return out.sort((a,b) => Number(b.key.startsWith('n-')) - Number(a.key.startsWith('n-')) || b.day - a.day);
+  return out.sort((a,b) => Number(!!b.needsDecision)-Number(!!a.needsDecision) || Number(b.key.startsWith('n-')) - Number(a.key.startsWith('n-')) || b.day - a.day);
 }
 
 function renderOffice() {
   const a = playerAgency(game), roster = playerRoster(game);
-  const lock = rosterLock(game), rep = game.lastReport;
-  const firstProgress=badgeProgress(roster.find(t=>t.id===game.opening?.firstTrainerId));
+  const rep = game.lastReport;
+  const needsFirst=game.opening?.tutorialContractNeeded||!roster.length;
+  const pros=roster.filter(isRegisteredPro).length;
   return `<div class="page-h"><div><div class="eyebrow">MANAGER'S OFFICE · 시즌 1</div><h2>${esc(game.playerName || '대표')}님의 사무실</h2></div><span class="muted">${saveNotice || '진행 상황 자동 저장'}</span></div>
-    <section class="office-hero"><div><span class="eyebrow">${gameDate(game.day)} · ${game.day}일차</span><h1>${roster.length ? '작은 팀에서 시작되는 큰 여정.' : '첫 계약이 새로운 시즌을 엽니다.'}</h1><p>${roster.length ? '오늘의 목적지를 정하고, 트레이너의 성장을 지켜보세요.' : '스카우팅 보고서를 살펴보고 첫 유스 트레이너와 협상하세요.'}</p><button data-nav="${roster.length ? 'map' : 'scouting'}">${roster.length ? '오늘의 활동 배정' : '후보 살펴보기'} →</button></div><div class="hero-emblem"><span class="pokeball"></span><small>TRAINER<br>MANAGEMENT</small></div></section>
-    <div class="metric-grid"><div><span>사용 가능한 자금</span><b>₽ ${won(a.funds)}</b><small>주급 예산 ${won(dailyUpkeep(game)*7)}</small></div><div><span>소속 트레이너</span><b>${roster.length}<small> 명</small></b><small>보유 포켓몬 ${a.box.length + roster.reduce((n,t)=>n+t.party.length,0)}마리</small></div><div><span>첫 여정 · 뱃지</span><b>${firstProgress.best}<small> / 8</small></b><small>관동 ${firstProgress.kanto} · 성도 ${firstProgress.johto}${game.opening?.done?' · 목표 달성':' · 한 지방 8개 필요'}</small></div><div><span>다음 급여 지급</span><b class="metric-name">${gameDate(Math.ceil(game.day/7)*7)}</b><small>7일마다 계약 주급을 정산합니다</small></div></div>
+    <section class="office-hero"><div><span class="eyebrow">${gameDate(game.day)} · ${game.day}일차</span><h1>${needsFirst ? '다음 세대의 첫 계약을 시작하세요.' : pros ? '프로의 현재와 유스의 미래를 함께.' : '첫 프로를 키우는 여정.'}</h1><p>${needsFirst ? '기존 로스터를 확인하고 새 유스와 첫 계약을 협상하세요.' : '오늘의 목적지를 정하고, 트레이너의 성장을 지켜보세요.'}</p><button data-nav="${needsFirst ? 'scouting' : 'map'}">${needsFirst ? '후보 살펴보기' : '오늘의 활동 배정'} →</button></div><div class="hero-emblem"><span class="pokeball"></span><small>TRAINER<br>MANAGEMENT</small></div></section>
+    <div class="metric-grid"><div><span>사용 가능한 자금</span><b>₽ ${won(a.funds)}</b><small>주급 예산 ${won(dailyUpkeep(game)*7)}</small></div><div><span>소속 트레이너</span><b>${roster.length}<small> 명</small></b><small>보유 포켓몬 ${a.box.length + roster.reduce((n,t)=>n+t.party.length,0)}마리</small></div><div><span>선수 등록</span><b>${pros}<small> 프로</small></b><small>유스 ${youthCount(a)} / ${youthCapacity(a)}명 · 8배지 후 콜업 결정</small></div><div><span>다음 급여 지급</span><b class="metric-name">${gameDate(Math.ceil(game.day/7)*7)}</b><small>7일마다 계약 주급을 정산합니다</small></div></div>
     <div class="office-columns"><section class="card"><div class="section-heading"><h3>오늘의 운영 계획</h3><button class="ghost" data-nav="map">일정 변경</button></div>
       ${roster.length ? roster.map(t=>`<div class="assignment"><span class="avatar">${esc(t.name[0])}</span><div><b>${fatigueIcon(t)} ${esc(t.name)}</b><p>${esc(describeAction(game.actions[t.id]))}</p></div><div class="mini-party">${t.party.map(m=>monImage(m.species)).join('')}</div></div>`).join('') : '<p class="muted">아직 계약한 트레이너가 없습니다.</p>'}</section>
       <section class="card"><div class="section-heading"><h3>대표에게 온 보고</h3><button class="ghost" data-nav="inbox">전체 보기</button></div>${inboxItems().slice(0,3).map(m=>`<button class="brief-link" data-nav="inbox"><small>${m.day}일차 · 운영 보고</small><b>${esc(m.title)}</b><span>→</span></button>`).join('') || '<p class="muted">첫 유스 계약을 기다리고 있습니다.</p>'}</section></div>
@@ -177,7 +176,7 @@ function renderInbox() {
   const selectedReport = selected?.trainerId || selected?.reportDay ? game.log.find(r=>r.day===selected.day) : null;
   return `<div class="page-h"><div><div class="eyebrow">COMMUNICATIONS</div><h2>받은 메시지함</h2></div><span class="muted">${items.length}건</span></div>
     <div class="mail-layout"><div class="mail-list">${items.map((m,i)=>`<button class="mail-item ${selected?.key === m.key ? 'selected' : ''} ${read.has(m.key)?'':'unread'}" data-message="${i}"><small>${m.day}일차 · 운영팀</small><b>${esc(m.title)}</b><p>${esc((m.preview || m.body || '소속사 소식을 확인하세요.').slice(0,140))}</p></button>`).join('') || '<p class="muted">받은 소식이 없습니다.</p>'}</div>
-    <article class="mail-body">${selected ? `<div class="eyebrow">운영팀 → ${esc(game.playerName || '대표')}</div><h2>${esc(selected.title)}</h2><small>${selected.day}일차 · ${gameDate(selected.day)}</small><hr>${selectedReport ? renderDailySummary(selectedReport) : `<div class="letter">${esc(selected.body || '상세 내용은 관련 화면에서 확인할 수 있습니다.').replace(/\n/g,'<br>')}</div>`}<div class="dialog-actions"><button class="ghost" data-nav="map">탐험 지도</button><button class="ghost" data-nav="squad">트레이너 확인</button></div>` : '<h3>새로운 소식을 기다리고 있습니다.</h3>'}</article></div>`;
+    <article class="mail-body">${selected ? `<div class="eyebrow">운영팀 → ${esc(game.playerName || '대표')}</div><h2>${esc(selected.title)}</h2><small>${selected.day}일차 · ${gameDate(selected.day)}</small><hr>${selectedReport ? renderDailySummary(selectedReport) : `<div class="letter">${esc(selected.body || '상세 내용은 관련 화면에서 확인할 수 있습니다.').replace(/\n/g,'<br>')}</div>`}<div class="dialog-actions">${selected?.careerTrainerId?`<button data-open-trainer="${selected.careerTrainerId}">진로 결정하기</button>`:''}<button class="ghost" data-nav="map">탐험 지도</button><button class="ghost" data-nav="squad">트레이너 확인</button></div>` : '<h3>새로운 소식을 기다리고 있습니다.</h3>'}</article></div>`;
 }
 
 /* ---------------- 트레이너 ---------------- */
@@ -204,7 +203,7 @@ function renderSquad() {
     const d = displayStats(t);
     const deb = t.mentalDebuff > 0.5 ? ` <span class="pill" style="color:var(--red)">−${t.mentalDebuff.toFixed(1)}</span>` : '';
     return `<tr data-id="${t.id}">
-          <td class="nm">${fatigueIcon(t)} ${esc(t.name)}${t.isYouth ? ' <span class="pill">유스</span>' : ''}${deb}</td>
+          <td class="nm">${fatigueIcon(t)} ${esc(t.name)} <span class="pill">${careerLabel(t)}</span>${deb}</td>
           ${STAT_KEYS.map((k) => `<td class="n">${at(d[k])}</td>`).join('')}
           <td class="n">${t.record?.wins || 0}승 ${t.record?.losses || 0}패</td>
           <td class="n">${t.contract?.wage ?? t.salary}</td>
@@ -245,16 +244,17 @@ function monRow(m, { trainerId = null, index = null, editable = false, boxIndex 
 
 function renderTrainer(id) {
   const t = findTrainer(game.league, id);
-  if (!t) return '<div class="note">없는 트레이너입니다.</div>';
+  if (!t || t.agencyId!==game.playerAgencyId) return '<div class="note">현재 소속 트레이너가 아닙니다.</div>';
   const d = displayStats(t);
   const c = t.contract || {};
 
   return `
     <div class="page-h">
       <h2>${fatigueIcon(t)} ${esc(t.name)}</h2>
-      <div class="note">${t.isYouth ? '유스' : '정식'} · 레이팅 ${trainerRating(t).toFixed(1)} · ${t.record?.wins || 0}승 ${t.record?.losses || 0}패</div>
+      <div class="note">${careerLabel(t)} · 레이팅 ${trainerRating(t).toFixed(1)} · ${t.record?.wins || 0}승 ${t.record?.losses || 0}패</div>
     </div>
     <button class="ghost" id="back-squad" style="margin-bottom:10px">← 트레이너</button>
+    ${renderCareer(game,t)}
     <div class="cards">
       <div class="card">
         <h3>능력치</h3>
@@ -336,10 +336,9 @@ function renderScouting() {
   if (lock && !game.pendingStarter) {
     return `<div class="page-h"><h2>스카우팅</h2></div>
       <div class="card"><h3>지금은 계약할 수 없습니다</h3>
-      <div class="note">${lock.trainer ? `${esc(lock.trainer.name)}이(가) ` : ''}지역 뱃지 8개를 모두 모아야
-      로스터를 늘릴 수 있습니다. 현재 관동 ${lock.progress.kanto} / ${lock.needed}개 · 성도 ${lock.progress.johto} / ${lock.needed}개.</div></div>`;
+      <div class="note">${esc(lock.msg)}</div></div>`;
   }
-  return `<div class="page-h"><h2>스카우팅</h2></div><div id="nego-root"></div>`;
+  return `<div class="page-h"><h2>스카우팅</h2><span class="muted" id="scout-capacity">유스 ${youthCount(playerAgency(game))} / ${youthCapacity(playerAgency(game))}명</span></div><div id="nego-root"></div>`;
 }
 
 /* ---------------- 렌더 ---------------- */
@@ -370,6 +369,8 @@ function render() {
 
 function wire() {
   const main = $('main');
+  main.querySelectorAll('[data-open-trainer]').forEach(b=>b.onclick=()=>{detailId=b.dataset.openTrainer;screen='squad';render();});
+  wireCareer(main,game,()=>{if(detailId&&!playerRoster(game).some(t=>t.id===detailId))detailId=null;persist();render();});
   main.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{ if(b.dataset.trainer)map.trainerId=b.dataset.trainer;screen=b.dataset.nav; detailId=null; render(); });
   main.querySelectorAll('[data-message]').forEach(b=>b.onclick=()=>{ const m=inboxItems()[Number(b.dataset.message)]; selectedMessage=m.key; read.add(m.key); game.readMessages=[...read]; persist(); render(); });
   main.querySelectorAll('[data-box-select]').forEach(b=>b.onclick=()=>{boxSelection=Number(b.dataset.boxSelect);render();});
@@ -439,7 +440,7 @@ function wire() {
   });
 
   if (screen === 'scouting' && $('nego-root')) {
-    openNegotiation($('nego-root'), game, () => gotoMap(), () => {renderTop();renderSide();});
+    openNegotiation($('nego-root'), game, () => gotoMap(), () => {renderTop();renderSide();const capacity=$('scout-capacity');if(capacity)capacity.textContent=`유스 ${youthCount(playerAgency(game))} / ${youthCapacity(playerAgency(game))}명`;});
   }
 }
 
@@ -454,7 +455,7 @@ export function initFm({ game: existing }) {
   $('app').hidden = false;
 
   $('tb-continue').onclick = async () => {
-    if (busy || game.gameOver || game.pendingStarter || !playerRoster(game).length) return;
+    if (busy || game.gameOver || game.pendingStarter || game.opening?.tutorialContractNeeded || !playerRoster(game).length) return;
     busy = true; renderTop();
     const before = snapshotGame(game);
     const progress = dayProgress(game.day);
