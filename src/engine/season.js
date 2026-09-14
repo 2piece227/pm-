@@ -32,6 +32,7 @@ export function registerYouth(game,eventId,trainerId,remove=false){
   if(!t||t.agencyId!==game.playerAgencyId)return {ok:false,msg:'우리 소속 트레이너만 등록할 수 있습니다.'};
   if(remove){e.registrations=e.registrations.filter(id=>id!==trainerId);return {ok:true};}
   if(!youthEligible(t)||game.pendingStarter?.trainerId===t.id)return {ok:false,msg:'파트너가 있는 8배지 미만 유스만 참가합니다.'};
+  if(t.camp&&game.day+t.camp.remaining>e.date)return {ok:false,msg:'캠프 일정과 겹칩니다.'};
   if(!e.registrations.includes(t.id)&&e.registrations.length>=e.capacity)return {ok:false,msg:'등록 정원이 가득 찼습니다.'};
   if(!e.registrations.includes(t.id))e.registrations.push(t.id);
   return {ok:true};
@@ -40,9 +41,9 @@ export function npcEntryScore(agency,t){
   return (agency.policy?.aggression??0.5)*SEASON.npcAggressionWeight+SEASON.npcBase-(t.fatigue||0)/100;
 }
 export function cupEntrants(game,e){
-  const own=e.registrations.map(id=>findTrainer(game.league,id)).filter(t=>t?.agencyId===game.playerAgencyId&&youthEligible(t));
+  const own=e.registrations.map(id=>findTrainer(game.league,id)).filter(t=>t?.agencyId===game.playerAgencyId&&youthEligible(t)&&!t.camp);
   const npc=game.league.agencies.filter(a=>a.id!==game.playerAgencyId).flatMap(a=>a.roster.filter(youthEligible).map(t=>({t,score:npcEntryScore(a,t)})))
-    .filter(x=>x.score>=SEASON.npcThreshold).sort((a,b)=>b.score-a.score||a.t.id.localeCompare(b.t.id));
+    .filter(x=>!x.t.camp&&x.score>=SEASON.npcThreshold).sort((a,b)=>b.score-a.score||a.t.id.localeCompare(b.t.id));
   return [...own,...npc.map(x=>x.t)].slice(0,e.capacity);
 }
 export function cupToday(game){return ensureSeason(game).events.find(e=>e.date===game.day&&e.status==='scheduled');}

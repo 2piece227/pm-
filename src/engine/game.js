@@ -27,6 +27,7 @@ import { locationById } from '../data/routes.js';
 import { SPECIES_KO, ko, iGa } from '../data/ko.js';
 import { setupCareerStart, youthCount, youthCapacity } from './career.js';
 import { cupToday, cupEntrants, runYouthCup } from './season.js';
+import { tickPersonnel, tickCamp } from './personnel.js';
 
 export const GAME_CONFIG = {
   // 대회 설계를 다시 정할 때까지 실제 플레이에서는 개최/참가하지 않는다.
@@ -121,7 +122,7 @@ export function rosterLock(game) {
 /** 협상이 끝난 유스를 로스터에 넣는다 (§5.3) */
 export function signYouth(game, trainer, contract) {
   const a = playerAgency(game);
-  if(rosterLock(game)||game.league.agencies.some(a=>a.roster.some(t=>t.id===trainer.id)))throw new Error('유스 정원이 가득 찼거나 이미 계약한 트레이너입니다.');
+  if((game.personnel?.freeAgents||[]).some(t=>t.id===trainer.id)||rosterLock(game)||game.league.agencies.some(a=>a.roster.some(t=>t.id===trainer.id)))throw new Error('유스 정원이 가득 찼거나 이미 계약한 트레이너입니다.');
   trainer.agencyId = a.id;
   trainer.contract = { ...trainer.contract, ...contract };
   trainer.salary = contract.wage;
@@ -310,6 +311,7 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
   /* 하루 시작 시점을 먼저 잡아둬야 상금/참가비/경비의 순증감을 제대로 잴 수 있다 */
   const fundsAtStart = player.funds;
   const newsAtStart = new Set(league.newsFeed);
+  tickPersonnel(game);
   const youthCup=cupToday(game);
   const cupIds=new Set(youthCup?cupEntrants(game,youthCup).map(t=>t.id):[]);
   await onProgress({ id: 'activities', state: 'running', label: '오늘의 활동 진행', detail: `${player.roster.length}명의 일정 확인` });
@@ -317,6 +319,7 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
   /* --- 1. 플레이어 트레이너의 배정 행동 실행 (대회 출전은 아래에서 따로) --- */
   const myEntrants = [];
   for (const t of player.roster) {
+    if(t.camp){const text=tickCamp(t);(report.camps??=[]).push(text);league.newsFeed.unshift({day:game.day,kind:'personnel',text});await onProgress({id:`trainer-${t.id}`,state:'done',label:t.name,detail:text});continue;}
     if(cupIds.has(t.id)&&cupIds.size>=2){
       t.lastAction='유스컵 참가';
       await onProgress({id:`trainer-${t.id}`,state:'done',label:t.name,detail:'유스컵 참가 · 오늘의 다른 활동 대신 출전'});
@@ -430,11 +433,12 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
   // Youth contracts quote weekly wages; legacy non-contract salaries remain daily.
   const upkeep = player.roster.reduce((n, t) => n + (t.contract?.wage != null
     ? (game.day % 7 === 0 ? t.contract.wage : 0) : (t.salary || 0)), 0);
-  player.funds -= upkeep;
-  report.upkeep = upkeep;
+  const coachUpkeep=game.day%7===0?(player.coaches||[]).reduce((sum,c)=>sum+c.wage,0):0;
+  player.funds -= upkeep+coachUpkeep;
+  report.upkeep = upkeep+coachUpkeep;
   report.net = player.funds - fundsAtStart;      // 그날 자금 순증감
-  report.prize = report.net + upkeep;            // 경비를 빼기 전 = 대회에서 번 돈(참가비 차감 후)
-  await onProgress({ id: 'finance', state: 'done', label: '재무 정산 완료', detail: `급여 지급 ${upkeep} · 오늘 수지 ${report.net >= 0 ? '+' : ''}${report.net}` });
+  report.prize = report.net + upkeep+coachUpkeep;            // 경비를 빼기 전 = 대회에서 번 돈(참가비 차감 후)
+  await onProgress({ id: 'finance', state: 'done', label: '재무 정산 완료', detail: `급여 지급 ${report.upkeep} · 오늘 수지 ${report.net >= 0 ? '+' : ''}${report.net}` });
 
   /* --- 5. 시장 갱신 --- */
   await onProgress({ id: 'reports', state: 'running', label: '소식 및 스카우팅 보고서 정리' });
@@ -536,7 +540,7 @@ export function releaseTrainer(game, trainerId) {
 /* ---------------- 조회용 ---------------- */
 
 export function dailyUpkeep(game) {
-  return playerRoster(game).reduce((n, t) => n + (t.contract?.wage != null ? t.contract.wage / 7 : (t.salary || 0)), 0);
+  return (playerAgency(game).coaches||[]).reduce((n,c)=>n+c.wage/7,0)+playerRoster(game).reduce((n, t) => n + (t.contract?.wage != null ? t.contract.wage / 7 : (t.salary || 0)), 0);
 }
 
 export { trainerRating, allTrainers, findTrainer, findAgency, LOCAL_TOURNAMENT_TIERS };

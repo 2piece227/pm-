@@ -2,6 +2,7 @@ import { youthCount, youthCapacity, careerLabel, isRegisteredPro } from '../engi
 import { renderCareer, wireCareer } from './career.js';
 import { renderSeason, wireSeason, renderCupReport } from './season.js';
 import { ensureSeason, youthEligible } from '../engine/season.js';
+import { renderPersonnel, wirePersonnel } from './personnel.js';
 /**
  * FM식 화면 — 상단바(날짜·자금·계속) + 좌측 메뉴 + 본문 하나.
  *
@@ -79,6 +80,7 @@ const MENU = [
   { id: 'schedule', label: '일정' },
   { grp: '영입' },
   { id: 'scouting', label: '스카우팅' },
+  { id: 'personnel', label: '계약 · 스태프' },
 ];
 
 function renderSide() {
@@ -142,7 +144,7 @@ function inboxItems() {
       const [first, ...rest] = n.text.split(' / ');
       out.push({ key: `n-${n.day}-${n.trainerId}-${n.text.length}`, day: n.day, trainerId: n.trainerId, title: first.replace('탐험을 시작했다.', '탐험 보고'), body: rest.join('\n'), preview: rest.at(-1) });
     } else {
-      out.push({ key: `n-${n.day}-${n.text}`, day: n.day, title: n.text, body: '', reportDay:['gym','training','cup'].includes(n.kind)?n.day:null });
+      out.push({ key: `n-${n.day}-${n.text}`, day: n.day, title: n.text, body: '', reportDay:['gym','training','cup','personnel'].includes(n.kind)?n.day:null });
     }
   }
   return out.sort((a,b) => Number(!!b.needsDecision)-Number(!!a.needsDecision) || Number(b.key.startsWith('n-')) - Number(a.key.startsWith('n-')) || b.day - a.day);
@@ -170,7 +172,7 @@ function renderDailySummary(rep, detailed = true) {
   ${(rep.gyms||[]).map(m=>`<div class="report-activity">${renderBattleAnalysis(m.analysis)}<p><b>${esc(m.trainerName)} vs ${m.gymName} · ${m.won?'승리':'패배'}</b> <button class="ghost" data-watch-gym="${m.id}">관장전 다시 보기</button></p>${m.firstWin?`<p>${m.badge||'배지'} 획득 · 상금 +${won(m.reward)}${m.bonusPaid?` · 계약 배지 보너스 −${won(m.bonusPaid)}`:''}</p>`:m.won?'<p class="muted">이미 획득한 배지입니다. 첫 도전 보상은 중복 지급되지 않습니다.</p>':''}${(m.growth||[]).map(g=>`<p>${esc(K(g.species))} · 경험치 +${g.experience}${g.level>g.before?` · Lv.${g.before} → ${g.level}`:''}${g.learned.length?` · ${g.learned.map(x=>esc(M(x))).join(', ')} 습득`:''}</p>`).join('')}${(m.evolutions||[]).map(e=>`<p>${esc(K(e.before))} → ${esc(K(e.after))} 진화</p>`).join('')}</div>`).join('')}
   ${(rep.training||[]).map(t=>`<p>${esc(K(t.species))} · ${esc(t.text)}</p>`).join('')}
   ${rep.rested.length ? `<p class="muted">휴식 완료 · ${esc(rep.rested.join(', '))}</p>` : ''}
-  ${renderCupReport(game,rep.youthCupId)}<div class="report-foot">급여 지급 ${won(rep.upkeep)} · 새로운 소식 ${rep.news.length}건</div></section>`;
+  ${(rep.camps||[]).map(text=>`<p>${esc(text)}</p>`).join('')}${renderCupReport(game,rep.youthCupId)}<div class="report-foot">급여 지급 ${won(rep.upkeep)} · 새로운 소식 ${rep.news.length}건</div></section>`;
 }
 
 function renderInbox() {
@@ -179,7 +181,7 @@ function renderInbox() {
   const selectedReport = selected?.trainerId || selected?.reportDay ? game.log.find(r=>r.day===selected.day) : null;
   return `<div class="page-h"><div><div class="eyebrow">COMMUNICATIONS</div><h2>받은 메시지함</h2></div><span class="muted">${items.length}건</span></div>
     <div class="mail-layout"><div class="mail-list">${items.map((m,i)=>`<button class="mail-item ${selected?.key === m.key ? 'selected' : ''} ${read.has(m.key)?'':'unread'}" data-message="${i}"><small>${m.day}일차 · 운영팀</small><b>${esc(m.title)}</b><p>${esc((m.preview || m.body || '소속사 소식을 확인하세요.').slice(0,140))}</p></button>`).join('') || '<p class="muted">받은 소식이 없습니다.</p>'}</div>
-    <article class="mail-body">${selected ? `<div class="eyebrow">운영팀 → ${esc(game.playerName || '대표')}</div><h2>${esc(selected.title)}</h2><small>${selected.day}일차 · ${gameDate(selected.day)}</small><hr>${selectedReport ? renderDailySummary(selectedReport) : `<div class="letter">${esc(selected.body || '상세 내용은 관련 화면에서 확인할 수 있습니다.').replace(/\n/g,'<br>')}</div>`}<div class="dialog-actions">${selected?.careerTrainerId?`<button data-open-trainer="${selected.careerTrainerId}">진로 결정하기</button>`:''}<button class="ghost" data-nav="schedule">일정 · 대회 확인</button><button class="ghost" data-nav="map">탐험 지도</button><button class="ghost" data-nav="squad">트레이너 확인</button></div>` : '<h3>새로운 소식을 기다리고 있습니다.</h3>'}</article></div>`;
+    <article class="mail-body">${selected ? `<div class="eyebrow">운영팀 → ${esc(game.playerName || '대표')}</div><h2>${esc(selected.title)}</h2><small>${selected.day}일차 · ${gameDate(selected.day)}</small><hr>${selectedReport ? renderDailySummary(selectedReport) : `<div class="letter">${esc(selected.body || '상세 내용은 관련 화면에서 확인할 수 있습니다.').replace(/\n/g,'<br>')}</div>`}<div class="dialog-actions">${selected?.careerTrainerId?`<button data-open-trainer="${selected.careerTrainerId}">진로 결정하기</button>`:''}<button class="ghost" data-nav="personnel">계약 · 스태프</button><button class="ghost" data-nav="schedule">일정 · 대회 확인</button><button class="ghost" data-nav="map">탐험 지도</button><button class="ghost" data-nav="squad">트레이너 확인</button></div>` : '<h3>새로운 소식을 기다리고 있습니다.</h3>'}</article></div>`;
 }
 
 /* ---------------- 트레이너 ---------------- */
@@ -325,6 +327,7 @@ function renderMap() {
 
 /* ---------------- 활동 일정 ---------------- */
 function scheduledAction(t) {
+  if(t.camp)return `캠프 · ${t.camp.remaining}일 남음`;
   const e=game.competitions?.events.find(e=>e.date===game.day&&e.status==='scheduled'&&e.registrations.includes(t.id));
   return e&&youthEligible(t)?e.name+' 참가':describeAction(game.actions[t.id]);
 }
@@ -366,6 +369,7 @@ function render() {
   else if (screen === 'gyms') main.innerHTML = renderGyms(game,map.trainerId);
   else if (screen === 'schedule') main.innerHTML = renderSeason(game)+renderSchedule();
   else if (screen === 'scouting') main.innerHTML = renderScouting();
+  else if (screen === 'personnel') main.innerHTML = renderPersonnel(game);
 
   wire();
   wireMonImages(main);
@@ -376,6 +380,7 @@ function render() {
 
 function wire() {
   const main = $('main');
+  wirePersonnel(main,game,()=>{persist();render();});
   wireSeason(main,game,()=>{persist();render();},openCupWatch);
   main.querySelectorAll('[data-open-trainer]').forEach(b=>b.onclick=()=>{detailId=b.dataset.openTrainer;screen='squad';render();});
   wireCareer(main,game,()=>{if(detailId&&!playerRoster(game).some(t=>t.id===detailId))detailId=null;persist();render();});
