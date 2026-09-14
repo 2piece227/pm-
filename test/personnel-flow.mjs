@@ -3,6 +3,8 @@ import { createGame, playerAgency, advanceDay, dailyUpkeep } from '../src/engine
 import { ensurePersonnel, contractProposal, negotiatePersonnel, releaseQuote, releaseContract, transferQuote, hireCoach, assignCamp, tickPersonnel } from '../src/engine/personnel.js';
 import { snapshotGame, restoreGame } from '../src/engine/checkpoint.js';
 import { registerYouth, ensureSeason } from '../src/engine/season.js';
+import { transferOffers, sellYouth } from '../src/engine/career.js';
+import { renderPersonnel } from '../src/ui/personnel.js';
 import { youthCandidates } from '../src/data/youth-candidates.js';
 const g=await createGame({seed:174,agencyChoiceId:'player-major',careerStart:true});g.opening.tutorialContractNeeded=false;
 ensurePersonnel(g);const a=playerAgency(g),t=a.roster[0];
@@ -36,3 +38,16 @@ const legacy=snapshotGame(g);legacy.snapshotVersion=4;delete legacy.personnel;fo
 const migrated=restoreGame(legacy);assert(migrated.league.agencies.every(ag=>ag.roster.every(tr=>tr.contract.endsOn>=1030)));assert.equal(migrated.rng.getState(),g.rng.getState());
 assert(youthCandidates(g).every(c=>!g.personnel.freeAgents.some(t=>t.id===`y-${c.id}`)));
 console.log('PASS: renewal/duplicate charge, coach wages, camp duration/growth/save, overlap, release/FA, transfer money/ownership, expiry, v4 grace migration');
+
+// A graduation sale must not bypass the active-camp transfer guard.
+const campGame=await createGame({seed:174,agencyChoiceId:'player-major',careerStart:true});
+ensurePersonnel(campGame);const campAgency=playerAgency(campGame),graduate=campAgency.roster.find(t=>t.isYouth);graduate.legacyPro=true;
+const bid=transferOffers(campGame,graduate.id)[0];assert(bid);
+assert(hireCoach(campGame,'development').ok);assert(assignCamp(campGame,graduate.id,'judge','development').ok);
+const campSnapshot=snapshotGame(campGame);
+assert.deepEqual(transferOffers(campGame,graduate.id),[]);
+assert(!sellYouth(campGame,graduate.id,bid.agencyId,bid.fee).ok);
+assert.deepEqual(snapshotGame(campGame),campSnapshot);
+assert.match(renderPersonnel(campGame),/지도 가능한 코치가 없습니다/);
+assert.match(renderPersonnel(campGame),/id="camp-start" disabled/);
+console.log('PASS: camp blocks stale graduation sale without state changes; busy coach unavailable');

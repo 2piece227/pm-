@@ -66,7 +66,7 @@ export function holdYouth(game,id){
 /** Concrete NPC bids, recalculated without consuming RNG; no guaranteed buyer. */
 export function transferOffers(game,id){
   const t=owned(game,id);
-  if(!t||!t.isYouth||!proEligible(t)||game.pendingStarter?.trainerId===id)return [];
+  if(!t||!t.isYouth||!proEligible(t)||t.camp||game.pendingStarter?.trainerId===id)return [];
   const skill=Object.values(t.stats).reduce((n,v)=>n+v,0)/Object.keys(t.stats).length;
   const fee=Math.round((t.contract?.wage??t.salary??0)*CAREER.transfer.wageWeeks+skill*CAREER.transfer.skillFactor);
   return game.league.agencies.filter(a=>a.id!==game.playerAgencyId).flatMap(a=>{

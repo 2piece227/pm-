@@ -130,7 +130,7 @@ function inboxItems() {
   for(const t of playerRoster(game)) if(t.isYouth&&t.graduation?.decision==='pending') out.push({key:`graduation-${t.id}`,day:t.graduation.qualifiedDay,title:`${t.name}의 진로를 결정해주세요`,needsDecision:true,careerTrainerId:t.id,body:'트레이너 상세에서 프로 콜업·판매·보류를 선택할 수 있습니다.'});
 
   /* 오늘 배정이 비어 있으면 알려준다 — FM의 "할 일" 메시지 */
-  const idle = playerRoster(game).filter((t) => !game.actions[t.id]);
+  const idle = playerRoster(game).filter((t) => !game.actions[t.id] && !t.camp);
   if (idle.length) {
     out.push({
       key: `idle-${game.day}`, day: game.day, title: '오늘 할 일이 없는 트레이너가 있습니다',
