@@ -12,7 +12,7 @@ export function watchGymMatch(match) {
     const analysisPanel=document.createElement('section');
     analysisPanel.innerHTML=renderBattleAnalysis(match.analysis);
     $('watch-panel').append(analysisPanel);
-    $('watch-title').textContent=`${match.trainerName} vs ${match.gymName} · 체육관 도전`;
+    $('watch-title').textContent=`${match.trainerName} vs ${match.gymName} · ${match.eventName || "체육관 도전"}`;
     $('watch-close').textContent='관전 건너뛰기';
     $('watch-pause').textContent='⏸ 일시정지';
     resetScene();setSpeedSource(()=>Number($('speed').value));
@@ -27,8 +27,8 @@ export function watchGymMatch(match) {
     $('watch-close').onclick=close;
     $('watch-pause').onclick=()=>{const paused=setPaused(!isPaused());ambience.setPaused(paused);$('watch-pause').textContent=paused?'▶ 재개':'⏸ 일시정지';};
     const safe=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    playBattleLog(match.log,{p1:{name:safe(match.trainerName),agency:safe(match.agencyName)},p2:{name:match.gymName,agency:'체육관 관장'}})
-      .then(()=>{if(!closed){ambience.finish();$('watch-title').textContent=`${match.trainerName} · ${match.won?'관장전 승리':'관장전 패배'}${match.firstWin?' · 배지 획득':''}`;$('watch-close').textContent='결과 확인 · 닫기';}})
+    playBattleLog(match.log,{p1:{name:safe(match.trainerName),agency:safe(match.agencyName)},p2:{name:safe(match.gymName),agency:safe(match.opponentAgency || '체육관 관장')}})
+      .then(()=>{if(!closed){ambience.finish();$('watch-title').textContent=match.eventName ? `${match.trainerName} vs ${match.gymName} · ${match.draw?'무승부 · 추첨으로 진출 결정':(match.won?match.trainerName:match.gymName)+' 승리'}` : `${match.trainerName} · ${match.won?'관장전 승리':'관장전 패배'}${match.firstWin?' · 배지 획득':''}`;$('watch-close').textContent='결과 확인 · 닫기';}})
       .catch(()=>{if(!closed){ambience.finish();$('watch-title').textContent='관전 표시를 완료하지 못했습니다. 경기 결과는 저장되어 있습니다.';$('watch-close').textContent='결과 확인 · 닫기';}});
   });
 }

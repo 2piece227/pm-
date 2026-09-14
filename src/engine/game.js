@@ -26,6 +26,7 @@ import { badgeProgress } from './gym-progress.js';
 import { locationById } from '../data/routes.js';
 import { SPECIES_KO, ko, iGa } from '../data/ko.js';
 import { setupCareerStart, youthCount, youthCapacity } from './career.js';
+import { cupToday, cupEntrants, runYouthCup } from './season.js';
 
 export const GAME_CONFIG = {
   // 대회 설계를 다시 정할 때까지 실제 플레이에서는 개최/참가하지 않는다.
@@ -309,11 +310,18 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
   /* 하루 시작 시점을 먼저 잡아둬야 상금/참가비/경비의 순증감을 제대로 잴 수 있다 */
   const fundsAtStart = player.funds;
   const newsAtStart = new Set(league.newsFeed);
+  const youthCup=cupToday(game);
+  const cupIds=new Set(youthCup?cupEntrants(game,youthCup).map(t=>t.id):[]);
   await onProgress({ id: 'activities', state: 'running', label: '오늘의 활동 진행', detail: `${player.roster.length}명의 일정 확인` });
 
   /* --- 1. 플레이어 트레이너의 배정 행동 실행 (대회 출전은 아래에서 따로) --- */
   const myEntrants = [];
   for (const t of player.roster) {
+    if(cupIds.has(t.id)&&cupIds.size>=2){
+      t.lastAction='유스컵 참가';
+      await onProgress({id:`trainer-${t.id}`,state:'done',label:t.name,detail:'유스컵 참가 · 오늘의 다른 활동 대신 출전'});
+      continue;
+    }
     const action = game.actions[t.id] || 'rest';
     await onProgress({ id: `trainer-${t.id}`, state: 'running', label: t.name, detail: describeAction(action) });
     t.lastAction = action;
@@ -402,12 +410,14 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
     }));
   }
 
+  if(youthCup){await runYouthCup(game,youthCup,onProgress);report.youthCupId=youthCup.id;}
   /* NPC 회복 — 오늘 대회에 안 나간 NPC 트레이너 */
   const playedToday = new Set((report.tournament?.entrants || []).map((e) => e.trainerId));
   for (const a of league.agencies) {
     if (a.id === player.id) continue;
     for (const t of a.roster) {
       if (playedToday.has(t.id)) continue;
+      if(youthCup?.status==='completed'&&cupIds.has(t.id))continue;
       t.condition = Math.min(100, t.condition + GAME_CONFIG.condition.idle);
       /* NPC도 조금씩 자란다 — 세상이 멈춰 있으면 안 된다 (§0.1-4) */
       for (const k of STAT_KEYS) growStat(t, k, GAME_CONFIG.growth.battleRate * 0.5);

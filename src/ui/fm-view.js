@@ -1,5 +1,7 @@
 import { youthCount, youthCapacity, careerLabel, isRegisteredPro } from '../engine/career.js';
 import { renderCareer, wireCareer } from './career.js';
+import { renderSeason, wireSeason, renderCupReport } from './season.js';
+import { ensureSeason, youthEligible } from '../engine/season.js';
 /**
  * FM식 화면 — 상단바(날짜·자금·계속) + 좌측 메뉴 + 본문 하나.
  *
@@ -119,6 +121,7 @@ function renderTop() {
 /** 게임에서 벌어진 일을 메시지 목록으로 (§9 뉴스 파이프라인 재사용) */
 function inboxItems() {
   const out = [];
+  for(const e of ensureSeason(game).events.filter(e=>e.status==='scheduled'&&game.day>=e.openDay&&game.day<=e.deadline))out.push({key:`cup-register-${e.id}`,day:e.openDay,title:`${e.name} 참가 접수`,needsDecision:true,body:`${e.deadline}일차까지 일정 화면에서 유스를 등록하세요. 개최일은 ${e.date}일차이며, 오늘의 다른 활동 대신 대회에 참가합니다. 등록하지 않아도 NPC 대회 결과를 볼 수 있습니다.`});
   const lock = rosterLock(game);
 
   if (lock) out.push({key:`youth-full-${game.day}`,day:game.day,title:'유스 정원이 가득 찼습니다',body:lock.msg});
@@ -139,7 +142,7 @@ function inboxItems() {
       const [first, ...rest] = n.text.split(' / ');
       out.push({ key: `n-${n.day}-${n.trainerId}-${n.text.length}`, day: n.day, trainerId: n.trainerId, title: first.replace('탐험을 시작했다.', '탐험 보고'), body: rest.join('\n'), preview: rest.at(-1) });
     } else {
-      out.push({ key: `n-${n.day}-${n.text}`, day: n.day, title: n.text, body: '', reportDay:['gym','training'].includes(n.kind)?n.day:null });
+      out.push({ key: `n-${n.day}-${n.text}`, day: n.day, title: n.text, body: '', reportDay:['gym','training','cup'].includes(n.kind)?n.day:null });
     }
   }
   return out.sort((a,b) => Number(!!b.needsDecision)-Number(!!a.needsDecision) || Number(b.key.startsWith('n-')) - Number(a.key.startsWith('n-')) || b.day - a.day);
@@ -154,7 +157,7 @@ function renderOffice() {
     <section class="office-hero"><div><span class="eyebrow">${gameDate(game.day)} · ${game.day}일차</span><h1>${needsFirst ? '다음 세대의 첫 계약을 시작하세요.' : pros ? '프로의 현재와 유스의 미래를 함께.' : '첫 프로를 키우는 여정.'}</h1><p>${needsFirst ? '기존 로스터를 확인하고 새 유스와 첫 계약을 협상하세요.' : '오늘의 목적지를 정하고, 트레이너의 성장을 지켜보세요.'}</p><button data-nav="${needsFirst ? 'scouting' : 'map'}">${needsFirst ? '후보 살펴보기' : '오늘의 활동 배정'} →</button></div><div class="hero-emblem"><span class="pokeball"></span><small>TRAINER<br>MANAGEMENT</small></div></section>
     <div class="metric-grid"><div><span>사용 가능한 자금</span><b>₽ ${won(a.funds)}</b><small>주급 예산 ${won(dailyUpkeep(game)*7)}</small></div><div><span>소속 트레이너</span><b>${roster.length}<small> 명</small></b><small>보유 포켓몬 ${a.box.length + roster.reduce((n,t)=>n+t.party.length,0)}마리</small></div><div><span>선수 등록</span><b>${pros}<small> 프로</small></b><small>유스 ${youthCount(a)} / ${youthCapacity(a)}명 · 8배지 후 콜업 결정</small></div><div><span>다음 급여 지급</span><b class="metric-name">${gameDate(Math.ceil(game.day/7)*7)}</b><small>7일마다 계약 주급을 정산합니다</small></div></div>
     <div class="office-columns"><section class="card"><div class="section-heading"><h3>오늘의 운영 계획</h3><button class="ghost" data-nav="map">일정 변경</button></div>
-      ${roster.length ? roster.map(t=>`<div class="assignment"><span class="avatar">${esc(t.name[0])}</span><div><b>${fatigueIcon(t)} ${esc(t.name)}</b><p>${esc(describeAction(game.actions[t.id]))}</p></div><div class="mini-party">${t.party.map(m=>monImage(m.species)).join('')}</div></div>`).join('') : '<p class="muted">아직 계약한 트레이너가 없습니다.</p>'}</section>
+      ${roster.length ? roster.map(t=>`<div class="assignment"><span class="avatar">${esc(t.name[0])}</span><div><b>${fatigueIcon(t)} ${esc(t.name)}</b><p>${esc(scheduledAction(t))}</p></div><div class="mini-party">${t.party.map(m=>monImage(m.species)).join('')}</div></div>`).join('') : '<p class="muted">아직 계약한 트레이너가 없습니다.</p>'}</section>
       <section class="card"><div class="section-heading"><h3>대표에게 온 보고</h3><button class="ghost" data-nav="inbox">전체 보기</button></div>${inboxItems().slice(0,3).map(m=>`<button class="brief-link" data-nav="inbox"><small>${m.day}일차 · 운영 보고</small><b>${esc(m.title)}</b><span>→</span></button>`).join('') || '<p class="muted">첫 유스 계약을 기다리고 있습니다.</p>'}</section></div>
     ${rep ? renderDailySummary(rep, false) : ''}`;
 }
@@ -167,7 +170,7 @@ function renderDailySummary(rep, detailed = true) {
   ${(rep.gyms||[]).map(m=>`<div class="report-activity">${renderBattleAnalysis(m.analysis)}<p><b>${esc(m.trainerName)} vs ${m.gymName} · ${m.won?'승리':'패배'}</b> <button class="ghost" data-watch-gym="${m.id}">관장전 다시 보기</button></p>${m.firstWin?`<p>${m.badge||'배지'} 획득 · 상금 +${won(m.reward)}${m.bonusPaid?` · 계약 배지 보너스 −${won(m.bonusPaid)}`:''}</p>`:m.won?'<p class="muted">이미 획득한 배지입니다. 첫 도전 보상은 중복 지급되지 않습니다.</p>':''}${(m.growth||[]).map(g=>`<p>${esc(K(g.species))} · 경험치 +${g.experience}${g.level>g.before?` · Lv.${g.before} → ${g.level}`:''}${g.learned.length?` · ${g.learned.map(x=>esc(M(x))).join(', ')} 습득`:''}</p>`).join('')}${(m.evolutions||[]).map(e=>`<p>${esc(K(e.before))} → ${esc(K(e.after))} 진화</p>`).join('')}</div>`).join('')}
   ${(rep.training||[]).map(t=>`<p>${esc(K(t.species))} · ${esc(t.text)}</p>`).join('')}
   ${rep.rested.length ? `<p class="muted">휴식 완료 · ${esc(rep.rested.join(', '))}</p>` : ''}
-  <div class="report-foot">급여 지급 ${won(rep.upkeep)} · 새로운 소식 ${rep.news.length}건</div></section>`;
+  ${renderCupReport(game,rep.youthCupId)}<div class="report-foot">급여 지급 ${won(rep.upkeep)} · 새로운 소식 ${rep.news.length}건</div></section>`;
 }
 
 function renderInbox() {
@@ -176,7 +179,7 @@ function renderInbox() {
   const selectedReport = selected?.trainerId || selected?.reportDay ? game.log.find(r=>r.day===selected.day) : null;
   return `<div class="page-h"><div><div class="eyebrow">COMMUNICATIONS</div><h2>받은 메시지함</h2></div><span class="muted">${items.length}건</span></div>
     <div class="mail-layout"><div class="mail-list">${items.map((m,i)=>`<button class="mail-item ${selected?.key === m.key ? 'selected' : ''} ${read.has(m.key)?'':'unread'}" data-message="${i}"><small>${m.day}일차 · 운영팀</small><b>${esc(m.title)}</b><p>${esc((m.preview || m.body || '소속사 소식을 확인하세요.').slice(0,140))}</p></button>`).join('') || '<p class="muted">받은 소식이 없습니다.</p>'}</div>
-    <article class="mail-body">${selected ? `<div class="eyebrow">운영팀 → ${esc(game.playerName || '대표')}</div><h2>${esc(selected.title)}</h2><small>${selected.day}일차 · ${gameDate(selected.day)}</small><hr>${selectedReport ? renderDailySummary(selectedReport) : `<div class="letter">${esc(selected.body || '상세 내용은 관련 화면에서 확인할 수 있습니다.').replace(/\n/g,'<br>')}</div>`}<div class="dialog-actions">${selected?.careerTrainerId?`<button data-open-trainer="${selected.careerTrainerId}">진로 결정하기</button>`:''}<button class="ghost" data-nav="map">탐험 지도</button><button class="ghost" data-nav="squad">트레이너 확인</button></div>` : '<h3>새로운 소식을 기다리고 있습니다.</h3>'}</article></div>`;
+    <article class="mail-body">${selected ? `<div class="eyebrow">운영팀 → ${esc(game.playerName || '대표')}</div><h2>${esc(selected.title)}</h2><small>${selected.day}일차 · ${gameDate(selected.day)}</small><hr>${selectedReport ? renderDailySummary(selectedReport) : `<div class="letter">${esc(selected.body || '상세 내용은 관련 화면에서 확인할 수 있습니다.').replace(/\n/g,'<br>')}</div>`}<div class="dialog-actions">${selected?.careerTrainerId?`<button data-open-trainer="${selected.careerTrainerId}">진로 결정하기</button>`:''}<button class="ghost" data-nav="schedule">일정 · 대회 확인</button><button class="ghost" data-nav="map">탐험 지도</button><button class="ghost" data-nav="squad">트레이너 확인</button></div>` : '<h3>새로운 소식을 기다리고 있습니다.</h3>'}</article></div>`;
 }
 
 /* ---------------- 트레이너 ---------------- */
@@ -208,7 +211,7 @@ function renderSquad() {
           <td class="n">${t.record?.wins || 0}승 ${t.record?.losses || 0}패</td>
           <td class="n">${t.contract?.wage ?? t.salary}</td>
           <td>${(t.party || []).map((m) => `${K(m.species)} <span class="lv">Lv${m.level}</span>`).join(', ') || '—'}</td>
-          <td class="note">${esc(describeAction(game.actions[t.id]))}</td>
+          <td class="note">${esc(scheduledAction(t))}</td>
         </tr>`;
   }).join('')}</tbody>
     </table>`;
@@ -261,7 +264,7 @@ function renderTrainer(id) {
         <table class="grid"><tbody>
           ${STAT_KEYS.map((k) => `<tr><td>${STAT_KO[k]}</td><td class="n">${at(d[k])}</td></tr>`).join('')}
           <tr><td>연패 페널티</td><td class="n">${t.mentalDebuff ? `−${t.mentalDebuff.toFixed(1)}` : '없음'}</td></tr>
-          <tr><td>오늘</td><td class="n">${esc(describeAction(game.actions[t.id]))}</td></tr>
+          <tr><td>오늘</td><td class="n">${esc(scheduledAction(t))}</td></tr>
         </tbody></table>
       </div>
       <div class="card">
@@ -321,12 +324,16 @@ function renderMap() {
 }
 
 /* ---------------- 활동 일정 ---------------- */
+function scheduledAction(t) {
+  const e=game.competitions?.events.find(e=>e.date===game.day&&e.status==='scheduled'&&e.registrations.includes(t.id));
+  return e&&youthEligible(t)?e.name+' 참가':describeAction(game.actions[t.id]);
+}
 function renderSchedule() {
   const roster = playerRoster(game);
   return `<div class="page-h"><div><div class="eyebrow">OPERATIONS CALENDAR</div><h2>활동 일정</h2></div><span class="muted">오늘의 배정과 주간 정산</span></div>
-    <div class="week-calendar">${Array.from({length:7},(_,i)=>game.day+i).map(day=>`<section class="calendar-day ${day===game.day?'today':''}"><small>${day===game.day?'오늘':`${day-game.day}일 후`}</small><h3>${gameDate(day)}</h3>${day===game.day?roster.map(t=>`<p><b>${esc(t.name)}</b><br>${esc(describeAction(game.actions[t.id]))}</p>`).join(''):'<p class="muted">활동 미배정</p>'}${day%7===0?'<span class="pill">주급 지급일</span>':''}</section>`).join('')}</div>
-    <section class="card" style="margin-top:22px"><div class="section-heading"><h3>오늘의 활동 지시</h3><button data-nav="map">목적지 선택 →</button></div><p class="muted">하루 6~8회의 활동을 배정합니다. 센터 방문도 활동에 포함되며, 배정하지 않은 트레이너와 포켓몬은 휴식하며 회복합니다.</p>${roster.map(t=>`<div class="assignment"><span class="avatar">${esc(t.name[0])}</span><div><b>${fatigueIcon(t)} ${esc(t.name)}</b><p>${esc(describeAction(game.actions[t.id]))}</p></div></div>`).join('')}</section>
-    <section class="card" style="margin-top:22px"><h3>지난 활동</h3>${game.log.slice(0,7).map(rep=>`<div class="assignment"><b>${gameDate(rep.day)}</b><span class="muted">${rep.explored.map(r=>`${esc(r.name)} · ${esc(r.location)}`).join(' / ') || '휴식 및 소속사 운영'} · 수지 ${rep.net>=0?'+':''}${won(rep.net)}</span></div>`).join('') || '<p class="muted">아직 완료한 활동이 없습니다.</p>'}</section>`;
+    <div class="week-calendar">${Array.from({length:7},(_,i)=>game.day+i).map(day=>`<section class="calendar-day ${day===game.day?'today':''}"><small>${day===game.day?'오늘':`${day-game.day}일 후`}</small><h3>${gameDate(day)}</h3>${day===game.day?roster.map(t=>`<p><b>${esc(t.name)}</b><br>${esc(scheduledAction(t))}</p>`).join(''):'<p class="muted">활동 미배정</p>'}${(game.competitions?.events||[]).filter(e=>e.date===day||e.deadline===day).map(e=>`<p class="pill">${e.name} · ${e.date===day?'개최':'등록 마감'}</p>`).join('')}${day%7===0?'<span class="pill">주급 지급일</span>':''}</section>`).join('')}</div>
+    <section class="card" style="margin-top:22px"><div class="section-heading"><h3>오늘의 활동 지시</h3><button data-nav="map">목적지 선택 →</button></div><p class="muted">하루 6~8회의 활동을 배정합니다. 센터 방문도 활동에 포함되며, 배정하지 않은 트레이너와 포켓몬은 휴식하며 회복합니다.</p>${roster.map(t=>`<div class="assignment"><span class="avatar">${esc(t.name[0])}</span><div><b>${fatigueIcon(t)} ${esc(t.name)}</b><p>${esc(scheduledAction(t))}</p></div></div>`).join('')}</section>
+    <section class="card" style="margin-top:22px"><h3>지난 활동</h3>${game.log.slice(0,7).map(rep=>`<div class="assignment"><b>${gameDate(rep.day)}</b><span class="muted">${rep.explored.map(r=>`${esc(r.name)} · ${esc(r.location)}`).join(' / ') || (rep.youthCupId?'유스컵 및 소속사 운영':'휴식 및 소속사 운영')} · 수지 ${rep.net>=0?'+':''}${won(rep.net)}</span></div>`).join('') || '<p class="muted">아직 완료한 활동이 없습니다.</p>'}</section>`;
 }
 
 /* ---------------- 스카우팅 ---------------- */
@@ -357,7 +364,7 @@ function render() {
   else if (screen === 'support') main.innerHTML = renderSupport(game);
   else if (screen === 'training') main.innerHTML = renderTraining(game);
   else if (screen === 'gyms') main.innerHTML = renderGyms(game,map.trainerId);
-  else if (screen === 'schedule') main.innerHTML = renderSchedule();
+  else if (screen === 'schedule') main.innerHTML = renderSeason(game)+renderSchedule();
   else if (screen === 'scouting') main.innerHTML = renderScouting();
 
   wire();
@@ -369,6 +376,7 @@ function render() {
 
 function wire() {
   const main = $('main');
+  wireSeason(main,game,()=>{persist();render();},openCupWatch);
   main.querySelectorAll('[data-open-trainer]').forEach(b=>b.onclick=()=>{detailId=b.dataset.openTrainer;screen='squad';render();});
   wireCareer(main,game,()=>{if(detailId&&!playerRoster(game).some(t=>t.id===detailId))detailId=null;persist();render();});
   main.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{ if(b.dataset.trainer)map.trainerId=b.dataset.trainer;screen=b.dataset.nav; detailId=null; render(); });
@@ -511,4 +519,14 @@ async function openGymWatch(id) {
 async function drainGymWatches(){
   if(watchingGym||busy)return;
   for(const id of [...(game.pendingGymWatches||[])]) await openGymWatch(id);
+  for(const id of [...(game.pendingCupWatches||[])]) await openCupWatch(id);
+}
+
+async function openCupWatch(id){
+  if(busy)return;
+  const e=game.competitions?.events.find(e=>e.matches.some(m=>m.id===id));
+  const m=e?.matches.find(m=>m.id===id);if(!m)return;
+  busy=true;renderTop();
+  try{await watchGymMatch(m);if(!e.viewed.includes(id))e.viewed.push(id);game.pendingCupWatches=(game.pendingCupWatches||[]).filter(x=>x!==id);persist();}
+  finally{busy=false;render();}
 }

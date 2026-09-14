@@ -347,7 +347,7 @@ const nextPow2 = (n) => Math.pow(2, Math.ceil(Math.log2(Math.max(1, n))));
  * **최하위 시드가 빈칸(부전승)만 만나며 결승까지 직행**한다. 실제로 그 버그가 났었다
  * (0승 0패인데 준우승 12회). 표준 시드 순서를 쓰면 부전승이 상위 시드에 배분된다.
  */
-function seedOrder(size) {
+export function seedOrder(size) {
   let order = [1];
   while (order.length < size) {
     const n = order.length * 2;
