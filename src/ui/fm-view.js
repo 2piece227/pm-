@@ -1,7 +1,7 @@
 import { youthCount, youthCapacity, careerLabel, isRegisteredPro } from '../engine/career.js';
 import { renderCareer, wireCareer } from './career.js';
 import { renderSeason, wireSeason, renderCupReport } from './season.js';
-import { ensureSeason, youthEligible } from '../engine/season.js';
+import { ensureSeason, cupEligible, cupToday, cupEntrants } from '../engine/season.js';
 import { renderPersonnel, wirePersonnel } from './personnel.js';
 /**
  * FM식 화면 — 상단바(날짜·자금·계속) + 좌측 메뉴 + 본문 하나.
@@ -123,14 +123,16 @@ function renderTop() {
 /** 게임에서 벌어진 일을 메시지 목록으로 (§9 뉴스 파이프라인 재사용) */
 function inboxItems() {
   const out = [];
-  for(const e of ensureSeason(game).events.filter(e=>e.status==='scheduled'&&game.day>=e.openDay&&game.day<=e.deadline))out.push({key:`cup-register-${e.id}`,day:e.openDay,title:`${e.name} 참가 접수`,needsDecision:true,body:`${e.deadline}일차까지 일정 화면에서 유스를 등록하세요. 개최일은 ${e.date}일차이며, 오늘의 다른 활동 대신 대회에 참가합니다. 등록하지 않아도 NPC 대회 결과를 볼 수 있습니다.`});
+  for(const e of ensureSeason(game).events.filter(e=>e.status==='scheduled'&&game.day>=e.openDay&&game.day<=e.deadline))out.push({key:`cup-register-${e.id}`,day:e.openDay,title:`${e.name} 참가 접수`,needsDecision:true,body:`${e.deadline}일차까지 일정 화면에서 참가 자격에 맞는 트레이너를 등록하세요. 개최일은 ${e.date}일차이며, 오늘의 다른 활동 대신 대회에 참가합니다. 등록하지 않아도 NPC 대회 결과를 볼 수 있습니다.`});
   const lock = rosterLock(game);
 
   if (lock) out.push({key:`youth-full-${game.day}`,day:game.day,title:'유스 정원이 가득 찼습니다',body:lock.msg});
   for(const t of playerRoster(game)) if(t.isYouth&&t.graduation?.decision==='pending') out.push({key:`graduation-${t.id}`,day:t.graduation.qualifiedDay,title:`${t.name}의 진로를 결정해주세요`,needsDecision:true,careerTrainerId:t.id,body:'트레이너 상세에서 프로 콜업·판매·보류를 선택할 수 있습니다.'});
 
   /* 오늘 배정이 비어 있으면 알려준다 — FM의 "할 일" 메시지 */
-  const idle = playerRoster(game).filter((t) => !game.actions[t.id] && !t.camp);
+  const todayCup=cupToday(game),todayEntrants=todayCup?cupEntrants(game,todayCup):[];
+  const competing=new Set(todayEntrants.length>=2?todayEntrants.map(t=>t.id):[]);
+  const idle = playerRoster(game).filter((t) => !game.actions[t.id] && !t.camp && !competing.has(t.id));
   if (idle.length) {
     out.push({
       key: `idle-${game.day}`, day: game.day, title: '오늘 할 일이 없는 트레이너가 있습니다',
@@ -172,7 +174,7 @@ function renderDailySummary(rep, detailed = true) {
   ${(rep.gyms||[]).map(m=>`<div class="report-activity">${renderBattleAnalysis(m.analysis)}<p><b>${esc(m.trainerName)} vs ${m.gymName} · ${m.won?'승리':'패배'}</b> <button class="ghost" data-watch-gym="${m.id}">관장전 다시 보기</button></p>${m.firstWin?`<p>${m.badge||'배지'} 획득 · 상금 +${won(m.reward)}${m.bonusPaid?` · 계약 배지 보너스 −${won(m.bonusPaid)}`:''}</p>`:m.won?'<p class="muted">이미 획득한 배지입니다. 첫 도전 보상은 중복 지급되지 않습니다.</p>':''}${(m.growth||[]).map(g=>`<p>${esc(K(g.species))} · 경험치 +${g.experience}${g.level>g.before?` · Lv.${g.before} → ${g.level}`:''}${g.learned.length?` · ${g.learned.map(x=>esc(M(x))).join(', ')} 습득`:''}</p>`).join('')}${(m.evolutions||[]).map(e=>`<p>${esc(K(e.before))} → ${esc(K(e.after))} 진화</p>`).join('')}</div>`).join('')}
   ${(rep.training||[]).map(t=>`<p>${esc(K(t.species))} · ${esc(t.text)}</p>`).join('')}
   ${rep.rested.length ? `<p class="muted">휴식 완료 · ${esc(rep.rested.join(', '))}</p>` : ''}
-  ${(rep.camps||[]).map(text=>`<p>${esc(text)}</p>`).join('')}${renderCupReport(game,rep.youthCupId)}<div class="report-foot">급여 지급 ${won(rep.upkeep)} · 새로운 소식 ${rep.news.length}건</div></section>`;
+  ${(rep.camps||[]).map(text=>`<p>${esc(text)}</p>`).join('')}${renderCupReport(game,rep.cupId||rep.youthCupId)}<div class="report-foot">급여 지급 ${won(rep.upkeep)} · 새로운 소식 ${rep.news.length}건</div></section>`;
 }
 
 function renderInbox() {
@@ -329,14 +331,14 @@ function renderMap() {
 function scheduledAction(t) {
   if(t.camp)return `캠프 · ${t.camp.remaining}일 남음`;
   const e=game.competitions?.events.find(e=>e.date===game.day&&e.status==='scheduled'&&e.registrations.includes(t.id));
-  return e&&youthEligible(t)?e.name+' 참가':describeAction(game.actions[t.id]);
+  return e&&cupEligible(t,e)?e.name+' 참가':describeAction(game.actions[t.id]);
 }
 function renderSchedule() {
   const roster = playerRoster(game);
   return `<div class="page-h"><div><div class="eyebrow">OPERATIONS CALENDAR</div><h2>활동 일정</h2></div><span class="muted">오늘의 배정과 주간 정산</span></div>
     <div class="week-calendar">${Array.from({length:7},(_,i)=>game.day+i).map(day=>`<section class="calendar-day ${day===game.day?'today':''}"><small>${day===game.day?'오늘':`${day-game.day}일 후`}</small><h3>${gameDate(day)}</h3>${day===game.day?roster.map(t=>`<p><b>${esc(t.name)}</b><br>${esc(scheduledAction(t))}</p>`).join(''):'<p class="muted">활동 미배정</p>'}${(game.competitions?.events||[]).filter(e=>e.date===day||e.deadline===day).map(e=>`<p class="pill">${e.name} · ${e.date===day?'개최':'등록 마감'}</p>`).join('')}${day%7===0?'<span class="pill">주급 지급일</span>':''}</section>`).join('')}</div>
     <section class="card" style="margin-top:22px"><div class="section-heading"><h3>오늘의 활동 지시</h3><button data-nav="map">목적지 선택 →</button></div><p class="muted">하루 6~8회의 활동을 배정합니다. 센터 방문도 활동에 포함되며, 배정하지 않은 트레이너와 포켓몬은 휴식하며 회복합니다.</p>${roster.map(t=>`<div class="assignment"><span class="avatar">${esc(t.name[0])}</span><div><b>${fatigueIcon(t)} ${esc(t.name)}</b><p>${esc(scheduledAction(t))}</p></div></div>`).join('')}</section>
-    <section class="card" style="margin-top:22px"><h3>지난 활동</h3>${game.log.slice(0,7).map(rep=>`<div class="assignment"><b>${gameDate(rep.day)}</b><span class="muted">${rep.explored.map(r=>`${esc(r.name)} · ${esc(r.location)}`).join(' / ') || (rep.youthCupId?'유스컵 및 소속사 운영':'휴식 및 소속사 운영')} · 수지 ${rep.net>=0?'+':''}${won(rep.net)}</span></div>`).join('') || '<p class="muted">아직 완료한 활동이 없습니다.</p>'}</section>`;
+    <section class="card" style="margin-top:22px"><h3>지난 활동</h3>${game.log.slice(0,7).map(rep=>`<div class="assignment"><b>${gameDate(rep.day)}</b><span class="muted">${rep.explored.map(r=>`${esc(r.name)} · ${esc(r.location)}`).join(' / ') || ((rep.cupId||rep.youthCupId)?'대회 및 소속사 운영':'휴식 및 소속사 운영')} · 수지 ${rep.net>=0?'+':''}${won(rep.net)}</span></div>`).join('') || '<p class="muted">아직 완료한 활동이 없습니다.</p>'}</section>`;
 }
 
 /* ---------------- 스카우팅 ---------------- */

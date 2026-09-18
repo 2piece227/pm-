@@ -8,7 +8,7 @@ const g=await createGame({seed:911,agencyChoiceId:'player-major',careerStart:tru
 g.opening.tutorialContractNeeded=false;
 const own=playerAgency(g),t=own.roster.find(t=>t.isYouth),pro=own.roster.find(t=>!t.isYouth);
 let e=ensureSeason(g).events[0];
-assert.equal(e.date,7);assert.equal(ensureSeason(g).events.length,4);
+assert.equal(e.date,7);assert.equal(ensureSeason(g).events.filter(e=>e.kind==='youth').length,4);
 assert(!registerYouth(g,e.id,pro.id).ok);
 assert(registerYouth(g,e.id,t.id).ok);assert(registerYouth(g,e.id,t.id).ok);assert.equal(e.registrations.length,1);
 assert(registerYouth(g,e.id,t.id,true).ok);e.capacity=0;assert(!registerYouth(g,e.id,t.id).ok);e.capacity=8;assert(registerYouth(g,e.id,t.id).ok);

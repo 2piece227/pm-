@@ -24,3 +24,9 @@ dialog{color:var(--ink);background:#1b2230;border:1px solid #536373;border-radiu
 .activity-details>summary{padding:10px 0;color:var(--accent);cursor:pointer;font-size:12px}.mail-body .daily-summary{padding:16px 0;border:0;background:none}.mail-body .daily-summary .section-heading{flex-wrap:wrap}.activity-timeline>li>div{min-width:0}.activity-timeline p{overflow-wrap:anywhere}
 
 .wild-grid>.muted{grid-column:1/-1}
+
+.ranking-row > b { flex-shrink: 0; }
+@media (max-width:600px) {
+  .ranking-row { display:block; }
+  .ranking-row > b, .ranking-row > span { display:block; margin:6px 0; }
+}

@@ -26,7 +26,7 @@ import { badgeProgress } from './gym-progress.js';
 import { locationById } from '../data/routes.js';
 import { SPECIES_KO, ko, iGa } from '../data/ko.js';
 import { setupCareerStart, youthCount, youthCapacity } from './career.js';
-import { cupToday, cupEntrants, runYouthCup } from './season.js';
+import { cupToday, cupEntrants, runCup } from './season.js';
 import { tickPersonnel, tickCamp } from './personnel.js';
 
 export const GAME_CONFIG = {
@@ -321,8 +321,8 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
   for (const t of player.roster) {
     if(t.camp){const text=tickCamp(t);(report.camps??=[]).push(text);league.newsFeed.unshift({day:game.day,kind:'personnel',text});await onProgress({id:`trainer-${t.id}`,state:'done',label:t.name,detail:text});continue;}
     if(cupIds.has(t.id)&&cupIds.size>=2){
-      t.lastAction='유스컵 참가';
-      await onProgress({id:`trainer-${t.id}`,state:'done',label:t.name,detail:'유스컵 참가 · 오늘의 다른 활동 대신 출전'});
+      t.lastAction=youthCup.name+' 참가';
+      await onProgress({id:`trainer-${t.id}`,state:'done',label:t.name,detail:youthCup.name+' 참가 · 오늘의 다른 활동 대신 출전'});
       continue;
     }
     const action = game.actions[t.id] || 'rest';
@@ -413,7 +413,7 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
     }));
   }
 
-  if(youthCup){await runYouthCup(game,youthCup,onProgress);report.youthCupId=youthCup.id;}
+  if(youthCup){await runCup(game,youthCup,onProgress);report.cupId=youthCup.id;if(youthCup.kind==='youth')report.youthCupId=youthCup.id;}
   /* NPC 회복 — 오늘 대회에 안 나간 NPC 트레이너 */
   const playedToday = new Set((report.tournament?.entrants || []).map((e) => e.trainerId));
   for (const a of league.agencies) {
@@ -422,6 +422,7 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
       if (playedToday.has(t.id)) continue;
       if(youthCup?.status==='completed'&&cupIds.has(t.id))continue;
       t.condition = Math.min(100, t.condition + GAME_CONFIG.condition.idle);
+      t.fatigue=Math.max(0,(t.fatigue||0)-MANAGEMENT.restRecovery);
       /* NPC도 조금씩 자란다 — 세상이 멈춰 있으면 안 된다 (§0.1-4) */
       for (const k of STAT_KEYS) growStat(t, k, GAME_CONFIG.growth.battleRate * 0.5);
     }
