@@ -17,6 +17,8 @@ export function analyseBattle(result, context = {}) {
   for (const {turn,think:t} of rows) {
     const chosen = t.options[t.selected];
     if (!chosen) continue;
+    if(t.knowledge?.omitted?.length)observations.push({turn,kind:'focus',text:`확인했던 ${t.knowledge.omitted.map(m=>ko(MOVE_KO,m)).join(', ')}을 이번 판단에서 놓쳤습니다. 공개 기록은 유지됩니다.`});
+    if(t.knowledge?.estimated?.length&&turn===rows[0]?.turn)observations.push({turn,kind:'knowledge',text:`아직 확인하지 않은 기술은 종족·레벨을 바탕으로 추정했습니다. 추정: ${t.knowledge.estimated.map(m=>ko(MOVE_KO,m)).join(', ')}. 실제 장착 기술로 확인된 것은 아닙니다.`});
     const label = ko(chosen.kind==='switch'?SPECIES_KO:MOVE_KO,chosen.label);
     const notExecuted=chosen.kind==='move'&&!executed.has(`${turn}:${chosen.label}`);
     const executionNote=notExecuted?' (실제 사용 기록 없음: 행동 전 기절·행동 불가 등은 로그를 확인하세요.)':'';
@@ -50,5 +52,5 @@ export function analyseBattle(result, context = {}) {
     summary, counts, observations, focusTurn, shockTurn,
     mentalAffected:(context.mentalDebuff||0)>0,
     lossStreak:context.lossStreak||0,
-    limitation:'선공권·상태·회복·교체 진입 피해를 반영한 근사 평가입니다. 모든 기술·특성의 예외나 상대 교체 예측을 다루지는 않으며, 실제 최적수나 승패의 인과관계를 확정하지 않습니다.' };
+    limitation:'공개된 기술·특성·도구와 종족·레벨 기반 추정을 사용하는 근사 평가입니다. 미공개 기술·개체값·노력치·성격을 직접 읽지 않으며, 실제 최적수나 승패의 인과관계를 확정하지 않습니다.' };
 }

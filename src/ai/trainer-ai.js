@@ -22,6 +22,7 @@ import {
 } from './estimate.js';
 import { policyId, policyWeight, policyAdjustment } from '../data/battle-policy.js';
 import {TACTICS,entryDamagePct,executionChance,recoveryScore,residualPct} from './tactics.js';
+import {OpponentModel,ownView} from './opponent-model.js';
 
 /** 재현 가능한 시뮬을 위한 소형 PRNG (mulberry32) */
 export function makeRng(seed = 1) {
@@ -73,6 +74,7 @@ export class TrainerAI {
   }
 
   reset() {
+    this.opponent = new OpponentModel();
     this.shock = 0;       // 아군이 쓰러진 직후 남은 동요 턴 수
     this.justSwitched = false;
   }
@@ -160,8 +162,9 @@ export class TrainerAI {
     const side = battle[sideId];
     const foeSide = battle[sideId === 'p1' ? 'p2' : 'p1'];
     const request = side.activeRequest;
-    const me = side.active[0];
-    const foe = foeSide.active[0];
+    const me = ownView(side.active[0]);
+    const foe = this.opponent.view(battle,foeSide.id,this.gen,this.stats,this.rng);
+    if(!foe)return {choice:'default',think:null};
     const active = request.active[0];
 
     const opts = [];
@@ -195,7 +198,7 @@ export class TrainerAI {
 
     if (!active.trapped && !active.maybeTrapped) {
       for (const opt of this.switchOptions(battle, sideId)) {
-        const bench = side.pokemon[opt.slot - 1];
+        const bench = ownView(side.pokemon[opt.slot - 1]);
         opts.push({
           kind: 'switch',
           label: bench.name,
@@ -218,7 +221,7 @@ export class TrainerAI {
       choice: opts[index].choice,
       think: { ...this.formatThink(T, opts, probs), selected: index, policy: this.policy,
         focusAffected: T > this.temperature(0), shock: this.shock > 0,
-        vulnerable: turnsSurvive <= 1, pressure: myBest < foeBest },
+        vulnerable: turnsSurvive <= 1, pressure: myBest < foeBest, knowledge:foe.knowledge },
     };
   }
 
@@ -285,9 +288,9 @@ export class TrainerAI {
   /** 쓰러져서 강제로 내보내야 할 때 — 누구를 내보낼지도 판단력이 관여한다 */
   chooseForcedSwitch(battle, sideId) {
     const side = battle[sideId];
-    const foe = battle[sideId === 'p1' ? 'p2' : 'p1'].active[0];
+    const foe = this.opponent.view(battle,sideId === 'p1' ? 'p2' : 'p1',this.gen,this.stats,this.rng);
     const opts = this.switchOptions(battle, sideId).map((opt) => {
-      const bench = side.pokemon[opt.slot - 1];
+      const bench = ownView(side.pokemon[opt.slot - 1]);
       let score = 0;
       if (foe) {
         const out = bestDamagePct(this.gen, bench, foe);

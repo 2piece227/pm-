@@ -242,6 +242,8 @@ function drawHpBox(side, f) {
   }
 
   applyStatusLook(side, f.statusCode || null);
+  const moves=$(`known-moves-${side}`);
+  if(moves)moves.textContent=Array.from({length:4},(_,i)=>f.knownMoves?.[i]||'????').join(' / ');
   return tweenHp(side, st, f);
 }
 
@@ -252,6 +254,7 @@ export function drawTrainers(names) {
     if (!el) continue;
     const v = names?.[side];
     const name = typeof v === 'string' ? v : v?.name || '';
+    const knownName=$(`known-trainer-${side}`);if(knownName)knownName.textContent=name||side;
     const agency = typeof v === 'string' ? '' : v?.agency || '';
     el.innerHTML = name ? `<b>${name}</b>${agency ? `<em>${agency}</em>` : ''}` : '';
     el.style.display = name ? '' : 'none';
@@ -736,6 +739,7 @@ export function resetScene() {
     hpBox[side] = null;
     const b = $(`hp-${side}`);
     if (b) b.innerHTML = '';
+    const known=$(`known-moves-${side}`);if(known)known.textContent='???? / ???? / ???? / ????';
     applyStatusLook(side, null);
   }
   drawSprite('p1', null);

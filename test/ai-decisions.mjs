@@ -12,6 +12,9 @@ function position(a,b,edit=()=>{}){
   battle.makeChoices('default','default');
   edit(battle.p1.active[0],battle.p2.active[0],battle);
   const ai=createTrainerAI({name:'A',stats:full},'균형형',makeRng(9));
+  // Isolate the phase-1 tactical evaluator with a fully observed position.
+  // Public-information isolation and reveal chronology are tested in ai-knowledge.mjs.
+  ai.opponent={view:()=>battle.p2.active[0]};
   const before=JSON.stringify(battle.toJSON());
   const result=ai.chooseAction(battle,'p1');
   assert.equal(JSON.stringify(battle.toJSON()),before,'AI evaluation must not mutate battle or engine RNG');

@@ -15,6 +15,7 @@ import {
   eunNeun, eulReul, iGa,
 } from '../data/ko.js';
 import { animArchetype } from '../data/move-anim.js';
+import {PublicBattle} from '../engine/public-battle.js';
 
 /* ---------------- 파싱 ---------------- */
 
@@ -87,6 +88,7 @@ const trainerName = (v) => (typeof v === 'string' ? v : v?.name || '');
 export function toKoreanLog(protocolLog, names, think = []) {
   const lines = protocolLog.slice();
   const out = [];
+  const knowledge = new PublicBattle();
 
   const mon = {};      // slot → { ident, species, level, gender }
   const hp = {};       // slot → { pct, cur, max }
@@ -134,6 +136,7 @@ export function toKoreanLog(protocolLog, names, think = []) {
         types: SPECIES_TYPES[m?.species] || '',
         level: m?.level ?? 50,
         gender: m?.gender || null,
+        knownMoves: (knowledge.current(side)?.moves||[]).map(name=>ko(MOVE_KO,name)),
         pct: h?.pct ?? 100,
         cur: h?.cur ?? null,
         max: h?.max ?? null,
@@ -165,6 +168,7 @@ export function toKoreanLog(protocolLog, names, think = []) {
       if (lines[i + 1] && lines[i + 2]) lines.splice(i + 2, 1);
       continue;
     }
+    knowledge.push(raw);
 
     switch (type) {
       case 'teamsize': {

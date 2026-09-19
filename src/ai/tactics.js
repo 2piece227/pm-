@@ -36,8 +36,8 @@ export function actionChance(mon,move){
 export function threats(gen,foe,me){
   const locked=foe.volatiles?.lockedmove?.move;
   return foe.moveSlots.filter(s=>s.pp!==0&&!s.disabled&&(!locked||s.id===locked))
-    .map(s=>gen.moves.get(s.id)).filter(m=>m&&m.category!=='Status')
-    .map(move=>({move,damage:realDamagePct(gen,foe,me,move),chance:actionChance(foe,move)}));
+    .map(s=>({move:gen.moves.get(s.id),weight:s.weight??1})).filter(({move})=>move&&move.category!=='Status')
+    .map(({move,weight})=>({move,damage:realDamagePct(gen,foe,me,move)*weight,chance:actionChance(foe,move)}));
 }
 export function executionChance(gen,me,move,foe){
   let denial=0;

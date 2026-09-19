@@ -123,7 +123,7 @@ export function bestDamagePct(gen, attacker, defender) {
     if (locked && slot.id !== locked) continue;
     const move = gen.moves.get(slot.id);
     if (!move || move.category === 'Status') continue;
-    best = Math.max(best, realDamagePct(gen, attacker, defender, move));
+    best = Math.max(best, realDamagePct(gen, attacker, defender, move)*(slot.weight??1));
   }
   return best;
 }
