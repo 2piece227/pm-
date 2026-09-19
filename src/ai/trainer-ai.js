@@ -4,23 +4,24 @@
  * 엔진(@pkmn/sim)이 "이 수를 두면 결과가 이렇다"를 계산하고,
  * 이 레이어는 "어떤 수를 둘까"만 담당한다. 두 레이어는 절대 섞지 않는다.
  *
- * 점수식은 프로토타입(trainer_sim_v2.html)에서 검증된 것을 그대로 옮겼다.
+ * 기본 점수식은 프로토타입에서 출발하며 tactics.js가 행동 가능성/회복/진입 위험을 보정한다.
  *   공격기 = 상성뺀_기대데미지% × 체감상성 × 스타일가중치 (+42 KO 보너스)
  *   기점기 = (배율−1) × 최대타 × 남은턴 − 이번턴_손해
  *   교체   = (위험도 − 임계값) × 30 + (현재피해 − 벤치피해) × 0.42
  */
 import {
   bestDamagePct,
+  combatEffect,
   curve,
   hpPct,
   neutralDamagePct,
-  realDamagePct,
   selfBoostsOf,
   shortfallEffect,
   stageMul,
   typeEff,
 } from './estimate.js';
 import { policyId, policyWeight, policyAdjustment } from '../data/battle-policy.js';
+import {TACTICS,entryDamagePct,executionChance,recoveryScore,residualPct} from './tactics.js';
 
 /** 재현 가능한 시뮬을 위한 소형 PRNG (mulberry32) */
 export function makeRng(seed = 1) {
@@ -170,7 +171,8 @@ export class TrainerAI {
     const myBest = bestDamagePct(gen, me, foe);
     const foeBest = bestDamagePct(gen, foe, me);
     const turnsToKO = myBest > 0 ? Math.ceil(hpPct(foe) / myBest) : 9;
-    const turnsSurvive = foeBest > 0 ? Math.ceil(hpPct(me) / foeBest) : 9;
+    const pressure = foeBest + residualPct(me);
+    const turnsSurvive = pressure > 0 ? Math.ceil(hpPct(me) / pressure) : 9;
     const R = Math.max(0, Math.min(turnsToKO, turnsSurvive, 6));
 
     active.moves.forEach((rm, i) => {
@@ -182,7 +184,7 @@ export class TrainerAI {
         kind: 'move',
         category: move.category,
         accuracy: move.accuracy === true ? 100 : move.accuracy,
-        role: move.heal ? 'heal' : selfBoostsOf(move) ? 'setup' : move.status ? 'status' : 'attack',
+        role: move.heal || move.id === 'rest' ? 'heal' : selfBoostsOf(move) ? 'setup' : move.status ? 'status' : 'attack',
         typeEffect: move.category !== 'Status' ? typeEff(gen, move.type, foe.getTypes()) : null,
         label: move.name, // 영문 id 그대로. 한글 변환은 표시 레이어의 몫이다.
         choice: `move ${i + 1}`,
@@ -198,7 +200,7 @@ export class TrainerAI {
           kind: 'switch',
           label: bench.name,
           choice: `switch ${opt.slot}`,
-          safer: bestDamagePct(gen, foe, bench)/Math.max(1,hpPct(bench)) < foeBest/Math.max(1,hpPct(me)),
+          safer: (bestDamagePct(gen, foe, bench)+entryDamagePct(gen,bench))/Math.max(1,hpPct(bench)) < foeBest/Math.max(1,hpPct(me)),
           score: this.scoreSwitch(me, foe, bench),
         });
       }
@@ -226,14 +228,16 @@ export class TrainerAI {
 
     if (move.category !== 'Status') {
       /* 상성을 뺀 맨몸 데미지에 "체감" 상성을 곱한다 — 이 순서를 뒤집으면 지식 스탯이 죽는다 */
-      const trueEff = typeEff(gen, move.type, foe.getTypes());
+      const trueEff = combatEffect(gen, me, foe, move);
       const felt = this.perceive(trueEff);
       this.lastPerception = { trueEff, felt };
       const adj = neutralDamagePct(me, foe, move) * felt;
       let score = adj * (move.category === 'Physical' ? sty.phys : sty.spec);
       if (adj >= hpPct(foe)) score += KO_BONUS;
-      return score;
+      return score * executionChance(gen,me,move,foe);
     }
+
+    if (move.heal || move.id === 'rest') return recoveryScore(gen,me,foe,move)*sty.status;
 
     /* 고스트 저주: 랭크업기가 아니라 자기 HP 절반을 태워 상대에게 턴당 25% 도트 */
     if (move.id === 'curse' && me.getTypes().includes('Ghost')) {
@@ -241,7 +245,7 @@ export class TrainerAI {
       const foeBest = bestDamagePct(gen, foe, me);
       const survAfter = foeBest > 0 ? Math.ceil((hpPct(me) - 50) / foeBest) : 9;
       const ticks = Math.max(0, Math.min(survAfter, ctx.turnsToKO, 5));
-      return (25 * ticks - ctx.myBest) * sty.status;
+      return (25 * ticks - ctx.myBest) * sty.status * executionChance(gen,me,move,foe);
     }
 
     /* 능력치 상승기: (배율−1) × 최대타 × 남은턴 − 이번 턴 손해 */
@@ -255,19 +259,14 @@ export class TrainerAI {
     const cur = me.boosts[key] || 0;
     const next = Math.min(6, cur + boosts[key]);
     const mult = stageMul(next) / stageMul(cur);
-    return (ctx.myBest * (mult - 1) * (ctx.R - 1) - ctx.myBest) * sty.status;
+    return (ctx.myBest * (mult - 1) * (ctx.R - 1) - ctx.myBest) * sty.status * executionChance(gen,me,move,foe);
   }
 
   scoreSwitch(me, foe, bench) {
     const gen = this.gen;
-    let incMe = 0;
-    let incBench = 0;
-    for (const slot of foe.moveSlots) {
-      const mv = gen.moves.get(slot.id);
-      if (!mv || mv.category === 'Status') continue;
-      incMe = Math.max(incMe, realDamagePct(gen, foe, me, mv));
-      incBench = Math.max(incBench, realDamagePct(gen, foe, bench, mv));
-    }
+    const incMe = bestDamagePct(gen,foe,me)+residualPct(me);
+    const entry = entryDamagePct(gen,bench);
+    const incBench = bestDamagePct(gen,foe,bench)+entry+residualPct(bench);
     const feltMe = this.perceive(incMe / 100) * 100;
     const feltBench = this.perceive(incBench / 100) * 100;
 
@@ -276,6 +275,9 @@ export class TrainerAI {
 
     let score = (risk - threshold) * 30 + (feltMe - feltBench) * 0.42;
     score *= this.sty.sw;
+    // Switching consumes the turn: the incoming Pokemon must take entry damage and a hit.
+    if (entry >= hpPct(bench)) score = Math.min(-TACTICS.unsafeSwitch*2,score);
+    else if (feltBench >= hpPct(bench)) score = Math.min(-TACTICS.unsafeSwitch,score);
     if (this.justSwitched) score -= 26;
     return score;
   }
@@ -290,7 +292,12 @@ export class TrainerAI {
       if (foe) {
         const out = bestDamagePct(this.gen, bench, foe);
         const inc = bestDamagePct(this.gen, foe, bench);
+        const entry = entryDamagePct(this.gen,bench);
+        const health = Math.max(1,hpPct(bench)-entry);
         score = this.perceive(out / 100) * 100 - this.perceive(inc / 100) * 100 * 0.8;
+        score -= entry;
+        if(entry>=hpPct(bench))score-=TACTICS.unsafeSwitch*2;
+        else if(inc>=health)score-=TACTICS.unsafeSwitch*.5;
       }
       return { kind: 'switch', label: `→${bench.name}`, choice: `switch ${opt.slot}`, score };
     });

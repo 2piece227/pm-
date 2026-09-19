@@ -35,7 +35,7 @@ export function analyseBattle(result, context = {}) {
       if (Object.hasOwn(counts,chosen.role)) counts[chosen.role]++;
       if (['setup','heal','status'].includes(chosen.role)) observations.push({turn,kind:chosen.role,text:`${label} 선택${t.vulnerable?' — 당장 큰 피해를 받을 수 있는 상황이었습니다.':'.'}${executionNote}`});
       if (chosen.perception?.trueEff === 0 && chosen.perception.felt > 0 && t.options.some(o=>o.perception?.trueEff>0)) {
-        observations.push({turn,kind:'knowledge',text:`${label}: 타입상 통하지 않는 공격을 유효하게 평가했습니다. 상성 지식의 오판이 선택에 개입했습니다. 실제 기술 성공 여부는 전투 로그를 함께 확인하세요.`});
+        observations.push({turn,kind:'knowledge',text:`${label}: 타입·특성상 통하지 않는 공격을 유효하게 평가했습니다. 면역 지식의 오판이 선택에 개입했습니다. 실제 기술 성공 여부는 전투 로그를 함께 확인하세요.`});
       }
     }
     if(t.pressure) counts.pressure++;
@@ -50,5 +50,5 @@ export function analyseBattle(result, context = {}) {
     summary, counts, observations, focusTurn, shockTurn,
     mentalAffected:(context.mentalDebuff||0)>0,
     lossStreak:context.lossStreak||0,
-    limitation:'피해와 행동 평가는 근사치이며 실제 최적수나 승패의 인과관계를 확정하지 않습니다. 회복·상태이상 평가는 현재 제한적입니다.' };
+    limitation:'선공권·상태·회복·교체 진입 피해를 반영한 근사 평가입니다. 모든 기술·특성의 예외나 상대 교체 예측을 다루지는 않으며, 실제 최적수나 승패의 인과관계를 확정하지 않습니다.' };
 }

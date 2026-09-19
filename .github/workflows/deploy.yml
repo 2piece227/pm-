@@ -31,6 +31,7 @@ jobs:
           node test/city-local-flow.mjs
           node test/pwt-flow.mjs
           node test/save-codec.mjs
+          node test/ai-decisions.mjs
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:

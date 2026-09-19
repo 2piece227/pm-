@@ -46,7 +46,10 @@ export function selfBoostsOf(move) {
  */
 export function neutralDamagePct(attacker, defender, move) {
   if (move.category === 'Status') return 0;
-  const bp = move.basePower;
+  // Fixed damage ignores attack/defense; immunity still applies in combatEffect.
+  if(move.damage==='level'||typeof move.damage==='number')
+    return (move.damage==='level'?attacker.level:move.damage)/defender.maxhp*100;
+  const bp = move.basePower * (move.id === 'facade' && ['brn','par','psn','tox'].includes(attacker.status) ? 2 : 1);
   if (!bp) return 0;
 
   const phys = move.category === 'Physical';
@@ -66,8 +69,14 @@ export function neutralDamagePct(attacker, defender, move) {
     ? (move.multihit[0] + move.multihit[1]) / 2
     : move.multihit || 1;
   const acc = move.accuracy === true ? 1 : move.accuracy / 100;
-
-  return (dmg * hits * acc) / defender.maxhp * 100;
+  let statusMod = 1;
+  if (phys && attacker.status === 'brn' && attacker.ability !== 'guts' && move.id !== 'facade') statusMod *= 0.5;
+  if (phys && attacker.status && attacker.ability === 'guts') statusMod *= 1.5;
+  const accuracyStage = Math.max(-6, Math.min(6, (attacker.boosts.accuracy || 0) - (defender.boosts.evasion || 0)));
+  const accuracyMod = accuracyStage >= 0 ? (3 + accuracyStage) / 3 : 3 / (3 - accuracyStage);
+  const hitChance = move.accuracy === true || attacker.ability === 'noguard' || defender.ability === 'noguard'
+    ? 1 : Math.min(1, acc * accuracyMod);
+  return (dmg * hits * hitChance * statusMod) / defender.maxhp * 100;
 }
 
 /** 상성까지 적용한 기대 데미지 — "남은 턴" 추정에 쓰는 객관적 값 */
@@ -75,14 +84,43 @@ export function realDamagePct(gen, attacker, defender, move) {
   if (move.category === 'Status') return 0;
   return (
     neutralDamagePct(attacker, defender, move) *
-    typeEff(gen, move.type, defender.getTypes())
+    combatEffect(gen, attacker, defender, move)
   );
+}
+
+/** Common immunity exceptions, without firing engine events. Knowledge may still misread these. */
+export function groundedForEstimate(mon){
+  if(mon.battle.field.pseudoWeather.gravity||mon.volatiles.ingrain||mon.volatiles.smackdown)return true;
+  // Simulator isGrounded ignores held items on inactive bench Pokemon. Score their entry state.
+  const item=mon.ability==='klutz'||mon.battle.field.pseudoWeather.magicroom||mon.volatiles.embargo?'':mon.item;
+  if(item==='ironball')return true;
+  if(mon.getTypes().includes('Flying'))return false;
+  if(mon.ability==='levitate'&&!mon.volatiles.gastroacid)return null;
+  if(mon.volatiles.magnetrise||mon.volatiles.telekinesis)return false;
+  return item!=='airballoon';
+}
+export function combatEffect(gen, attacker, defender, move) {
+  const bypass=['moldbreaker','teravolt','turboblaze'].includes(attacker.ability);
+  const grounded=groundedForEstimate(defender);
+  if(move.type==='Ground'&&move.id!=='thousandarrows'&&!grounded&&
+    !(grounded===null&&bypass&&defender.item!=='airballoon'))return 0;
+  if(!bypass){
+    const immune={Water:['waterabsorb','stormdrain','dryskin'],Electric:['voltabsorb','lightningrod','motordrive'],Fire:['flashfire','wellbakedbody'],Grass:['sapsipper']};
+    if(immune[move.type]?.includes(defender.ability))return 0;
+  }
+  const types=move.type==='Ground'&&(grounded||move.id==='thousandarrows')
+    ? defender.getTypes().filter(t=>t!=='Flying') : defender.getTypes();
+  const eff=typeEff(gen,move.type,types);
+  return move.damage==='level'||typeof move.damage==='number' ? (eff?1:0) : eff;
 }
 
 /** 그 포켓몬이 상대에게 낼 수 있는 최대타 (%/턴) */
 export function bestDamagePct(gen, attacker, defender) {
   let best = 0;
   for (const slot of attacker.moveSlots) {
+    if (slot.pp === 0 || slot.disabled) continue;
+    const locked = attacker.volatiles?.lockedmove?.move;
+    if (locked && slot.id !== locked) continue;
     const move = gen.moves.get(slot.id);
     if (!move || move.category === 'Status') continue;
     best = Math.max(best, realDamagePct(gen, attacker, defender, move));
