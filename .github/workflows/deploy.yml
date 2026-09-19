@@ -23,6 +23,14 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
+      - name: Verify game progression before deploy
+        run: |
+          node test/management-flow.mjs
+          node test/personnel-flow.mjs
+          node test/season-flow.mjs
+          node test/city-local-flow.mjs
+          node test/pwt-flow.mjs
+          node test/save-codec.mjs
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -146,7 +146,7 @@ function inboxItems() {
       const [first, ...rest] = n.text.split(' / ');
       out.push({ key: `n-${n.day}-${n.trainerId}-${n.text.length}`, day: n.day, trainerId: n.trainerId, title: first.replace('탐험을 시작했다.', '탐험 보고'), body: rest.join('\n'), preview: rest.at(-1) });
     } else {
-      out.push({ key: `n-${n.day}-${n.text}`, day: n.day, title: n.text, body: '', reportDay:['gym','training','cup','personnel'].includes(n.kind)?n.day:null });
+      out.push({ key: `n-${n.day}-${n.text}`, day: n.day, title: n.text, body: '', reportDay:['gym','training','cup','personnel','pwt'].includes(n.kind)?n.day:null });
     }
   }
   return out.sort((a,b) => Number(!!b.needsDecision)-Number(!!a.needsDecision) || Number(b.key.startsWith('n-')) - Number(a.key.startsWith('n-')) || b.day - a.day);
@@ -174,7 +174,7 @@ function renderDailySummary(rep, detailed = true) {
   ${(rep.gyms||[]).map(m=>`<div class="report-activity">${renderBattleAnalysis(m.analysis)}<p><b>${esc(m.trainerName)} vs ${m.gymName} · ${m.won?'승리':'패배'}</b> <button class="ghost" data-watch-gym="${m.id}">관장전 다시 보기</button></p>${m.firstWin?`<p>${m.badge||'배지'} 획득 · 상금 +${won(m.reward)}${m.bonusPaid?` · 계약 배지 보너스 −${won(m.bonusPaid)}`:''}</p>`:m.won?'<p class="muted">이미 획득한 배지입니다. 첫 도전 보상은 중복 지급되지 않습니다.</p>':''}${(m.growth||[]).map(g=>`<p>${esc(K(g.species))} · 경험치 +${g.experience}${g.level>g.before?` · Lv.${g.before} → ${g.level}`:''}${g.learned.length?` · ${g.learned.map(x=>esc(M(x))).join(', ')} 습득`:''}</p>`).join('')}${(m.evolutions||[]).map(e=>`<p>${esc(K(e.before))} → ${esc(K(e.after))} 진화</p>`).join('')}</div>`).join('')}
   ${(rep.training||[]).map(t=>`<p>${esc(K(t.species))} · ${esc(t.text)}</p>`).join('')}
   ${rep.rested.length ? `<p class="muted">휴식 완료 · ${esc(rep.rested.join(', '))}</p>` : ''}
-  ${(rep.camps||[]).map(text=>`<p>${esc(text)}</p>`).join('')}${renderCupReport(game,rep.cupId||rep.youthCupId)}<div class="report-foot">급여 지급 ${won(rep.upkeep)} · 새로운 소식 ${rep.news.length}건</div></section>`;
+  ${rep.international?`<p>${esc(rep.international)}</p><button data-nav="schedule">PWT 결과 · 관전</button>`:''}${(rep.camps||[]).map(text=>`<p>${esc(text)}</p>`).join('')}${renderCupReport(game,rep.cupId||rep.youthCupId)}<div class="report-foot">급여 지급 ${won(rep.upkeep)} · 새로운 소식 ${rep.news.length}건</div></section>`;
 }
 
 function renderInbox() {
@@ -531,7 +531,7 @@ async function drainGymWatches(){
 
 async function openCupWatch(id){
   if(busy)return;
-  const e=game.competitions?.events.find(e=>e.matches.some(m=>m.id===id));
+  const e=[...(game.competitions?.events||[]),...(game.international?.seasons||[])].find(e=>e.matches.some(m=>m.id===id));
   const m=e?.matches.find(m=>m.id===id);if(!m)return;
   busy=true;renderTop();
   try{await watchGymMatch(m);if(!e.viewed.includes(id))e.viewed.push(id);game.pendingCupWatches=(game.pendingCupWatches||[]).filter(x=>x!==id);persist();}

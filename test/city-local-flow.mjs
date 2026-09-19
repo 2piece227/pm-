@@ -53,7 +53,7 @@ assert(!cupEligible(youth,next),'seed preference never bypasses pro eligibility'
 // v5 upgrade only adds future tournaments; preserves old results, party and RNG.
 const old=snapshotGame(saved);old.snapshotVersion=5;old.competitions.events=old.competitions.events.filter(e=>e.kind==='youth');old.competitions.version=1;
 const restored=restoreGame(old);
-assert.equal(restored.snapshotVersion,6);assert.equal(restored.rng.getState(),old.rngState);
+assert.equal(restored.snapshotVersion,7);assert.equal(restored.rng.getState(),old.rngState);
 assert.deepEqual(restored.league,old.league);
 assert(restored.competitions.events.filter(e=>e.kind!=='youth').every(e=>e.date>=old.day));
 assert.deepEqual(restored.competitions.events.filter(e=>e.kind==='youth'),old.competitions.events);

@@ -1,3 +1,4 @@
+import { ensureInternational, internationalSeason } from './international.js';
 import { ensurePersonnel } from './personnel.js';
 import { makeRng } from './run-battle.js';
 import { policyId, POLICY_CONFIG } from '../data/battle-policy.js';
@@ -8,11 +9,11 @@ import { ensureSeason } from './season.js';
 // JSON-safe state with the exact random stream position. No engine objects are persisted.
 export function snapshotGame(game) {
   return JSON.parse(JSON.stringify({ ...game, rng: undefined,
-    rngState: game.rng.getState(), snapshotVersion: 6 }));
+    rngState: game.rng.getState(), snapshotVersion: 7 }));
 }
 
 export function restoreGame(snapshot) {
-  if (![1,2,3,4,5,6].includes(snapshot?.snapshotVersion) || !snapshot.league?.agencies || !Number.isInteger(snapshot.rngState)) {
+  if (![1,2,3,4,5,6,7].includes(snapshot?.snapshotVersion) || !snapshot.league?.agencies || !Number.isInteger(snapshot.rngState)) {
     throw new Error('저장 파일을 읽을 수 없습니다.');
   }
   const game = JSON.parse(JSON.stringify(snapshot));
@@ -38,6 +39,7 @@ export function restoreGame(snapshot) {
   if(game.snapshotVersion===3){ensureSeason(game);game.snapshotVersion=4;}
   if(game.snapshotVersion===4){ensurePersonnel(game);game.snapshotVersion=5;}
   if(game.snapshotVersion===5){ensureSeason(game);game.snapshotVersion=6;}
+  if(game.snapshotVersion===6){ensureInternational(game);internationalSeason(game);game.snapshotVersion=7;}
   game.rng = makeRng(game.rngState);
   return game;
 }

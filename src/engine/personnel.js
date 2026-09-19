@@ -1,3 +1,4 @@
+import { internationallyLocked } from '../data/international.js';
 import { PERSONNEL as P, COACH_CANDIDATES } from '../data/personnel.js';
 import { SEASON } from '../data/season.js';
 import { seasonDate } from './season.js';
@@ -31,6 +32,7 @@ export function personnelCandidate(t){
 export function contractProposal(game,t){return candidateProposal(personnelCandidate(t),player(game));}
 function room(a,t){return a.roster.length<P.rosterLimit&&(!t.isYouth||youthCount(a)<youthCapacity(a));}
 export function transferQuote(game,id){
+  if(internationallyLocked(game,id))return null;
   const state=ensurePersonnel(game),free=state.freeAgents.find(t=>t.id===id);
   if(free)return {trainer:free,fee:0,from:null};
   for(const a of game.league.agencies){
@@ -68,7 +70,7 @@ export function releaseQuote(game,id){const t=owned(game,id);return t?Math.round
 function toFreeAgent(game,a,t){a.roster=a.roster.filter(x=>x.id!==t.id);t.agencyId=null;t.coachAssigned=null;delete game.actions[t.id];delete t.camp;game.personnel.freeAgents.push(t);}
 export function releaseContract(game,id,fee){
   ensurePersonnel(game);const a=player(game),t=owned(game,id);
-  if(!offseason(game)||!t||t.camp||game.pendingStarter||fee!==releaseQuote(game,id)||a.funds<fee)return {ok:false,msg:'비시즌·계약 상태·정산금을 확인하세요.'};
+  if(!offseason(game)||!t||internationallyLocked(game,id)||t.camp||game.pendingStarter||fee!==releaseQuote(game,id)||a.funds<fee)return {ok:false,msg:'비시즌·계약 상태·정산금을 확인하세요.'};
   a.funds-=fee;toFreeAgent(game,a,t);
   const text=`${t.name} 계약 해지 · 정산금${fee} · 현재 파티와 가방을 보유한 자유계약 선수로 전환`;
   game.personnel.history.unshift({day:game.day,kind:'release',trainerId:id,text});game.league.newsFeed.unshift({day:game.day,kind:'personnel',text});

@@ -27,6 +27,8 @@ import { locationById } from '../data/routes.js';
 import { SPECIES_KO, ko, iGa } from '../data/ko.js';
 import { setupCareerStart, youthCount, youthCapacity } from './career.js';
 import { cupToday, cupEntrants, runCup } from './season.js';
+import { ensureInternational, internationalSeason, ensureOfficials, tickInternational } from './international.js';
+import { pwtBreak } from '../data/international.js';
 import { tickPersonnel, tickCamp } from './personnel.js';
 
 export const GAME_CONFIG = {
@@ -107,6 +109,7 @@ export async function createGame({
 
   if(careerStart) await setupCareerStart(game);
   await refreshMarket(game);
+  ensureInternational(game);internationalSeason(game);
   return game;
 }
 
@@ -207,6 +210,7 @@ export function describeAction(action) {
     return `${loc?.name || ex.locationId} · ${ex.mode === 'catch' ? '포획 중심' : ex.mode === 'mixed' ? '포획·배틀 병행' : '배틀 중심'} · ${ex.activities}회 (센터 포함)`;
   }
   if(action?.startsWith('gym:')) return `${gymById(action.slice(4))?.name || ''} 체육관 도전 · 자동 관전`;
+  if(action==='pwt-study')return 'PWT 경기 분석 견학';
   if (!action || action === 'rest') return '휴식';
   if (action.startsWith('enter:')) return '대회 출전';
   return action;
@@ -313,6 +317,7 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
   const newsAtStart = new Set(league.newsFeed);
   tickPersonnel(game);
   const youthCup=cupToday(game);
+  if(youthCup?.kind==='local')await ensureOfficials(game);
   const cupIds=new Set(youthCup?cupEntrants(game,youthCup).map(t=>t.id):[]);
   await onProgress({ id: 'activities', state: 'running', label: '오늘의 활동 진행', detail: `${player.roster.length}명의 일정 확인` });
 
@@ -325,7 +330,8 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
       await onProgress({id:`trainer-${t.id}`,state:'done',label:t.name,detail:youthCup.name+' 참가 · 오늘의 다른 활동 대신 출전'});
       continue;
     }
-    const action = game.actions[t.id] || 'rest';
+    let action = game.actions[t.id] || 'rest';
+    if(action==='pwt-study'&&!pwtBreak(game)){delete game.actions[t.id];action='rest';}
     await onProgress({ id: `trainer-${t.id}`, state: 'running', label: t.name, detail: describeAction(action) });
     t.lastAction = action;
 
@@ -340,7 +346,13 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
       continue;
     }
 
-    if(action.startsWith('gym:')) {
+    if(action==='pwt-study'&&pwtBreak(game)&&t.isYouth){
+      const before=t.stats.know;growStat(t,'know',GAME_CONFIG.growth.battleRate);
+      const text=`${t.name} · PWT 경기 분석 견학 완료 · 지식 +${(t.stats.know-before).toFixed(2)}`;
+      (report.camps??=[]).push(text);healParty(t);
+      await onProgress({id:`trainer-${t.id}`,state:'done',label:t.name,detail:text});continue;
+    }
+    if(action.startsWith('gym:')&&!pwtBreak(game)) {
       const match=await challengeGym(game,t,action.slice(4));
       (report.gyms??=[]).push(match);
       await onProgress({id:`trainer-${t.id}`,state:'done',label:`${t.name} · 체육관 도전 완료`,detail:'이어서 관장전 관전을 시작합니다.'});
@@ -414,6 +426,8 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
   }
 
   if(youthCup){await runCup(game,youthCup,onProgress);report.cupId=youthCup.id;if(youthCup.kind==='youth')report.youthCupId=youthCup.id;}
+  const internationalReport=await tickInternational(game,onProgress);
+  if(internationalReport)report.international=internationalReport;
   /* NPC 회복 — 오늘 대회에 안 나간 NPC 트레이너 */
   const playedToday = new Set((report.tournament?.entrants || []).map((e) => e.trainerId));
   for (const a of league.agencies) {

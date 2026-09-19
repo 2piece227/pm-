@@ -1,3 +1,4 @@
+import { encodeSave, decodeSave } from './save-codec.js';
 /** 오프닝 선택과 전체 게임 상태를 저장한다. 기존 v1 오프닝 저장도 계속 읽는다. */
 import { snapshotGame } from './checkpoint.js';
 const KEY = 'pm-save-v1';
@@ -7,7 +8,7 @@ export function loadSave() {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
-    const data = JSON.parse(raw);
+    const data = decodeSave(raw);
     if (data?.version !== VERSION) return null;   // 형식이 바뀌면 조용히 버린다
     return data;
   } catch {
@@ -19,7 +20,7 @@ export function writeSave(patch) {
   const cur = loadSave() || { version: VERSION };
   const next = { ...cur, ...patch, version: VERSION, savedAt: Date.now() };
   try {
-    localStorage.setItem(KEY, JSON.stringify(next));
+    localStorage.setItem(KEY, encodeSave(next));
     next.persisted = true;
   } catch { next.persisted = false; }
   return next;

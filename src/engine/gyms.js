@@ -1,3 +1,4 @@
+import { pwtBreak } from '../data/international.js';
 import { Dex } from '@pkmn/dex';
 import { ko, SPECIES_KO } from '../data/ko.js';
 import { GYMS, gymById } from '../data/gyms.js';
@@ -11,6 +12,7 @@ import { analyseBattle } from './battle-analysis.js';
 import { markGraduation } from './career.js';
 
 export async function challengeGym(game, trainer, gymId) {
+  if(pwtBreak(game))throw new Error('PWT 기간에는 공식 체육관 도전이 중단됩니다.');
   const gym=gymById(gymId), agency=agencyOf(game);
   if(!gym||!agency.roster.includes(trainer)||!trainer.party.length) throw new Error('도전할 체육관과 트레이너를 확인하세요.');
   if(trainer.lastGymDay===game.day) throw new Error('관장전은 하루 한 번 도전합니다.');

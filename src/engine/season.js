@@ -1,3 +1,4 @@
+import { competitionTrainer, competitionAgency, payCompetitionPrize } from './international.js';
 import { SEASON, SEASON_PHASES, CUP_SCHEDULE, RANKING } from '../data/season.js';
 import { citySeedScores } from './regional-ranking.js';
 import { proEligible, isRegisteredPro } from './career.js';
@@ -20,7 +21,7 @@ export function ensureSeason(game) {
     if(game.competitions.events.some(e=>e.id===id)||date<game.day)continue;
     game.competitions.events.push({id,name:`제${y}시즌 ${spec.label} · ${spec.kind==='city'?(d<100?'전반기':'후반기')+' '+(spec.days.indexOf(d)%3+1)+'차':spec.kind==='youth'?(d===7?'개막':'후반'):'연간 오픈'}`,kind:spec.kind,region:'kanto-johto',
       season:y,date,deadline:date-1,openDay:date-SEASON.registrationLead,status:'scheduled',
-      eligibility:spec.eligibility,capacity:SEASON.capacity,qualification:'none',format:'knockout',
+      eligibility:spec.eligibility,capacity:spec.kind==='local'?32:SEASON.capacity,qualification:'none',format:'knockout',
       prizeMultiplier:SEASON.prizeMultipliers[spec.kind],reputationMultiplier:SEASON.prizeMultipliers[spec.kind],ranking:spec.ranking,rankingWeight:spec.weight,pointsMultiplier:spec.kind==='city'&&d===spec.days.at(-1)?RANKING.lastCityMultiplier:1,rosterSize:6,setFormat:'bo1',musicContext:'kanto',
       registrations:[],entrants:[],matches:[],decisions:[],result:null,viewed:[],watchMode:'results'});
   }
@@ -52,14 +53,15 @@ export function cupEntrants(game,e){
   const own=e.registrations.map(id=>findTrainer(game.league,id)).filter(t=>t?.agencyId===game.playerAgencyId&&cupEligible(t,e)&&!t.camp);
   const npc=game.league.agencies.filter(a=>a.id!==game.playerAgencyId).flatMap(a=>a.roster.filter(t=>cupEligible(t,e)).map(t=>({t,score:npcEntryScore(a,t)})))
     .filter(x=>!x.t.camp&&x.score>=SEASON.npcThreshold).sort((a,b)=>b.score-a.score||a.t.id.localeCompare(b.t.id));
-  return [...own,...npc.map(x=>x.t)].slice(0,e.capacity);
+  const officials=e.kind==='local'?(game.international?.officials||[]).filter(t=>t.region==='kanto-johto'):[];
+  return [...own,...officials,...npc.map(x=>x.t)].slice(0,e.capacity);
 }
 export function cupToday(game){return ensureSeason(game).events.find(e=>e.date===game.day&&e.status==='scheduled');}
 export async function runCup(game,e,onProgress=async()=>{}){
   if(e.status!=='scheduled'||e.date!==game.day)return;
   const trainers=cupEntrants(game,e);
   e.decisions=game.league.agencies.filter(a=>a.id!==game.playerAgencyId).flatMap(a=>a.roster.filter(t=>cupEligible(t,e)).map(t=>({trainerId:t.id,score:npcEntryScore(a,t),entered:trainers.includes(t)})));
-  e.entrants=trainers.map(t=>({id:t.id,name:t.name,agencyId:t.agencyId,agencyName:game.league.agencies.find(a=>a.id===t.agencyId).name,party:structuredClone(t.party.slice(0,e.rosterSize)),definition:structuredClone({name:t.name,isYouth:t.isYouth,badges:t.badges,legacyPro:t.legacyPro,regionalRole:t.regionalRole,stats:effectiveStats(t),nature:t.nature,battlePolicy:t.battlePolicy,mentalDebuff:t.mentalDebuff,lossStreak:t.lossStreak})}));
+  e.entrants=trainers.map(t=>({id:t.id,name:t.name,agencyId:t.agencyId,agencyName:competitionAgency(game,t),party:structuredClone(t.party.slice(0,e.rosterSize)),definition:structuredClone({name:t.name,isYouth:t.isYouth,badges:t.badges,legacyPro:t.legacyPro,regionalRole:t.regionalRole,stats:effectiveStats(t),nature:t.nature,battlePolicy:t.battlePolicy,mentalDebuff:t.mentalDebuff,lossStreak:t.lossStreak})}));
   if(trainers.length<2){e.status='cancelled';game.league.newsFeed.unshift({day:game.day,kind:'cup',text:`${e.name} · 참가자 부족으로 취소. 상금 지급 없음.`});return;}
   for(let i=e.entrants.length-1;i>0;i--){const j=Math.floor(game.rng()*(i+1));[e.entrants[i],e.entrants[j]]=[e.entrants[j],e.entrants[i]];}
   if(e.kind==='city'){const scores=citySeedScores(game,e);e.entrants.sort((a,b)=>(scores.get(b.id)??RANKING.base)-(scores.get(a.id)??RANKING.base));}
@@ -89,7 +91,7 @@ export async function runCup(game,e,onProgress=async()=>{}){
   e.result={championId:champion.id,runnerId:runner.id};
   e.scouting=[];
   for(const x of e.entrants){
-    const t=findTrainer(game.league,x.id),count=appearances.get(x.id)||0;
+    const t=competitionTrainer(game,x.id),count=appearances.get(x.id)||0;
     const growth=[];
     for(const mon of t.party.slice(0,e.rosterSize)){const before=mon.level;await gainExp(mon,SEASON.experience*count);growth.push({species:mon.species,before,level:mon.level,experience:SEASON.experience*count});}
     for(const key of STAT_KEYS)t.stats[key]=Math.min(t.potential?.[key]??t.stats[key],t.stats[key]+SEASON.growth*count);
@@ -99,7 +101,7 @@ export async function runCup(game,e,onProgress=async()=>{}){
     e.scouting.push({trainerId:t.id,name:t.name,agencyName:x.agencyName,growth,text:`${count}경기 · ${wins}승 · 출전 당시 ${x.party.map(p=>`${ko(SPECIES_KO,p.species)} Lv.${p.level}`).join(', ')}. 상대와 파티 차이를 함께 보고 평가하세요.`});
   }
   for(const [x,prize]of [[champion,SEASON.prize*(e.prizeMultiplier??1)],[runner,SEASON.runnerPrize*(e.prizeMultiplier??1)]]){
-    const a=game.league.agencies.find(a=>a.id===x.agencyId);a.funds+=prize;a.reputation+=SEASON.reputation*(e.reputationMultiplier??1);
+    payCompetitionPrize(game,x,prize,SEASON.reputation*(e.reputationMultiplier??1));
   }
   e.status='completed';
   game.league.newsFeed.unshift({day:game.day,kind:'cup',text:`${e.name} · ${champion.name} 우승 (${SEASON.prize*(e.prizeMultiplier??1)}), ${runner.name} 준우승 (${SEASON.runnerPrize*(e.prizeMultiplier??1)}). 일정에서 대진·저장 관전·스카우팅 보고서를 확인하세요.`});

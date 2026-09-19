@@ -10,7 +10,7 @@ export function watchGymMatch(match) {
     const overlay=$('watch-ov'), app=$('app');
     overlay.hidden=false;$('watch-panel').style.display='';app.inert=true;
     const analysisPanel=document.createElement('section');
-    analysisPanel.innerHTML=renderBattleAnalysis(match.analysis);
+    analysisPanel.innerHTML=match.analysis?renderBattleAnalysis(match.analysis):'<p class="muted">저장된 경기 로그를 재생합니다.</p>';
     $('watch-panel').append(analysisPanel);
     $('watch-title').textContent=`${match.trainerName} vs ${match.gymName} · ${match.eventName || "체육관 도전"}`;
     $('watch-close').textContent='관전 건너뛰기';

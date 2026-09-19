@@ -16,4 +16,4 @@ export const SEASON_PHASES = [
   ['local','로컬컵',100],['road-pwt','Road to PWT',130],['pwt','PWT',150],
   ['city-second','시티컵 후반기',180],['regional','지역 리그',280],
   ['seeds','PWC 시드 결정전',310],['pwc','PWC',330],
-].map(([id,name,start])=>({id,name,start,implemented:['offseason','city-first','city-second','local'].includes(id)}));
+].map(([id,name,start])=>({id,name,start,implemented:['offseason','city-first','city-second','local','road-pwt','pwt'].includes(id)}));
