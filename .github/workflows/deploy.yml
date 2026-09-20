@@ -35,6 +35,7 @@ jobs:
           node test/ai-knowledge.mjs
           node test/ai-strategy.mjs
           node test/ai-field.mjs
+          node test/ai-variable-power.mjs
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:

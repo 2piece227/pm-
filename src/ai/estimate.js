@@ -49,7 +49,7 @@ export function neutralDamagePct(attacker, defender, move) {
   // Fixed damage ignores attack/defense; immunity still applies in combatEffect.
   if(move.damage==='level'||typeof move.damage==='number')
     return (move.damage==='level'?attacker.level:move.damage)/defender.maxhp*100;
-  const bp = move.basePower * (move.id === 'facade' && ['brn','par','psn','tox'].includes(attacker.status) ? 2 : 1);
+  const bp = estimatedPower(attacker, move) * (move.id === 'facade' && ['brn','par','psn','tox'].includes(attacker.status) ? 2 : 1);
   if (!bp) return 0;
 
   const phys = move.category === 'Physical';
@@ -77,6 +77,19 @@ export function neutralDamagePct(attacker, defender, move) {
   const hitChance = move.accuracy === true || attacker.ability === 'noguard' || defender.ability === 'noguard'
     ? 1 : Math.min(1, acc * accuracyMod);
   return (dmg * hits * hitChance * statusMod * fieldDamageMod(attacker,defender,move)) / defender.maxhp * 100;
+}
+
+/** Public HP/boost-dependent power; never execute move callbacks during AI evaluation. */
+export function estimatedPower(attacker,move){
+  if(['eruption','waterspout','dragonenergy'].includes(move.id))
+    return Math.max(1,Math.floor(150*attacker.hp/attacker.maxhp));
+  if(['storedpower','powertrip'].includes(move.id))
+    return 20+20*Object.values(attacker.boosts).reduce((sum,n)=>sum+Math.max(0,n),0);
+  if(['flail','reversal'].includes(move.id)){
+    const ratio=Math.max(1,Math.floor(attacker.hp*48/attacker.maxhp));
+    return ratio<2?200:ratio<5?150:ratio<10?100:ratio<17?80:ratio<33?40:20;
+  }
+  return move.basePower;
 }
 
 /** Singles public-field estimate. No engine events or hidden ability queries. */
