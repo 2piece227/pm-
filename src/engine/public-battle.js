@@ -28,7 +28,7 @@ export class PublicBattle {
       if(!record||ambiguous||type==='replace')record={key,species,name:p[2].split(': ').slice(1).join(': '),
         level:Number(details.find(v=>/^L\d+$/.test(v))?.slice(1)||100),moves:[],ability:'',item:'',boosts:{},volatiles:{},toxicStage:0};
       if(record.transformed)record.moves=[];
-      record.boosts={};record.volatiles={};record.toxicStage=0;record.transformed=false;record.forme=null;record.types=null;
+      record.boosts={};record.volatiles={};record.toxicStage=0;record.transformed=false;record.forme=null;record.types=null;record.abilitySuppressed=false;
       this.active[side]=key;this.records.set(key,record);
       record.enteredTurn=this.turn;
       this.condition(record,p[4]);return;
@@ -57,7 +57,8 @@ export class PublicBattle {
     if(type==='-setboost')r.boosts[p[3]]=Number(p[4]);
     if(type==='-clearboost')r.boosts={};
     if(type==='-clearallboost')for(const v of this.records.values())v.boosts={};
-    if(type==='-ability')r.ability=publicId(p[3]);
+    if(type==='-ability'){r.ability=publicId(p[3]);r.abilitySuppressed=false;}
+    if(type==='-endability')r.abilitySuppressed=true;
     if(type==='-item')r.item=publicId(p[3]);
     if(type==='-enditem')r.item='';
     if(type==='-transform'){r.transformed=true;r.moves=[];r.forme=this.current(p[3]?.slice(0,2))?.species||null;}

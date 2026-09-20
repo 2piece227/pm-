@@ -6,7 +6,7 @@ const candidates=new Map();
 // Own team is known, but getTypes() fires global engine events and can inspect hidden foes.
 export function ownView(mon){
   return {name:mon.name,level:mon.level,hp:mon.hp,maxhp:mon.maxhp,status:mon.status,
-    ability:mon.ability,item:mon.item,boosts:mon.boosts,volatiles:mon.volatiles,statusState:mon.statusState,
+    ability:mon.volatiles.gastroacid?'':mon.ability,item:mon.item,boosts:mon.boosts,volatiles:mon.volatiles,statusState:mon.statusState,
     moveSlots:mon.moveSlots,battle:{field:mon.battle.field},side:{sideConditions:mon.side.sideConditions},
     getStat:(k)=>mon.getStat(k,false,true),
     getTypes:()=>mon.terastallized&&mon.terastallized!=='Stellar'?[mon.terastallized]:
@@ -32,7 +32,7 @@ export class OpponentModel {
   benches(battle,side,gen,stats,rng){
     this.public.scan(battle.log);
     return [...this.public.records.values()].filter(r=>r.key.startsWith(side)&&r.name!==this.public.current(side)?.name&&r.ratio>0&&!r.transformed)
-      .map(r=>this.view(battle,side,gen,stats,rng,{...r,boosts:{},volatiles:{},toxicStage:0,forme:null,types:null}));
+      .map(r=>this.view(battle,side,gen,stats,rng,{...r,boosts:{},volatiles:{},toxicStage:0,forme:null,types:null,abilitySuppressed:false}));
   }
   view(battle,side,gen,stats,rng,knownRecord=null){
     this.public.scan(battle.log);
@@ -55,7 +55,7 @@ export class OpponentModel {
     const stat=k=>Math.floor((2*base[k]+31)*level/100)+(k==='hp'?level+10:5);
     const maxhp=species.id==='shedinja'?1:stat('hp');
     const view={name:record.name,level,maxhp,hp:Math.max(0,record.ratio*maxhp),status:record.status||'',
-      ability:record.ability,item:record.item,boosts:{...record.boosts},volatiles:structuredClone(record.volatiles),
+      ability:record.abilitySuppressed?'':record.ability,item:record.item,boosts:{...record.boosts},volatiles:structuredClone(record.volatiles),
       statusState:{stage:record.toxicStage},moveSlots:slots,
       battle:{field:battle.field},side:{sideConditions:battle[side].sideConditions},
       getTypes:()=>record.teraType&&record.teraType!=='Stellar'?[record.teraType]:[...(record.types||species.types)],getStat:(k,unboosted)=>stat(k)*(unboosted?1:stageMul(record.boosts[k]||0)),
