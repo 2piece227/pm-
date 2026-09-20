@@ -29,13 +29,18 @@ function moveCandidates(gen,species,level){
 }
 export class OpponentModel {
   constructor(){this.public=new PublicBattle();this.cache=null;}
-  view(battle,side,gen,stats,rng){
+  benches(battle,side,gen,stats,rng){
     this.public.scan(battle.log);
-    const record=this.public.current(side);if(!record)return null;
-    const cacheKey=`${battle.log.length}:${side}`;
+    return [...this.public.records.values()].filter(r=>r.key.startsWith(side)&&r.name!==this.public.current(side)?.name&&r.ratio>0&&!r.transformed)
+      .map(r=>this.view(battle,side,gen,stats,rng,{...r,boosts:{},volatiles:{},toxicStage:0,forme:null,types:null}));
+  }
+  view(battle,side,gen,stats,rng,knownRecord=null){
+    this.public.scan(battle.log);
+    const record=knownRecord||this.public.current(side);if(!record)return null;
+    const cacheKey=`${battle.log.length}:${record.key}`;
     if(this.cache?.key===cacheKey)return this.cache.view;
     const species=gen.species.get(record.forme||record.species),level=record.level;
-    const lapse=Math.max(0,20-stats.focus)/20*KNOWLEDGE.maxLapse*Math.min(1,this.public.turn/12);
+    const lapse=knownRecord?0:Math.max(0,20-stats.focus)/20*KNOWLEDGE.maxLapse*Math.min(1,this.public.turn/12);
     const omitted=[],remembered=[];
     for(const name of record.moves){
       // The last shown move is still salient; lapses never erase the public notebook.

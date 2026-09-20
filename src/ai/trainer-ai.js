@@ -23,6 +23,7 @@ import {
 import { policyId, policyWeight, policyAdjustment } from '../data/battle-policy.js';
 import {TACTICS,entryDamagePct,executionChance,recoveryScore,residualPct} from './tactics.js';
 import {OpponentModel,ownView} from './opponent-model.js';
+import {predictSwitch,preservationValue,followupValue,strategyWeight} from './strategy.js';
 
 /** 재현 가능한 시뮬을 위한 소형 PRNG (mulberry32) */
 export function makeRng(seed = 1) {
@@ -77,17 +78,39 @@ export class TrainerAI {
     this.opponent = new OpponentModel();
     this.shock = 0;       // 아군이 쓰러진 직후 남은 동요 턴 수
     this.justSwitched = false;
+    this.failureStreak=0;
+    this.mentalReasons=[];
   }
 
   /** 아군이 쓰러졌다 — 멘탈 스탯이 작동할 구간을 연다 */
   onFaint() {
-    this.shock = 2;
+    this.shock = Math.min(4,this.shock+2);
+    this.mentalReasons.push('아군 기절');
+  }
+
+  observeOutcome(lines,side){
+    let failed=false,acted=false,critical=false;
+    for(const raw of lines){
+      const p=raw.split('|'),actor=p[2]?.slice(0,2);
+      if(actor!==side)continue;
+      if(p[1]==='move')acted=true;
+      if(['-miss','-fail','cant'].includes(p[1]))failed=true;
+      if(p[1]==='-crit')critical=true;
+    }
+    if(failed)this.failureStreak++;else if(acted)this.failureStreak=0;
+    if(critical){this.shock=Math.min(4,this.shock+1.5);this.mentalReasons.push('급소 피격');}
+    if(failed&&this.failureStreak>=2){this.shock=Math.min(4,this.shock+1);this.mentalReasons.push('연속 행동 실패');}
+  }
+
+  cognitiveStats(){
+    return {...this.stats,focus:Math.max(0,this.stats.focus-this.shock*Math.max(0,20-this.stats.mental)*.15)};
   }
 
   /** 턴 종료 정리 */
   endTurn(switched) {
     this.shock = Math.max(0, this.shock - 1);
     this.justSwitched = switched;
+    this.mentalReasons=[];
   }
 
   gauss() {
@@ -163,9 +186,17 @@ export class TrainerAI {
     const foeSide = battle[sideId === 'p1' ? 'p2' : 'p1'];
     const request = side.activeRequest;
     const me = ownView(side.active[0]);
-    const foe = this.opponent.view(battle,foeSide.id,this.gen,this.stats,this.rng);
+    const cognition=this.cognitiveStats();
+    const foe = this.opponent.view(battle,foeSide.id,this.gen,cognition,this.rng);
     if(!foe)return {choice:'default',think:null};
     const active = request.active[0];
+    const allies=side.pokemon.filter(p=>p!==side.active[0]&&!p.fainted&&p.hp>0).map(ownView);
+    const seenBench=this.opponent.benches?.(battle,foeSide.id,gen,cognition,this.rng)||[];
+    const recentSwitch=this.opponent.public?.current(foeSide.id)?.enteredTurn>=battle.turn-1;
+    const prediction=predictSwitch(gen,me,foe,seenBench,{recentSwitch});
+    const preserve=preservationValue(gen,me,allies,seenBench);
+    const weight=strategyWeight(this.stats,this.shock);
+    const followupEnabled=this.stats.ops>=14&&this.stats.judge>=14;
 
     const opts = [];
 
@@ -194,6 +225,24 @@ export class TrainerAI {
         score: this.scoreMove(move, me, foe, { myBest, R, turnsSurvive, turnsToKO }),
       });
       opts.at(-1).perception = this.lastPerception;
+      const option=opts.at(-1);
+      if(prediction.probability){
+        let switchedScore=0;
+        for(const target of prediction.targets){
+          // A switching opponent does not attack this turn. Its incoming position is public estimate only.
+          const arriving={...target.mon,moveSlots:[]};
+          const output=bestDamagePct(gen,me,arriving);
+          switchedScore+=target.weight*this.scoreMove(move,me,arriving,{myBest:output,R:3,turnsSurvive:9,turnsToKO:output?Math.ceil(hpPct(arriving)/output):9});
+        }
+        const adjustment=weight*prediction.probability*(switchedScore-option.score);
+        option.score+=adjustment;option.predictionAdjustment=adjustment;
+      }
+      if(followupEnabled){
+        const stay=followupValue(gen,me,foe,move);
+        const changed=prediction.targets.reduce((sum,t)=>sum+t.weight*followupValue(gen,me,{...t.mon,moveSlots:[]},move),0);
+        option.followupAdjustment=weight*((1-prediction.probability)*stay+prediction.probability*changed);
+        option.score+=option.followupAdjustment;
+      }
     });
 
     if (!active.trapped && !active.maybeTrapped) {
@@ -206,6 +255,12 @@ export class TrainerAI {
           safer: (bestDamagePct(gen, foe, bench)+entryDamagePct(gen,bench))/Math.max(1,hpPct(bench)) < foeBest/Math.max(1,hpPct(me)),
           score: this.scoreSwitch(me, foe, bench),
         });
+        const option=opts.at(-1),entry=entryDamagePct(gen,bench);
+        if(entry+bestDamagePct(gen,foe,bench)<hpPct(bench)){
+          const abandoned=Object.values(me.boosts).reduce((n,v)=>n+Math.max(0,v),0)*5;
+          option.preservationAdjustment=weight*Math.max(0,preserve-abandoned-entryDamagePct(gen,me)*.3);
+          option.score+=option.preservationAdjustment;
+        }
       }
     }
 
@@ -221,7 +276,9 @@ export class TrainerAI {
       choice: opts[index].choice,
       think: { ...this.formatThink(T, opts, probs), selected: index, policy: this.policy,
         focusAffected: T > this.temperature(0), shock: this.shock > 0,
-        vulnerable: turnsSurvive <= 1, pressure: myBest < foeBest, knowledge:foe.knowledge },
+        vulnerable: turnsSurvive <= 1, pressure: myBest < foeBest, knowledge:foe.knowledge,
+        strategy:{switchProbability:prediction.probability,targets:prediction.targets.map(t=>t.mon.name),preservation:preserve,followupEnabled},
+        mentalReasons:[...this.mentalReasons] },
     };
   }
 
@@ -235,7 +292,8 @@ export class TrainerAI {
       const felt = this.perceive(trueEff);
       this.lastPerception = { trueEff, felt };
       const adj = neutralDamagePct(me, foe, move) * felt;
-      let score = adj * (move.category === 'Physical' ? sty.phys : sty.spec);
+      // Damage beyond remaining HP has no extra payoff, especially in stay/switch comparisons.
+      let score = Math.min(adj,hpPct(foe)) * (move.category === 'Physical' ? sty.phys : sty.spec);
       if (adj >= hpPct(foe)) score += KO_BONUS;
       return score * executionChance(gen,me,move,foe);
     }
@@ -288,7 +346,7 @@ export class TrainerAI {
   /** 쓰러져서 강제로 내보내야 할 때 — 누구를 내보낼지도 판단력이 관여한다 */
   chooseForcedSwitch(battle, sideId) {
     const side = battle[sideId];
-    const foe = this.opponent.view(battle,sideId === 'p1' ? 'p2' : 'p1',this.gen,this.stats,this.rng);
+    const foe = this.opponent.view(battle,sideId === 'p1' ? 'p2' : 'p1',this.gen,this.cognitiveStats(),this.rng);
     const opts = this.switchOptions(battle, sideId).map((opt) => {
       const bench = ownView(side.pokemon[opt.slot - 1]);
       let score = 0;

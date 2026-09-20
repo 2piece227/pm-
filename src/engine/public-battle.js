@@ -23,6 +23,7 @@ export class PublicBattle {
       if(record.transformed)record.moves=[];
       record.boosts={};record.volatiles={};record.toxicStage=0;record.transformed=false;record.forme=null;record.types=null;
       this.active[side]=key;this.records.set(key,record);
+      record.enteredTurn=this.turn;
       this.condition(record,p[4]);return;
     }
     const r=this.current(side);if(!r)return;

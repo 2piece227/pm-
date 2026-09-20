@@ -17,6 +17,9 @@ export function analyseBattle(result, context = {}) {
   for (const {turn,think:t} of rows) {
     const chosen = t.options[t.selected];
     if (!chosen) continue;
+    if(t.strategy?.switchProbability>.2&&Math.abs(chosen.predictionAdjustment||0)>5)observations.push({turn,kind:'planning',text:`상대 교체 가능성을 약 ${Math.round(t.strategy.switchProbability*100)}%로 추정해 ${t.strategy.targets.map(n=>ko(SPECIES_KO,n)).join(', ')} 대면도 고려했습니다. 확정 예측은 아닙니다.`});
+    if(chosen.preservationAdjustment>5)observations.push({turn,kind:'planning',text:'이미 확인한 상대 파티에 대응할 포켓몬을 남겨두는 가치를 교체 판단에 반영했습니다.'});
+    if(t.mentalReasons?.length)observations.push({turn,kind:'mental',text:`직전 상황: ${t.mentalReasons.join(', ')}. 멘탈 수치에 따라 판단 변동과 운영 평가에 영향을 줍니다.`});
     if(t.knowledge?.omitted?.length)observations.push({turn,kind:'focus',text:`확인했던 ${t.knowledge.omitted.map(m=>ko(MOVE_KO,m)).join(', ')}을 이번 판단에서 놓쳤습니다. 공개 기록은 유지됩니다.`});
     if(t.knowledge?.estimated?.length&&turn===rows[0]?.turn)observations.push({turn,kind:'knowledge',text:`아직 확인하지 않은 기술은 종족·레벨을 바탕으로 추정했습니다. 추정: ${t.knowledge.estimated.map(m=>ko(MOVE_KO,m)).join(', ')}. 실제 장착 기술로 확인된 것은 아닙니다.`});
     const label = ko(chosen.kind==='switch'?SPECIES_KO:MOVE_KO,chosen.label);

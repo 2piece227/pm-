@@ -15,6 +15,7 @@ const aa=createTrainerAI({name:'A',stats},'균형형',makeRng(8)),ab=createTrain
 assert.deepEqual(aa.chooseAction(a,'p1'),ab.chooseAction(b,'p1'),'hidden moves/item/ability/nature/EVs must not change AI decision');
 const enemy=b.p2.active[0];
 for(const field of ['moveSlots','ability','item','storedStats','set'])Object.defineProperty(enemy,field,{get(){throw new Error(`private read ${field}`);},configurable:true});
+for(const field of ['pokemon','active'])Object.defineProperty(b.p2,field,{get(){throw new Error(`private opponent roster read ${field}`);},configurable:true});
 ab.opponent.cache=null;assert.doesNotThrow(()=>ab.chooseAction(b,'p1'));
 a.destroy(); // b deliberately contains access traps: do not invoke engine cleanup on it.
 

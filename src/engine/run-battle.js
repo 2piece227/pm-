@@ -107,14 +107,19 @@ export function runBattle({ trainerA, trainerB, teamA, teamB, seed, collectThink
       }
     }
 
+    const logStart=battle.log.length;
+    const turnBefore=battle.turn;
     battle.makeChoices(choices.p1, choices.p2);
+    const outcome=battle.log.slice(logStart);
+    const completedTurn=battle.turn>turnBefore||outcome.some(l=>l.startsWith('|move|')||l.startsWith('|cant|'));
 
     /* 쓰러진 개체 수가 늘었으면 멘탈 스탯이 작동할 구간을 연다 */
     for (const side of SIDES) {
+      if(completedTurn)ai[side].endTurn(switchedThisTurn[side]);
+      ai[side].observeOutcome(outcome,side);
       const n = battle[side].pokemon.filter((p) => p.fainted).length;
       if (n > fainted[side]) ai[side].onFaint();
       fainted[side] = n;
-      ai[side].endTurn(switchedThisTurn[side]);
     }
   }
 

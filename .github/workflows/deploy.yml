@@ -33,6 +33,7 @@ jobs:
           node test/save-codec.mjs
           node test/ai-decisions.mjs
           node test/ai-knowledge.mjs
+          node test/ai-strategy.mjs
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
