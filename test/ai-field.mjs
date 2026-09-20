@@ -1,0 +1,40 @@
+import assert from 'node:assert/strict';
+import {Battle,Teams} from '@pkmn/sim';
+import {realDamagePct} from '../src/ai/estimate.js';
+const battle=new Battle({formatid:'gen9customgame',seed:[1,2,3,4]});
+battle.setPlayer('p1',{team:Teams.pack(Teams.import('Mew\n- Surf\n- Flamethrower\n- Psychic\n- Brick Break'))});
+battle.setPlayer('p2',{team:Teams.pack(Teams.import('Mew\n- Splash'))});
+battle.makeChoices('default','default');
+const a=battle.p1.active[0],b=battle.p2.active[0],gen=battle.dex;
+const estimate=id=>realDamagePct(gen,a,b,gen.moves.get(id));
+const surf=estimate('surf'),fire=estimate('flamethrower'),psychic=estimate('psychic'),brick=estimate('brickbreak');
+battle.field.weather='raindance';
+assert.equal(estimate('surf'),surf*1.5);assert.equal(estimate('flamethrower'),fire*.5);
+battle.field.weather='sunnyday';
+assert.equal(estimate('surf'),surf*.5);assert.equal(estimate('flamethrower'),fire*1.5);
+battle.field.weather='primordialsea';assert.equal(estimate('flamethrower'),0);
+battle.field.weather='desolateland';assert.equal(estimate('surf'),0);
+a.ability='cloudnine';assert.equal(estimate('surf'),surf);a.ability='synchronize';battle.field.weather='';
+b.side.sideConditions.lightscreen={};assert.equal(estimate('psychic'),psychic*.5);
+b.side.sideConditions.auroraveil={};assert.equal(estimate('psychic'),psychic*.5);
+assert.equal(estimate('brickbreak'),brick);
+a.ability='infiltrator';assert.equal(estimate('psychic'),psychic);a.ability='synchronize';
+assert.equal(realDamagePct(gen,a,b,{...gen.moves.get('psychic'),willCrit:true}),psychic);
+const fixed=gen.moves.get('seismictoss');assert.equal(realDamagePct(gen,a,b,fixed),a.level/b.maxhp*100);
+// Compare actual simulator damage under the same seeded roll, independently of AI formula.
+const actual=(id,weather='',screen=false)=>{
+ const sim=new Battle({formatid:'gen9customgame',seed:[11,12,13,14]});
+ sim.setPlayer('p1',{team:Teams.pack(Teams.import(`Mew\n- ${id}`))});
+ sim.setPlayer('p2',{team:Teams.pack(Teams.import('Mew\n- Splash'))});
+ sim.makeChoices('default','default');
+ sim.field.weather=weather;if(screen)sim.p2.sideConditions.lightscreen={};
+ const damage=sim.actions.getDamage(sim.p1.active[0],sim.p2.active[0],id);
+ sim.destroy();return damage;
+};
+assert(actual('surf','raindance')>actual('surf')*1.4);
+assert(actual('flamethrower','raindance')<actual('flamethrower')*.6);
+assert(actual('psychic','',true)<actual('psychic')*.6);
+const before=JSON.stringify(battle.toJSON());estimate('surf');assert.equal(JSON.stringify(battle.toJSON()),before);
+battle.destroy();
+console.log('PASS: weather, screens, no stacking, breakers, fixed damage, known suppression and simulator comparison');
+

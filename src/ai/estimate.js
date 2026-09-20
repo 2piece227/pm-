@@ -76,7 +76,27 @@ export function neutralDamagePct(attacker, defender, move) {
   const accuracyMod = accuracyStage >= 0 ? (3 + accuracyStage) / 3 : 3 / (3 - accuracyStage);
   const hitChance = move.accuracy === true || attacker.ability === 'noguard' || defender.ability === 'noguard'
     ? 1 : Math.min(1, acc * accuracyMod);
-  return (dmg * hits * hitChance * statusMod) / defender.maxhp * 100;
+  return (dmg * hits * hitChance * statusMod * fieldDamageMod(attacker,defender,move)) / defender.maxhp * 100;
+}
+
+/** Singles public-field estimate. No engine events or hidden ability queries. */
+export function fieldDamageMod(attacker,defender,move){
+  let mod=1;
+  const suppressed=[attacker.ability,defender.ability].some(a=>['cloudnine','airlock'].includes(a));
+  const weather=suppressed?'':attacker.battle.field.weather;
+  if(['raindance','primordialsea'].includes(weather)){
+    if(move.type==='Water')mod*=1.5;
+    if(move.type==='Fire')mod*=weather==='primordialsea'?0:.5;
+  }
+  if(['sunnyday','desolateland'].includes(weather)){
+    if(move.type==='Fire')mod*=1.5;
+    if(move.type==='Water')mod*=weather==='desolateland'?0:.5;
+  }
+  const screens=defender.side.sideConditions;
+  // Screen-breaking attacks remove the screen before damage; guaranteed crits ignore it.
+  if(attacker.ability!=='infiltrator'&&!move.willCrit&&!['brickbreak','psychicfangs','ragingbull'].includes(move.id)&&
+    (screens.auroraveil||(move.category==='Physical'?screens.reflect:screens.lightscreen)))mod*=.5;
+  return mod;
 }
 
 /** 상성까지 적용한 기대 데미지 — "남은 턴" 추정에 쓰는 객관적 값 */
