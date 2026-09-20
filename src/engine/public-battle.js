@@ -56,6 +56,10 @@ export class PublicBattle {
     if(type==='-boost'||type==='-unboost')r.boosts[p[3]]=Math.max(-6,Math.min(6,(r.boosts[p[3]]||0)+(type==='-boost'?1:-1)*Number(p[4])));
     if(type==='-setboost')r.boosts[p[3]]=Number(p[4]);
     if(type==='-clearboost')r.boosts={};
+    if(type==='-invertboost')for(const key of Object.keys(r.boosts))r.boosts[key]=-r.boosts[key];
+    if(type==='-clearnegativeboost'||type==='-clearpositiveboost')for(const key of Object.keys(r.boosts)){
+      if(type==='-clearnegativeboost'?r.boosts[key]<0:r.boosts[key]>0)r.boosts[key]=0;
+    }
     if(type==='-clearallboost')for(const v of this.records.values())v.boosts={};
     if(type==='-ability'){r.ability=publicId(p[3]);r.abilitySuppressed=false;}
     if(type==='-endability')r.abilitySuppressed=true;

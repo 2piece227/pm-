@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {Battle,Teams} from '@pkmn/sim';
+import {PublicBattle} from '../src/engine/public-battle.js';
+const book=new PublicBattle();book.push('|switch|p2a: Mew|Mew|100/100');
+book.push('|-boost|p2a: Mew|atk|2');book.push('|-unboost|p2a: Mew|def|1');
+book.push('|-invertboost|p2a: Mew|[from] move: Topsy-Turvy');
+assert.deepEqual(book.current('p2').boosts,{atk:-2,def:1});
+book.push('|-clearnegativeboost|p2a: Mew|[silent]');assert.deepEqual(book.current('p2').boosts,{atk:0,def:1});
+book.push('|-unboost|p2a: Mew|spe|2');book.push('|-clearpositiveboost|p2a: Mew');
+assert.deepEqual(book.current('p2').boosts,{atk:0,def:0,spe:-2});
+const battle=new Battle({formatid:'gen9customgame',seed:[1,2,3,4]});
+battle.setPlayer('p1',{team:Teams.pack(Teams.import('Mew\n- Splash\n- Topsy-Turvy'))});
+battle.setPlayer('p2',{team:Teams.pack(Teams.import('Mew\n- Swords Dance\n- Splash'))});
+battle.makeChoices('default','default');battle.makeChoices('move 1','move 1');
+const observed=new PublicBattle();observed.scan(battle.log);assert.equal(observed.current('p2').boosts.atk,2);
+battle.makeChoices('move 2','move 2');observed.scan(battle.log);
+assert.equal(observed.current('p2').boosts.atk,battle.p2.active[0].boosts.atk);assert.equal(observed.current('p2').boosts.atk,-2);
+battle.destroy();console.log('PASS: public boost inversion/selective reset and actual Topsy-Turvy match engine');
