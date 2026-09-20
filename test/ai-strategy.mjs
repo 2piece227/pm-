@@ -47,5 +47,7 @@ assert.equal(shaken.cognitiveStats().focus,shaken.stats.focus);
 calm.reset();assert.equal(calm.failureStreak,0);assert.equal(calm.shock,0);
 b.destroy();
 const trial=()=>runBattle({trainerA:createTrainerAI({name:'A',stats},'균형형',makeRng(7)),trainerB:createTrainerAI({name:'B',stats},'균형형',makeRng(8)),teamA:'Starmie\n- Surf\n- Recover',teamB:'Blissey\n- Thunderbolt\n- Soft-Boiled',seed:90,collectThink:true});
-assert.deepEqual(trial(),trial());
+// Wall-clock protocol timestamps are not seeded battle outcomes.
+const deterministicResult=()=>{const r=trial();return {...r,log:r.log.filter(line=>!line.startsWith('|t:|'))};};
+assert.deepEqual(deterministicResult(),deterministicResult());
 console.log('PASS: only publicly seen switches, bounded probabilities/branches, traps/hazards, specialist preservation, limited reply, mental events/recovery and deterministic engine');

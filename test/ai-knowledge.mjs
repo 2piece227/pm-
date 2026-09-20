@@ -61,7 +61,9 @@ assert(highPrior.moveSlots.every(s=>s.estimated&&!s.observed));priorBattle.destr
 
 const one=()=>runBattle({trainerA:createTrainerAI({name:'A',stats},'균형형',makeRng(4)),trainerB:createTrainerAI({name:'B',stats},'균형형',makeRng(5)),
  teamA:'Starmie\n- Surf\n- Recover',teamB:'Charizard\n- Flamethrower\n- Air Slash',seed:18,collectThink:true});
-const r1=one(),r2=one();assert.deepEqual(r1,r2);
+const r1=one(),r2=one();
+const withoutClock=r=>({...r,log:r.log.filter(line=>!line.startsWith('|t:|'))});
+assert.deepEqual(withoutClock(r1),withoutClock(r2));
 assert.deepEqual(r1.think.find(r=>r.side==='p1').think.knowledge.observed,[]);
 assert(r1.think.every(r=>!r.think.knowledge||r.think.knowledge.observed.length<=4));
 console.log('PASS: hidden-state noninterference/access traps, public split logs, moves/ability/item attribution, switch/Illusion, copied-move exclusion, focus lapses, chronological saved replay and deterministic battles');

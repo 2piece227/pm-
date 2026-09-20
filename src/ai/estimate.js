@@ -17,6 +17,7 @@
  * 검증: 올20 vs 올20 승률 62.6% -> 올20 vs 네임드(올25) 87.7% -> 올20 vs 네임드(올28) 93.2%.
  * 선형이던 v1~v2에서는 17~20 차이가 승률 5%p도 못 움직였다.
  */
+import {effectiveSpeed} from './speed.js';
 export const curve = (v) => 20 * Math.pow(Math.max(0, v) / 20, 1.8);
 
 /** curve() 기준 부족분/초과분의 비대칭 반응. 부족분은 그대로, 초과분은 gainDamp로 감쇠. */
@@ -49,7 +50,7 @@ export function neutralDamagePct(attacker, defender, move) {
   // Fixed damage ignores attack/defense; immunity still applies in combatEffect.
   if(move.damage==='level'||typeof move.damage==='number')
     return (move.damage==='level'?attacker.level:move.damage)/defender.maxhp*100;
-  const bp = estimatedPower(attacker, move) * (move.id === 'facade' && ['brn','par','psn','tox'].includes(attacker.status) ? 2 : 1);
+  const bp = estimatedPower(attacker, move, defender) * (move.id === 'facade' && ['brn','par','psn','tox'].includes(attacker.status) ? 2 : 1);
   if (!bp) return 0;
 
   const phys = move.category === 'Physical';
@@ -80,7 +81,13 @@ export function neutralDamagePct(attacker, defender, move) {
 }
 
 /** Public HP/boost-dependent power; never execute move callbacks during AI evaluation. */
-export function estimatedPower(attacker,move){
+export function estimatedPower(attacker,move,defender){
+  if(move.id==='electroball'&&defender){
+    const ratio=Math.floor(effectiveSpeed(attacker)/Math.max(1,effectiveSpeed(defender)));
+    return [40,60,80,120,150][Math.min(4,ratio)];
+  }
+  if(move.id==='gyroball'&&defender)
+    return Math.min(150,Math.floor(25*effectiveSpeed(defender)/Math.max(1,effectiveSpeed(attacker)))+1);
   if(['eruption','waterspout','dragonenergy'].includes(move.id))
     return Math.max(1,Math.floor(150*attacker.hp/attacker.maxhp));
   if(['storedpower','powertrip'].includes(move.id))
