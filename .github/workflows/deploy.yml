@@ -36,6 +36,7 @@ jobs:
           node test/ai-strategy.mjs
           node test/ai-field.mjs
           node test/ai-variable-power.mjs
+          node test/ai-lock-memory.mjs
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:

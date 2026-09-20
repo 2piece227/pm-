@@ -8,7 +8,14 @@ export class PublicBattle {
     if(this.skipPrivate){this.skipPrivate=false;return;}
     const p=String(raw).split('|'),type=p[1],side=p[2]?.slice(0,2);
     if(type==='split'){this.skipPrivate=true;return;}
-    if(type==='turn'){this.turn=Number(p[2]);return;}
+    if(type==='turn'){
+      this.turn=Number(p[2]);
+      // A rampage lasts at most three turns. Confusion can be prevented (Own Tempo),
+      // so its absence is not evidence of an indefinite lock. Never read hidden duration.
+      for(const r of this.records.values())if(r.volatiles.lockedmove&&
+        this.turn>r.volatiles.lockedmove.startedTurn+2)delete r.volatiles.lockedmove;
+      return;
+    }
     if(type==='-clearallboost'){for(const v of this.records.values())v.boosts={};return;}
     if(type==='poke'){const key=`${side}:${p[3]?.split(',')[0]}`;this.preview.set(key,(this.preview.get(key)||0)+1);return;}
     if(!['p1','p2'].includes(side))return;
@@ -35,7 +42,10 @@ export class PublicBattle {
         r.lastMove=publicId(p[3]);
       }
       const id=publicId(p[3]);
-      if(['outrage','thrash','petaldance'].includes(id))r.volatiles.lockedmove={move:id};
+      if(r.volatiles.lockedmove?.move!==id)delete r.volatiles.lockedmove;
+      // Called moves (e.g. Sleep Talk) do not establish an external-move lock.
+      if(['outrage','thrash','petaldance'].includes(id)&&!p.slice(4).some(s=>s.startsWith('[from]')))
+        r.volatiles.lockedmove??={move:id,startedTurn:this.turn};
     }
     if(['-damage','-heal','-sethp'].includes(type)){
       this.condition(r,p[3]);
