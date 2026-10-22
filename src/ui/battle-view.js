@@ -232,8 +232,12 @@ function drawHpBox(side, f) {
   st.stat.textContent = f.status || '';
   st.stat.dataset.st = f.statusCode || '';
   st.stat.style.visibility = f.status ? 'visible' : 'hidden';
-  st.boost.textContent = f.boosts || '';
-  st.boost.style.display = f.boosts ? '' : 'none';
+  /* 능력 변화는 원작처럼 평소엔 숨기고, Shift·확인 버튼을 꾹 누를 때만 보인다 (CSS .scene.peek) */
+  st.boost.innerHTML = f.boosts
+    ? f.boosts.split(' ').map((b) => { const m = /^(.+?)([+-])(\d)$/.exec(b); if (!m) return ''; const n = Number(m[3]);
+      return `<i class="${m[2] === '+' ? 'up' : 'down'}">${m[1]} ${(m[2] === '+' ? '▲' : '▼').repeat(n)}</i>`; }).join('')
+    : '<i class="none">능력 변화 없음</i>';
+  st.boost.style.display = '';
 
   /* 남은 포켓몬 수 — 실기처럼 몬스터볼 줄로 보여준다 */
   const total = f.total ?? 0;
@@ -281,6 +285,23 @@ export function drawField(field, names) {
   const scene = $('scene');
   if (scene) scene.dataset.weather = w || '';
   return Promise.all(pending);
+}
+
+/* ---------------- 특성 팝업 ---------------- */
+
+/** 5세대 이후 원작의 특성 표시 띠. 닫는 함수를 돌려준다 */
+function showAbilityPopup({ side, mon, ability }) {
+  const scene = $('scene');
+  if (!scene) return () => {};
+  scene.querySelectorAll(`.ab-pop.${side}`).forEach((e) => e.remove());
+  const el = document.createElement('div');
+  el.className = `ab-pop ${side}`;
+  el.innerHTML = `<small></small><b></b>`;
+  el.querySelector('small').textContent = `${mon}의`;
+  el.querySelector('b').textContent = ability;
+  scene.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('in'));
+  return () => { el.classList.remove('in'); setTimeout(() => el.remove(), 260); };
 }
 
 /* ---------------- 자막 박스 ---------------- */
@@ -756,6 +777,8 @@ export function resetScene() {
   drawSprite('p2', null);
   clearLog();
   say('');
+  $('scene')?.querySelectorAll('.ab-pop').forEach((e) => e.remove());
+  $('scene')?.classList.remove('peek');
 }
 
 /**
@@ -791,9 +814,13 @@ export async function playBattleLog(protocolLog, names, think = []) {
     if (apply && !deferred) apply();
 
     const s = spd();
+    /* 원작(5세대 이후)처럼 특성이 작동하면 그 포켓몬 쪽에 특성 팝업이 미끄러져 나온다 */
+    const pop = line.pop ? showAbilityPopup(line.pop) : null;
+    if (pop && s) await wait(420 / s);
     if (line.msg) await typeMessage(line.msg, token);
     await playAnim(line.anim, token, deferred ? apply : null);
     if (apply && !applied) await apply(); // 연출이 없거나 중단된 경우의 안전망
+    if (pop) { if (s && !line.msg) await wait(700 / s); pop(); }
 
     if (s) {
       /* 다 찍힌 자막을 읽을 시간. 실기의 "다음으로 넘기기" 대기에 해당 */

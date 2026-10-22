@@ -68,3 +68,23 @@
 .hpbox.foe .hpb-trainer{top:100%;left:18px;margin-top:3px;border-radius:0 0 9px 9px}
 .hpbox.me .hpb-trainer{bottom:100%;right:18px;margin-bottom:3px;border-radius:9px 9px 0 0;flex-direction:row-reverse;padding:2px 3px 2px 10px}
 @media(max-width:760px){.hpb-trainer{font-size:9px}.hpb-trainer em{display:none}.hpb-trainer .bt-sprite{width:16px;height:16px}}
+
+/* ---- 특성 팝업 (5세대 이후 원작의 특성 표시 띠) ---- */
+.ab-pop{position:absolute;z-index:5;min-width:150px;max-width:44%;padding:6px 16px 7px;display:flex;flex-direction:column;line-height:1.25;
+  background:linear-gradient(180deg,#f8f8f8,#dcdce4);color:#303038;border:3px solid #4a5068;box-shadow:inset 0 0 0 2px #fff,0 4px 0 rgba(0,0,0,.3);
+  transition:transform .22s ease-out,opacity .22s;opacity:0;pointer-events:none}
+.ab-pop small{font-size:11px;font-weight:800;color:#606070}
+.ab-pop b{font-size:17px;font-weight:900;letter-spacing:-.3px}
+.ab-pop.p2{right:0;top:30%;border-right:0;border-radius:12px 0 0 12px;transform:translateX(100%)}
+.ab-pop.p1{left:0;top:52%;border-left:0;border-radius:0 12px 12px 0;transform:translateX(-100%)}
+.ab-pop.in{transform:none;opacity:1}
+
+/* ---- 능력 변화: 평소엔 숨기고 꾹 누를 때만 ---- */
+.scene:not(.peek) .hpb-boost{display:none!important}
+.scene.peek .hpb-boost{display:flex!important;flex-wrap:wrap;gap:4px;margin-top:5px;padding:0;background:none}
+.hpb-boost i{font-style:normal;font-size:11px;font-weight:900;padding:2px 7px;border-radius:5px;color:#fff;text-shadow:none}
+.hpb-boost i.up{background:#2f8f6a}.hpb-boost i.down{background:#b0464a}.hpb-boost i.none{background:#6a6f78}
+.scene.peek .hpbox{box-shadow:inset 0 0 0 2px #fffff4,0 0 0 3px #f8c840,0 4px 0 rgba(0,0,0,.28)}
+#watch-peek{user-select:none;-webkit-user-select:none;touch-action:none}
+#watch-peek:active{background:var(--accent);color:#0f2620}
+@media(max-width:760px){.ab-pop{min-width:110px;padding:4px 10px}.ab-pop b{font-size:13px}}

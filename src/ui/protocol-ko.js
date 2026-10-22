@@ -12,7 +12,7 @@
 import {
   ABILITY_KO, BOOST_KO, CANT_MSG, ITEM_KO, MOVE_KO, MOVE_TYPE, SPECIES_KO, SPECIES_TYPES,
   STATUS_BADGE, STATUS_KO, STATUS_MSG, STATUS_TICK, WEATHER_MSG, CURE_MSG, ko,
-  eunNeun, eulReul, iGa,
+  eunNeun, eulReul, iGa, euro,
 } from '../data/ko.js';
 import { animArchetype } from '../data/move-anim.js';
 import {PublicBattle} from '../engine/public-battle.js';
@@ -79,6 +79,24 @@ function fromSource(parts) {
   if (!raw) return null;
   return raw.replace('[from]', '').trim().replace(/^(ability|item|move):\s*/, '');
 }
+
+/** `[from] ability: X` 와 그 주인(`[of]`, 없으면 줄의 대상) */
+function abilitySource(parts) {
+  const raw = parts.find((p) => p.startsWith('[from] ability:'));
+  if (!raw) return null;
+  const of = parts.find((p) => p.startsWith('[of]'));
+  return { ability: raw.replace('[from] ability:', '').trim(), owner: parseIdent(of ? of.replace('[of]', '').trim() : parts[1]) };
+}
+const isBerry = (item) => /Berry$/.test(item || '');
+
+/* 원작처럼 특성 팝업만 뜨고 자막이 따로 붙는 특성 알림 (그 외는 팝업만) */
+const ABILITY_ANNOUNCE = {
+  Pressure: (n) => `${eunNeun(n)} 프레셔를\n발휘하고 있다!`,
+  Unnerve: () => '상대는 긴장해서\n나무열매를 먹을 수 없게 되었다!',
+  'Air Lock': () => '날씨의 영향이 없어졌다!',
+  'Cloud Nine': () => '날씨의 영향이 없어졌다!',
+  'Mold Breaker': (n) => `${eunNeun(n)} 틀깨기다!`,
+};
 
 /* ---------------- 본체 ---------------- */
 
@@ -169,6 +187,7 @@ export function toKoreanLog(protocolLog, names, think = []) {
       continue;
     }
     knowledge.push(raw);
+    const abSrc = type === '-ability' ? null : abilitySource(parts);
 
     switch (type) {
       case 'teamsize': {
@@ -255,9 +274,15 @@ export function toKoreanLog(protocolLog, names, think = []) {
           const w = WEATHER_MSG[src];
           if (w && w.damage) msg = w.damage(eulReul(name));
           else if (STATUS_TICK[src]) msg = STATUS_TICK[src](eunNeun(name));
-          else if (src === 'Leftovers') msg = `${eunNeun(name)} 남은음식으로\n체력을 회복했다!`;
-          else if (src === 'Life Orb') msg = `${eunNeun(name)} 생명의구슬로\n데미지를 입었다!`;
-          else {
+          else if (parts.some((p) => p.startsWith('[from] item:'))) {
+            const item = ko(ITEM_KO, src);
+            if (src === 'Life Orb') msg = `${name}의\n생명이 조금 깎였다!`;
+            else if (type === '-heal' && isBerry(src)) msg = `${eunNeun(name)} ${eulReul(item)} 먹고\nHP를 회복했다!`;
+            else if (type === '-heal') msg = `${eunNeun(name)} ${euro(item)}\n조금 회복했다!`;
+            else msg = `${eunNeun(name)} ${item} 때문에\n데미지를 입었다!`;
+          } else if (parts.some((p) => p.startsWith('[from] ability:'))) {
+            msg = type === '-heal' ? `${eunNeun(name)}\n체력을 회복했다!` : `${eunNeun(name)}\n데미지를 입었다!`;
+          } else {
             const label = ko(ABILITY_KO, ko(ITEM_KO, ko(MOVE_KO, src)));
             msg = delta > 0
               ? `${eunNeun(name)} ${label}(으)로\n체력을 회복했다!`
@@ -360,9 +385,12 @@ export function toKoreanLog(protocolLog, names, think = []) {
         push('l-sub', '  하지만 빗나갔다!', { noField: true, msg: `하지만 ${monKo(id)}에게는\n맞지 않았다!` });
         break;
       }
-      case '-fail':
+      case '-fail': {
+        const ab = abilitySource(parts);
+        if (ab && parts[2] === 'unboost') { push('l-sub', '  능력 하락 막음', { noField: true, msg: `${monKo(parseIdent(parts[1]))}의 능력은\n떨어지지 않는다!` }); break; }
         push('l-sub', '  하지만 실패했다!', { noField: true, msg: '하지만 실패했다!' });
         break;
+      }
 
       case '-boost':
       case '-unboost': {
@@ -423,19 +451,49 @@ ${ko(STATUS_KO, st)} 상태가 되었다!`,
         const id = parseIdent(parts[1]);
         const ab = ko(ABILITY_KO, parts[2]);
         const name = monKo(id);
-        /* 5세대 실기는 특성을 자막으로 알린다 — 별도 팝업 박스가 아니다 */
-        push('l-gold', `  ${name}의 ${ab}!`, {
-          msg: `${name}의\n${ab}!`,
+        /* 5세대 이후 원작: 특성 팝업이 포켓몬 옆에 뜨고, 효과 자막은 다음 줄(능력 하락 등)이 맡는다 */
+        const line = push('l-gold', `  ${name}의 ${ab}!`, {
+          msg: ABILITY_ANNOUNCE[parts[2]] ? ABILITY_ANNOUNCE[parts[2]](name) : null,
           anim: { k: 'ability', side: id.side, ability: ab, mon: name },
         });
+        line.pop = { side: id.side, mon: name, ability: ab };
         break;
       }
 
       case '-enditem': {
         const id = parseIdent(parts[1]);
+        const en = parts[2], item = ko(ITEM_KO, en);
+        const name = monKo(id);
+        const from = parts.find((p) => p.startsWith('[from]')) || '';
+        const of = parseIdent((parts.find((p) => p.startsWith('[of]')) || '').replace('[of]', '').trim());
+        if (parts.includes('[silent]')) break;
+        let msg;
+        if (parts.includes('[eat]')) {
+          /* 다음 줄이 같은 열매의 회복이면 그쪽에서 "먹고 회복했다"로 한 번에 말한다 */
+          const next = lines.slice(i + 1, i + 3).join('\n');
+          msg = next.includes(`[from] item: ${en}`) ? null : `${eunNeun(name)} ${eulReul(item)}\n먹었다!`;
+        } else if (/stealeat/.test(from)) msg = `${eunNeun(monKo(of))} ${name}의\n${eulReul(item)} 빼앗아 먹었다!`;
+        else if (/Knock Off/.test(from)) msg = `${eunNeun(monKo(of))} ${name}의\n${eulReul(item)} 탁쳐서 떨어뜨렸다!`;
+        else if (/gem/.test(from)) msg = `${euro(item)}\n기술의 위력이 올라갔다!`;
+        else if (en === 'Focus Sash') msg = `${eunNeun(name)} 기합의띠로\n버텼다!`;
+        else if (en === 'Air Balloon') msg = `${name}의 풍선이\n터져 버렸다!`;
+        else if (en === 'White Herb') msg = `${eunNeun(name)} 하양허브로\n능력을 원래대로 되돌렸다!`;
+        else if (en === 'Mental Herb') msg = `${eunNeun(name)} 멘탈허브로\n원래 상태로 돌아왔다!`;
+        else msg = `${eunNeun(name)} ${eulReul(item)}\n사용했다!`;
+        push('l-gold', `  ${name} ${item} 소모`, { msg, noField: !msg });
+        break;
+      }
+
+      case '-item': {
+        const id = parseIdent(parts[1]);
         const item = ko(ITEM_KO, parts[2]);
         const name = monKo(id);
-        push('l-gold', `  ${name} ${item} 소모`, { msg: `${name}의 ${iGa(item)}\n없어졌다!` });
+        const ab = abilitySource(parts);
+        let msg;
+        if (parts[2] === 'Air Balloon') msg = `${eunNeun(name)} 풍선으로\n떠 있다!`;
+        else if (ab?.ability === 'Frisk') msg = `${eunNeun(monKo(ab.owner))} ${name}의\n${eulReul(item)} 통찰했다!`;
+        else msg = `${eunNeun(name)} ${eulReul(item)}\n손에 넣었다!`;
+        push('l-gold', `  ${name} ${item}`, { msg });
         break;
       }
 
@@ -482,9 +540,22 @@ ${ko(STATUS_KO, st)} 상태가 되었다!`,
 
       case '-activate': {
         const id = parseIdent(parts[1]);
-        const what = (parts[2] || '').replace(/^(move|ability):\s*/, '');
+        const rawWhat = parts[2] || '';
+        const what = rawWhat.replace(/^(move|ability|item):\s*/, '');
+        const name = monKo(id);
+        if (rawWhat.startsWith('ability:')) {
+          const ab = ko(ABILITY_KO, what);
+          const line = push('l-sub', `  ${name} ${ab}`, { msg: what === 'Sturdy' ? `${eunNeun(name)}\n공격을 버텼다!` : null, noField: true });
+          line.pop = { side: id.side, mon: name, ability: ab };
+          break;
+        }
+        if (rawWhat.startsWith('item:')) {
+          const item = ko(ITEM_KO, what);
+          push('l-sub', `  ${name} ${item}`, { noField: true, msg: what === 'Focus Band' ? `${eunNeun(name)} 기합의머리띠로\n버텼다!` : what === 'Quick Claw' ? `${eunNeun(name)} 선제공격손톱으로\n행동이 빨라졌다!` : `${name}의\n${item}!` });
+          break;
+        }
         const label = ko(ABILITY_KO, ko(MOVE_KO, what));
-        push('l-sub', `  ${monKo(id)} ${label}`, { msg: `${monKo(id)}의\n${label}!` });
+        push('l-sub', `  ${name} ${label}`, { msg: `${name}의\n${label}!` });
         break;
       }
 
@@ -541,6 +612,11 @@ ${ko(STATUS_KO, st)} 상태가 되었다!`,
 
       default:
         break;
+    }
+
+    /* 원작처럼 특성이 작동한 줄에는 그 주인 쪽에 특성 팝업을 띄운다 */
+    if (abSrc?.owner && out.length > mark && !out[mark].pop) {
+      out[mark].pop = { side: abSrc.owner.side, mon: monKo(abSrc.owner), ability: ko(ABILITY_KO, abSrc.ability) };
     }
 
     if (out.length > mark) {

@@ -20,11 +20,20 @@ export function watchGymMatch(match) {
     const ambience=mountBattleAmbience($('scene'),match);
     let closed=false;
     const close=()=>{
-      if(closed)return;closed=true;analysisPanel.remove();ambience.dispose();stopPlayback();sfx.stopAll();overlay.hidden=true;app.inert=false;
+      if(closed)return;closed=true;analysisPanel.remove();ambience.dispose();peekOff();document.removeEventListener('keyup',keyUp);window.removeEventListener('blur',peekOff);scene.onpointerdown=scene.onpointerup=scene.onpointerleave=scene.onpointercancel=null;stopPlayback();sfx.stopAll();overlay.hidden=true;app.inert=false;
       document.removeEventListener('keydown',key);resolve();
     };
-    const key=e=>{if(e.key==='Escape'){e.preventDefault();close();}};
-    document.addEventListener('keydown',key);
+    /* 능력 변화 확인: Shift 또는 버튼·HP 박스를 꾹 누르는 동안만 */
+    const scene=$('scene'),peekOn=()=>scene.classList.add('peek'),peekOff=()=>scene.classList.remove('peek');
+    const key=e=>{if(e.key==='Escape'){e.preventDefault();close();}else if(e.key==='Shift')peekOn();};
+    const keyUp=e=>{if(e.key==='Shift')peekOff();};
+    document.addEventListener('keydown',key);document.addEventListener('keyup',keyUp);window.addEventListener('blur',peekOff);
+    const peekBtn=$('watch-peek');
+    peekBtn.onpointerdown=e=>{e.preventDefault();peekOn();};peekBtn.onpointerup=peekBtn.onpointerleave=peekBtn.onpointercancel=peekOff;
+    peekBtn.oncontextmenu=e=>e.preventDefault();
+    let hold=0;
+    scene.onpointerdown=e=>{if(!e.target.closest('.hpbox'))return;hold=setTimeout(peekOn,280);};
+    scene.onpointerup=scene.onpointerleave=scene.onpointercancel=()=>{clearTimeout(hold);peekOff();};
     $('watch-close').onclick=close;
     $('watch-pause').onclick=()=>{const paused=setPaused(!isPaused());ambience.setPaused(paused);$('watch-pause').textContent=paused?'▶ 재개':'⏸ 일시정지';};
     const safe=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
