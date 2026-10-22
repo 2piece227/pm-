@@ -16,6 +16,7 @@ export async function challengeGym(game, trainer, gymId) {
   const gym=gymById(gymId), agency=agencyOf(game);
   if(!gym||!agency.roster.includes(trainer)||!trainer.party.length) throw new Error('도전할 체육관과 트레이너를 확인하세요.');
   if(trainer.lastGymDay===game.day) throw new Error('관장전은 하루 한 번 도전합니다.');
+  if((trainer.badges||[]).includes(gym.id)) throw new Error(`이미 ${gym.badge}를 가지고 있어 다시 도전할 수 없습니다.`);
   const seed=Math.floor(game.rng()*0x7fffffff), rng=makeRng(seed);
   const party=[];
   const gen=Dex.forGen(gym.region==='kanto'?3:4);

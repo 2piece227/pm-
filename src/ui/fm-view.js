@@ -42,6 +42,8 @@ import { renderBattleAnalysis } from './battle-analysis.js';
 import { regionalRanking } from '../engine/regional-ranking.js';
 import { UPDATE_NOTES } from '../data/update-notes.js';
 import { SEASON } from '../data/season.js';
+import { fixturesOf, upcomingFixture } from '../engine/gym-fixtures.js';
+import { gymById } from '../data/gyms.js';
 import { fatigueOf } from '../engine/pokemon-management.js';
 
 const $ = (id) => document.getElementById(id);
@@ -143,6 +145,10 @@ function inboxItems() {
   }
   /* 배정이 이어지니 지친 트레이너를 알려준다 — 쉬게 하는 건 대표의 판단 */
   for (const t of playerRoster(game)) if ((t.fatigue||0) >= 70 && parseExplore(game.actions[t.id])) out.push({ key:`tired-${t.id}-${game.day}`, day:game.day, needsDecision:true, title:`${t.name}에게 휴식이 필요합니다`, body:`피로가 ${Math.round(t.fatigue)}까지 쌓여 실력이 떨어지고 있습니다. 탐험 배정은 바꿀 때까지 매일 이어지니, 트레이너 화면이나 지도에서 하루 쉬게 해주세요.` });
+  for (const f of fixturesOf(game)) if (f.status==='booked' && f.day-game.day<=1) {
+    const t=playerRoster(game).find(x=>x.id===f.trainerId), g=gymById(f.gymId);
+    if (t&&g) out.push({ key:`fx-${f.id}-${game.day}`, day:game.day, title:`${f.day===game.day?'오늘':'내일'} ${t.name} vs ${g.name} 관장전`, body:`${gameDate(f.day)}에 ${g.name} 체육관에서 경기가 열립니다. 그날은 탐험 대신 관장전을 치르고, 끝나면 관전이 열립니다.` });
+  }
   /* 오늘 배정이 비어 있으면 알려준다 — FM의 "할 일" 메시지 */
   const todayCup=cupToday(game),todayEntrants=todayCup?cupEntrants(game,todayCup):[];
   const competing=new Set(todayEntrants.length>=2?todayEntrants.map(t=>t.id):[]);
@@ -195,6 +201,11 @@ function upcomingCups(n) { return [...ensureSeason(game).events].filter(e=>e.sta
 function renderNextUp(needsFirst) {
   if (needsFirst) return `<section class="next-match"><div class="kicker">FIRST STEP</div><h2>첫 유스 계약부터 하자</h2><p>스카우팅에서 후보와 조건을 맞춰 봐. 계약하면 첫 파트너를 고르고 레벨 5부터 같이 키워.</p><div class="actions"><button data-nav="scouting">후보 살펴보기 →</button></div></section>`;
   const e = upcomingCups(1)[0];
+  const fx = fixturesOf(game).filter(f=>f.status==='booked').sort((a,b)=>a.day-b.day)[0];
+  if (fx && (!e || fx.day <= e.date)) {
+    const g=gymById(fx.gymId), t=playerRoster(game).find(x=>x.id===fx.trainerId);
+    return `<section class="next-match"><div class="dday"><small>${fx.day===game.day?'TODAY':'D-DAY'}</small>${fx.day===game.day?'오늘':`D-${fx.day-game.day}`}</div><div class="kicker">NEXT GYM MATCH · ${g.region==='kanto'?'관동':'성도'} ${g.order}번째</div><h2>${esc(t?.name||'')} vs ${g.name}</h2><p>${gameDate(fx.day)} · ${g.badge}이 걸린 관장전</p><p>관장 파티 ${g.party.map(p=>`${K(p.species)} Lv.${p.level}`).join(' · ')}</p><div class="actions"><button data-nav="gyms">체육관 순회 →</button><button class="ghost" data-nav="map">오늘 활동 배정</button></div></section>`;
+  }
   if (e) {
     const open = game.day >= e.openDay && game.day <= e.deadline;
     const mine = playerRoster(game).filter(t=>e.registrations.includes(t.id)).map(t=>t.name);
@@ -405,12 +416,15 @@ function renderMap() {
 function scheduledAction(t) {
   if(t.camp)return `캠프 · ${t.camp.remaining}일 남음`;
   const e=game.competitions?.events.find(e=>e.date===game.day&&e.status==='scheduled'&&e.registrations.includes(t.id));
-  return e&&cupEligible(t,e)?e.name+' 참가':describeAction(game.actions[t.id]);
+  if(e&&cupEligible(t,e))return e.name+' 참가';
+  const fx=upcomingFixture(game,t.id);
+  if(fx?.day===game.day)return `${gymById(fx.gymId)?.name} 체육관 관장전 · 자동 관전`;
+  return describeAction(game.actions[t.id])+(fx?` · ${fx.day-game.day}일 뒤 ${gymById(fx.gymId)?.name} 관장전`:'');
 }
 function renderSchedule() {
   const roster = playerRoster(game);
   return `<div class="page-h"><div><div class="eyebrow">OPERATIONS CALENDAR</div><h2>활동 일정</h2></div><span class="muted">오늘의 배정과 주간 정산</span></div>
-    <div class="week-calendar">${Array.from({length:7},(_,i)=>game.day+i).map(day=>`<section class="calendar-day ${day===game.day?'today':''}"><small>${day===game.day?'오늘':`${day-game.day}일 후`}</small><h3>${gameDate(day)}</h3>${day===game.day?roster.map(t=>`<p><b>${esc(t.name)}</b><br>${esc(scheduledAction(t))}</p>`).join(''):'<p class="muted">활동 미배정</p>'}${(game.competitions?.events||[]).filter(e=>e.date===day||e.deadline===day).map(e=>`<p class="pill">${e.name} · ${e.date===day?'개최':'등록 마감'}</p>`).join('')}${day%7===0?'<span class="pill">주급 지급일</span>':''}</section>`).join('')}</div>
+    <div class="week-calendar">${Array.from({length:7},(_,i)=>game.day+i).map(day=>`<section class="calendar-day ${day===game.day?'today':''}"><small>${day===game.day?'오늘':`${day-game.day}일 후`}</small><h3>${gameDate(day)}</h3>${day===game.day?roster.map(t=>`<p><b>${esc(t.name)}</b><br>${esc(scheduledAction(t))}</p>`).join(''):'<p class="muted">활동 미배정</p>'}${fixturesOf(game).filter(f=>f.status==='booked'&&f.day===day).map(f=>`<p class="pill fixture-pill">관장전 · ${esc(playerRoster(game).find(t=>t.id===f.trainerId)?.name||'')} vs ${gymById(f.gymId)?.name}</p>`).join('')}${(game.competitions?.events||[]).filter(e=>e.date===day||e.deadline===day).map(e=>`<p class="pill">${e.name} · ${e.date===day?'개최':'등록 마감'}</p>`).join('')}${day%7===0?'<span class="pill">주급 지급일</span>':''}</section>`).join('')}</div>
     <section class="card" style="margin-top:22px"><div class="section-heading"><h3>오늘의 활동 지시</h3><button data-nav="map">목적지 선택 →</button></div><p class="muted">하루 6~8회의 활동을 배정합니다. 센터 방문도 활동에 포함되며, 배정하지 않은 트레이너와 포켓몬은 휴식하며 회복합니다.</p>${roster.map(t=>`<div class="assignment"><span class="avatar">${esc(t.name[0])}</span><div><b>${fatigueIcon(t)} ${esc(t.name)}</b><p>${esc(scheduledAction(t))}</p></div></div>`).join('')}</section>
     <section class="card" style="margin-top:22px"><h3>지난 활동</h3>${game.log.slice(0,7).map(rep=>`<div class="assignment"><b>${gameDate(rep.day)}</b><span class="muted">${rep.explored.map(r=>`${esc(r.name)} · ${esc(r.location)}`).join(' / ') || ((rep.cupId||rep.youthCupId)?'대회 및 소속사 운영':'휴식 및 소속사 운영')} · 수지 ${rep.net>=0?'+':''}${won(rep.net)}</span></div>`).join('') || '<p class="muted">아직 완료한 활동이 없습니다.</p>'}</section>`;
 }

@@ -21,6 +21,7 @@ import { explore } from './explore.js';
 import { healParty } from './field-state.js';
 import { tickTraining, MANAGEMENT } from './pokemon-management.js';
 import { challengeGym } from './gyms.js';
+import { todaysFixture, cancelFixture, pruneFixtures } from './gym-fixtures.js';
 import { gymById } from '../data/gyms.js';
 import { badgeProgress } from './gym-progress.js';
 import { locationById } from '../data/routes.js';
@@ -327,10 +328,25 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
   const myEntrants = [];
   for (const t of player.roster) {
     if(t.camp){const text=tickCamp(t);(report.camps??=[]).push(text);league.newsFeed.unshift({day:game.day,kind:'personnel',text});await onProgress({id:`trainer-${t.id}`,state:'done',label:t.name,detail:text});continue;}
+    const fixture=todaysFixture(game,t.id);
     if(cupIds.has(t.id)&&cupIds.size>=2){
+      if(fixture)cancelFixture(game,fixture.id,'대회 출전');
       t.lastAction=youthCup.name+' 참가';
       await onProgress({id:`trainer-${t.id}`,state:'done',label:t.name,detail:youthCup.name+' 참가 · 오늘의 다른 활동 대신 출전'});
       continue;
+    }
+    /* 잡아 둔 관장전이 오늘이면 탐험 대신 치른다 — 탐험 배정은 그대로 두고 내일 이어진다 */
+    if(fixture){
+      if(pwtBreak(game)||(t.badges||[]).includes(fixture.gymId)){cancelFixture(game,fixture.id,pwtBreak(game)?'PWT 휴회':'이미 배지 보유');}
+      else{
+        await onProgress({ id: `trainer-${t.id}`, state: 'running', label: t.name, detail: `${gymById(fixture.gymId)?.name} 관장전` });
+        t.lastAction=`gym:${fixture.gymId}`;
+        const match=await challengeGym(game,t,fixture.gymId);
+        fixture.status='played';fixture.matchId=match.id;fixture.won=match.won;
+        (report.gyms??=[]).push(match);
+        await onProgress({id:`trainer-${t.id}`,state:'done',label:`${t.name} · 체육관 도전 완료`,detail:'이어서 관장전 관전을 시작합니다.'});
+        continue;
+      }
     }
     let action = game.actions[t.id] || 'rest';
     if(action==='pwt-study'&&!pwtBreak(game)){delete game.actions[t.id];action='rest';}
@@ -354,6 +370,7 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
       (report.camps??=[]).push(text);healParty(t);
       await onProgress({id:`trainer-${t.id}`,state:'done',label:t.name,detail:text});continue;
     }
+    if(action.startsWith('gym:')&&(t.badges||[]).includes(action.slice(4))) action='rest';   // 예전 저장의 중복 도전 배정
     if(action.startsWith('gym:')&&!pwtBreak(game)) {
       const match=await challengeGym(game,t,action.slice(4));
       (report.gyms??=[]).push(match);
@@ -472,6 +489,7 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
 
   game.day++;
   clearActions(game);
+  pruneFixtures(game);
   game.lastReport = report;
   game.log.unshift(report);
   if (game.log.length > 60) game.log.pop();

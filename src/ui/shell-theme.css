@@ -146,3 +146,97 @@ button.ghost{border-radius:10px}
 .pixel-item{image-rendering:pixelated;width:36px;height:36px;background:none!important;border:0!important}
 .ov{background:radial-gradient(ellipse at 70% 15%,rgba(164,147,255,.25),transparent 55%),linear-gradient(180deg,rgba(11,13,21,.8),rgba(11,13,21,.95)),var(--backdrop,none) center 30%/cover no-repeat,#0b0d15;image-rendering:pixelated}.ov h1,.ov .ov-h{font-weight:900;letter-spacing:-1px}
 @media(max-width:760px){.app .topbar .tb-info{order:3;flex:1 1 100%;width:100%;flex-wrap:nowrap;justify-content:space-between;margin:0}.tb-club b{font-size:15px}}
+
+/* ---- 체육관 순회: 일정 신청형 ---- */
+.gym-trainers{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.gym-trainer-chip{display:grid;grid-template-columns:auto 1fr;gap:0 8px;align-items:center;text-align:left;padding:10px 14px;border-radius:14px;border:1px solid var(--rim)!important;background:var(--glass)!important;color:var(--ink)!important;min-width:170px}
+.gym-trainer-chip .fatigue{grid-row:span 2}
+.gym-trainer-chip b{font-size:13px}.gym-trainer-chip small{font-size:10px;color:var(--sub)}
+.gym-trainer-chip.on{border-color:var(--accent)!important;background:linear-gradient(135deg,rgba(97,219,194,.2),rgba(164,147,255,.08))!important;box-shadow:0 0 18px rgba(97,219,194,.15)}
+.gym-top{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:16px}
+.badge-row{display:flex;align-items:center;gap:6px;padding:6px 0}
+.badge-row>span{width:34px;font-size:11px;color:var(--sub);font-weight:700}
+.badge-img{width:32px;height:32px;object-fit:contain;filter:drop-shadow(0 2px 0 rgba(0,0,0,.35))}
+.badge-img.missing{filter:grayscale(1) brightness(.35);opacity:.55}
+.fixture-row,.history-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line2)}
+.fixture-row:first-of-type,.history-row:first-of-type{border-top:0}
+.fixture-row div,.history-row div{flex:1;min-width:0}
+.fixture-row b,.history-row b{display:block;font-size:13px}
+.fixture-row small,.history-row small{color:var(--sub);font-size:11px}
+.fixture-row .dd{font-weight:900;color:var(--accent);font-variant-numeric:tabular-nums}
+.fixture-row button,.history-row button{padding:5px 10px;font-size:11px}
+.history-row .result{width:26px;height:26px;display:grid;place-items:center;border-radius:8px;font-weight:900;font-size:12px;color:#0c1a16}
+.history-row .result.w{background:#73dfb4}.history-row .result.l{background:#ff8f93}
+.gym-layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;margin-bottom:16px;align-items:start}
+.gym-region-tabs{display:flex;gap:8px;margin-bottom:10px}
+.gym-region-tabs button{padding:8px 16px;border-radius:10px;font-weight:800}
+.gym-list{display:flex;flex-direction:column;gap:8px}
+.gym-row{display:grid;grid-template-columns:40px minmax(0,1.1fr) minmax(0,1fr) auto auto;align-items:center;gap:12px;padding:12px 14px;border-radius:16px;background:var(--glass);border:1px solid var(--rim)}
+.gym-row.picked{border-color:var(--accent);box-shadow:0 0 18px rgba(97,219,194,.15)}
+.gym-row.badge{opacity:.62}
+.gym-row .badge-img{width:36px;height:36px}
+.gym-info b{display:block;font-size:14px}.gym-info b small{font-size:11px;color:var(--sub);font-weight:500}
+.gym-info>small{font-size:11px;color:var(--sub)}
+.gym-party-mini{display:flex;gap:2px}
+.gym-party-mini span{position:relative}
+.gym-party-mini img{width:40px;height:40px}
+.gym-party-mini small{position:absolute;right:0;bottom:0;font-size:9px;font-weight:800;background:rgba(0,0,0,.55);padding:0 3px;border-radius:4px}
+.gym-state{font-size:11px;font-weight:800;padding:4px 9px;border-radius:999px;white-space:nowrap;background:rgba(255,255,255,.06);color:var(--sub)}
+.gym-state.open{color:var(--accent);background:rgba(97,219,194,.12)}
+.gym-state.badge{color:var(--gold);background:rgba(240,201,110,.12)}
+.gym-state.booked{color:var(--violet);background:rgba(164,147,255,.15)}
+.gym-row>button{padding:8px 14px;border-radius:10px;font-weight:800;white-space:nowrap}
+.booking{position:sticky;top:0;padding:20px}
+.booking h3{font-size:17px;font-weight:900;margin:6px 0}
+.booking h4{margin:16px 0 8px;font-size:12px}
+.booking label{display:block;font-size:11px;color:var(--sub);margin-top:14px}
+.booking select{display:block;width:100%;margin-top:6px;padding:8px;border-radius:10px;background:rgba(0,0,0,.25);color:var(--ink);border:1px solid var(--line)}
+.booking-party{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.booking-party>div{text-align:center;background:rgba(255,255,255,.04);border-radius:10px;padding:4px 6px}
+.booking-party img{width:48px;height:48px}.booking-party b,.booking-party small{display:block;font-size:10px}.booking-party small{color:var(--sub)}
+.day-chips{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px}
+.day-chip{display:flex;flex-direction:column;align-items:center;padding:7px 4px;border-radius:10px;border:1px solid var(--line2)!important;background:rgba(255,255,255,.04)!important;color:var(--ink)!important}
+.day-chip small{font-size:9px;color:var(--sub)}.day-chip b{font-size:11px}.day-chip i{font-style:normal;font-size:9px;color:var(--red)}
+.day-chip.on{border-color:var(--accent)!important;background:rgba(97,219,194,.2)!important}
+.booking-actions{display:flex;gap:8px;margin:16px 0 8px}
+.booking-actions button{flex:1;padding:10px;border-radius:10px;font-weight:800}
+.howto{padding-left:18px;line-height:1.9;font-size:12px;color:#c3ccdb}
+@media(max-width:1100px){.gym-layout,.gym-top{grid-template-columns:1fr}.booking{position:static}.gym-row{grid-template-columns:36px minmax(0,1fr) auto;}.gym-party-mini{display:none}.gym-row>button{grid-column:2/-1}}
+
+/* ---- 포켓몬 관리 · 기술 선택 v2 ---- */
+.pokemon-dialog{width:min(1000px,95vw);background:rgba(17,21,33,.96);border:1px solid var(--rim);border-radius:20px;padding:24px 26px 0}
+.pokemon-dialog .pokemon-heading{margin-bottom:10px}
+.moves-v2{display:grid;grid-template-columns:290px minmax(0,1fr);gap:18px;margin-top:6px}
+.moves-v2 h4{margin:0 0 10px;font-size:13px;font-weight:800}.moves-v2 h4 small{color:var(--sub);font-weight:500;margin-left:6px}
+.equipped{display:flex;flex-direction:column;gap:8px}
+.eq-slot{display:grid;grid-template-columns:22px auto 1fr;grid-template-rows:auto auto;gap:2px 8px;align-items:center;text-align:left;padding:10px 12px;border-radius:14px;border:1px solid var(--line2)!important;background:rgba(255,255,255,.04)!important;color:var(--ink)!important}
+.eq-slot .slot-no{grid-row:span 2;font-weight:900;color:var(--sub)}
+.eq-slot .move-type{min-width:44px;padding:3px 6px}
+.eq-slot b{font-size:13px}.eq-slot b.empty{grid-column:2/-1;color:var(--sub)}
+.eq-slot small{grid-column:2/-1;font-size:10px;color:var(--sub)}
+.eq-slot.selected{border-color:var(--accent)!important;background:rgba(97,219,194,.14)!important;box-shadow:0 0 16px rgba(97,219,194,.15)}
+.learn-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+.learn-head h4{margin:0}
+.pokemon-dialog .learn-head input{max-width:220px;margin:0;padding:7px 10px;border-radius:10px}
+.move-table{width:100%;border-collapse:collapse;font-size:12px}
+.move-table th{position:sticky;top:-24px;background:rgba(17,21,33,.98);text-align:left;font-size:10px;color:var(--sub);font-weight:700;padding:7px 8px;border-bottom:1px solid var(--line2)}
+.move-table th,.move-table td{border:0;border-bottom:1px solid var(--line2)}.move-table td{padding:7px 8px}
+.move-table td:nth-child(n+4){font-variant-numeric:tabular-nums;color:#c8d1e0}
+.move-table tr.move-row{cursor:pointer}
+.move-table tr.move-row:hover td{background:rgba(255,255,255,.04)}
+.move-table tr.move-row.selected td{background:rgba(97,219,194,.16)}
+.move-table tr.move-row.equipped td{opacity:.55}
+.move-table .move-type{min-width:44px;padding:3px 6px}
+.eq-tag{margin-left:6px;font-size:9px;font-weight:800;padding:2px 6px;border-radius:6px;background:rgba(164,147,255,.2);color:var(--violet)}
+.move-compare{position:sticky;bottom:0;display:flex;align-items:center;justify-content:space-between;gap:16px;margin:16px -26px 0;padding:14px 26px;background:rgba(12,15,25,.97);border-top:1px solid var(--rim);min-height:64px}
+.move-compare>div{min-width:0}
+.move-compare .from{color:var(--sub);text-decoration:line-through}
+.move-compare .arrow{margin:0 10px;color:var(--accent);font-weight:900}
+.move-compare .to{font-weight:800}
+.move-compare p{margin:4px 0 0;font-size:11px}
+.move-compare button{flex:none;padding:10px 18px;border-radius:12px;font-weight:900}
+.pokemon-dialog>.panel-notice:last-child{margin:0;padding:8px 0}
+@media(max-width:760px){.moves-v2{grid-template-columns:1fr}.move-table th:nth-child(5),.move-table td:nth-child(5){display:none}.move-compare{flex-direction:column;align-items:stretch}}
+.move-table th:first-child,.move-table td:first-child{width:64px}.move-table td:nth-child(2){width:40%}
+@media(max-width:1100px){.gym-layout .booking{order:-1}}
+@media(max-width:1100px){.side button{gap:7px;padding:8px 6px;font-size:12px}.side button .ico{width:22px;height:22px}.side button .ico img{width:20px;height:20px}}

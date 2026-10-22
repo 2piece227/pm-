@@ -95,7 +95,6 @@ for(const [i,g] of GYMS.entries()){
   trainer.fatigue=0;
 }
 assert.equal(trainer.badges.length,16);assert.equal(trainer.contract.wage,25,'150% raise applied once');
-const count=trainer.badges.length;const repeat=await challengeGym(game,trainer,'brock');assert(!repeat.firstWin);assert.equal(repeat.reward,0);assert.equal(trainer.badges.length,count);
-await assert.rejects(()=>challengeGym(game,trainer,'brock'),/하루 한 번/);
+const count=trainer.badges.length;await assert.rejects(()=>challengeGym(game,trainer,'brock'),/이미 .*배지/);assert.equal(trainer.badges.length,count);
 assert.deepEqual(snapshotGame(restoreGame(snapshotGame(game))),snapshotGame(game));
 console.log('PASS: charged moves/abilities, evolution, finite supplies, potion use, fatigue, IV days/locks/save, all 16 gyms, exact party levels, badge unlock, no duplicate rewards, replay persistence');
