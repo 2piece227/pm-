@@ -7,6 +7,7 @@ import { monImage, escapeHtml as esc } from './management-widgets.js';
 import { TYPE_KO } from './pokemon-panel.js';
 import { BATTLE_POLICIES, policyId } from '../data/battle-policy.js';
 import { renderBattleAnalysis } from './battle-analysis.js';
+import { SUPPLIES, SUPPLY_KINDS, ballCount } from '../data/supplies.js';
 import { gameDate } from './management-widgets.js';
 import { fixturesOf, gymStatus, bookingDays, bookGym, cancelFixture, GYM_BOOKING } from '../engine/gym-fixtures.js';
 import { gymById } from '../data/gyms.js';
@@ -19,10 +20,20 @@ const badgeImg = (g, earned = true) => `<img class="badge-img ${earned ? '' : 'm
 const K=s=>ko(SPECIES_KO,s);
 export function fatigueIcon(t){const f=fatigueOf(t);return `<span class="fatigue ${f.color}" role="img" aria-label="${f.label}" title="${f.label} · 패배하면 떨어지고 승리하면 회복됩니다">${f.face}</span>`;}
 
+/* 탐험 물품 탭 상태 — 고른 트레이너·분류 */
+const supplyUi={owner:null,kind:'ball'};
 export function renderSupport(game){
-  return `<div class="page-h"><h2>트레이너 지원</h2><span class="muted">구입한 물품은 선택한 트레이너의 가방에 지급됩니다</span></div><p class="muted">몬스터볼은 포획 시도에 1개, 상처약은 탐험 중 HP가 부족할 때 1개씩 사용합니다. 상처약은 HP 20 회복이며 기절·상태이상·PP는 센터에서 치료합니다.</p><div id="management-notice" role="status"></div>
-  ${agencyOf(game).roster.map(t=>`<section class="card support-card"><h3>${fatigueIcon(t)} ${esc(t.name)}의 가방</h3><div class="support-items">${Object.entries(MANAGEMENT.supplies).map(([key,def])=>`<div class="support-item"><img class="supply-icon pixel-item" src="${(import.meta.env?.BASE_URL??'/')}assets/items/${key==='pokeBall'?'poke-ball':'potion'}.png" alt="" aria-hidden="true" width="36" height="36"><h3>${def.name}</h3><p>보유 <b>${bagOf(t)[key]||0}</b>개 · 개당 ${def.price}</p><label>지급 수량<input class="supply-qty" type="number" min="1" max="999" value="1" data-owner="${t.id}" data-item="${key}" aria-label="${esc(t.name)} ${def.name} 지급 수량"></label><button data-buy="${key}" data-owner="${t.id}" ${agencyOf(game).funds<def.price?'disabled':''}>${def.price} 지불 · 1개 지급</button></div>`).join('')}</div></section>`).join('')}`;
+  const roster=agencyOf(game).roster,funds=agencyOf(game).funds;
+  const owner=roster.find(t=>t.id===supplyUi.owner)||roster[0];supplyUi.owner=owner?.id||null;
+  const bag=owner?bagOf(owner):{};
+  const carried=Object.entries(bag).filter(([k,n])=>n>0&&SUPPLIES[k]);
+  return `<div class="page-h"><h2>트레이너 지원</h2></div><p class="muted">고른 트레이너의 가방에 바로 지급합니다. 포획 때는 가방의 볼 중 잘 잡히는 것을 알아서 고르고, 탐험 중 기절·상태이상·PP·HP가 부족하면 맞는 도구를 먼저 쓴 뒤 없을 때 포켓몬센터에 들릅니다.</p><div id="management-notice" role="status"></div>
+  <div class="gym-trainers">${roster.map(t=>`<button class="gym-trainer-chip ${t.id===owner?.id?'on':''}" data-supply-owner="${t.id}" aria-pressed="${t.id===owner?.id}">${fatigueIcon(t)}<b>${esc(t.name)}</b><small>볼 ${ballCount(bagOf(t))}개 · 도구 ${Object.entries(bagOf(t)).filter(([k,n])=>n>0&&SUPPLIES[k]&&SUPPLIES[k].kind!=='ball').reduce((a,[,n])=>a+n,0)}개</small></button>`).join('')}</div>
+  ${owner?`<section class="card bag-now"><h3>${esc(owner.name)}의 가방</h3><div class="bag-chips">${carried.map(([k,n])=>`<span>${supplyIcon(k)}${esc(SUPPLIES[k].name)} <b>×${n}</b></span>`).join('')||'<span class="muted">비어 있습니다.</span>'}</div></section>`:''}
+  <nav class="shop-filters">${Object.entries(SUPPLY_KINDS).map(([k,v])=>`<button class="${supplyUi.kind===k?'selected':'ghost'}" data-supply-kind="${k}">${v}</button>`).join('')}</nav>
+  <div class="shop-grid">${owner?Object.values(SUPPLIES).filter(d=>d.kind===supplyUi.kind).map(d=>`<article class="shop-item support-item">${supplyIcon(d.key)}<div class="nm"><b>${esc(d.name)}</b><small>가방 ${bag[d.key]||0}개</small></div><p>${esc(d.desc)}</p><footer><span class="price">₽${d.price.toLocaleString()}${d.estimated?' <i title="원작 판매가가 없어 정한 값">임시</i>':''}</span><input class="supply-qty" type="number" min="1" max="999" value="1" data-owner="${owner.id}" data-item="${d.key}" aria-label="${esc(owner.name)} ${esc(d.name)} 지급 수량"><button data-buy="${d.key}" data-owner="${owner.id}" ${funds<d.price?'disabled':''}>지급</button></footer></article>`).join(''):'<p class="muted">계약한 트레이너가 없습니다.</p>'}</div>`;
 }
+const supplyIcon=key=>`<img class="item-ico" src="${(import.meta.env?.BASE_URL??'/')}assets/items/${SUPPLIES[key].icon}.png" alt="" aria-hidden="true" width="30" height="30" loading="lazy">`;
 
 export function renderTraining(game){
   const box=agencyOf(game).box;
@@ -78,9 +89,11 @@ export function wireManagementPages(root,game,refresh,watch,selectTrainer=()=>{}
   const notice=msg=>{const node=root.querySelector('#management-notice');if(node)node.textContent=msg;};
   root.querySelectorAll('.supply-qty').forEach(input=>input.oninput=()=>{
     const button=input.closest('.support-item').querySelector('button');const n=Number(input.value),def=MANAGEMENT.supplies[input.dataset.item];
-    button.textContent=`${(n*def.price).toLocaleString()} 지불 · ${n}개 지급`;
+    button.textContent=`₽${(n*def.price).toLocaleString()} · ${n}개 지급`;
     button.disabled=!Number.isInteger(n)||n<1||n>999||n*def.price>agencyOf(game).funds;
   });
+  root.querySelectorAll('[data-supply-owner]').forEach(b=>b.onclick=()=>{supplyUi.owner=b.dataset.supplyOwner;refresh();});
+  root.querySelectorAll('[data-supply-kind]').forEach(b=>b.onclick=()=>{supplyUi.kind=b.dataset.supplyKind;refresh();});
   root.querySelectorAll('[data-buy]').forEach(b=>b.onclick=()=>{const qty=Number(b.closest('.support-item').querySelector('input').value);const r=buySupplies(game,b.dataset.owner,b.dataset.buy,qty);if(r.ok)refresh();notice(r.msg);});
   root.querySelectorAll('.training-form').forEach(form=>{
     const mon=agencyOf(game).box[Number(form.dataset.box)];

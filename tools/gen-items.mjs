@@ -43,6 +43,7 @@ const [items, itemNames, itemFlavor, categories, machines, moves, moveFlavor, ve
   text(`${LOC}/move.json`).then(JSON.parse),
 ]);
 const locAbility = JSON.parse(await text(`${LOC}/ability.json`));
+const speciesCsv = await csv('pokemon_species');
 const vgOrder = Object.fromEntries(versionGroups.map(v => [v.id, Number(v.order)]));
 const latestKo = (rows, key) => {
   const out = {};
@@ -93,6 +94,22 @@ for (const it of gen.items.all()) {
   HELD_ITEMS[it.name] = { ko, cat, price, icon: p.identifier, desc: itemFlavorKo[p.id] || "", estimated: !(Number(p.cost) > 0) };
 }
 
+/* ---------- 탐험 물품 (트레이너 가방) — 볼·회복약·상태 회복·기력·PP ---------- */
+const SUPPLY_IDS = ['poke-ball','great-ball','ultra-ball','premier-ball','luxury-ball','heal-ball','net-ball','dive-ball','nest-ball','repeat-ball','timer-ball','dusk-ball','quick-ball',
+  'level-ball','lure-ball','moon-ball','friend-ball','love-ball','heavy-ball','fast-ball',
+  'potion','super-potion','hyper-potion','max-potion','full-restore','fresh-water','soda-pop','lemonade','moomoo-milk','energy-powder','energy-root',
+  'revive','max-revive','revival-herb','antidote','paralyze-heal','awakening','burn-heal','ice-heal','full-heal','heal-powder','ether','max-ether','elixir','max-elixir'];
+const camel = id => id.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+const SUPPLY_ITEMS = {};
+for (const id of SUPPLY_IDS) {
+  const p = items.find(i => i.identifier === id); if (!p) { console.warn('missing supply', id); continue; }
+  SUPPLY_ITEMS[camel(id)] = { ko: koName[p.id] || id, price: Number(p.cost) || 0, icon: id, desc: itemFlavorKo[p.id] || '' };
+}
+
+/* ---------- 포획률 (원작 종족별 capture_rate) ---------- */
+const CAPTURE_RATE = {};
+for (const r of speciesCsv) { const sp = gen.species.get(dexId(r.identifier)); if (sp?.exists) CAPTURE_RATE[sp.name] = Number(r.capture_rate); }
+
 /* ---------- 기술머신 (스칼렛·바이올렛) ---------- */
 const moveById = Object.fromEntries(moves.map(m => [m.id, m.identifier]));
 /* [임시값] SV 기술머신은 돈으로 사지 않는다(재료 제작). 위력·분류로 가격을 매긴다 */
@@ -113,7 +130,10 @@ export const MOVE_DESC_KO = ${JSON.stringify(MOVE_DESC, null, 0)};
 export const ABILITY_DESC_KO = ${JSON.stringify(ABILITY_DESC, null, 0)};
 export const HELD_ITEMS = ${JSON.stringify(HELD_ITEMS, null, 0)};
 export const TMS = ${JSON.stringify(TMS, null, 0)};
+export const SUPPLY_ITEMS = ${JSON.stringify(SUPPLY_ITEMS, null, 0)};
+export const CAPTURE_RATE = ${JSON.stringify(CAPTURE_RATE, null, 0)};
 `;
 fs.writeFileSync(OUT, body);
 const cats = Object.values(HELD_ITEMS).reduce((n, i) => (n[i.cat] = (n[i.cat] || 0) + 1, n), {});
+console.log(`supplies ${Object.keys(SUPPLY_ITEMS).length}, capture rates ${Object.keys(CAPTURE_RATE).length}`);
 console.log(`wrote ${OUT}: moves ${Object.keys(MOVE_DESC).length}, items ${Object.keys(HELD_ITEMS).length} ${JSON.stringify(cats)}, TMs ${TMS.length}`);

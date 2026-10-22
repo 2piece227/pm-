@@ -43,18 +43,18 @@ assert(!(await evolvePokemon(mon,'Charmeleon')).ok);
 trainer.bag={pokeBall:0,potion:0};let r=await explore(game,trainer,'route1','catch');assert.equal(r.events.length,0);assert.equal(r.catches.length,0);
 trainer.bag.pokeBall=1;r=await explore(game,trainer,'route1','catch',{activities:8});assert.equal(trainer.bag.pokeBall,0);assert.equal(r.events.filter(e=>e.kind==='catch').length,1);
 trainer.bag.potion=1;mon.fieldState={...fieldState(mon),hp:1};r=await explore(game,trainer,'route1','battle',{activities:6});
-assert.equal(r.events[0].kind,'potion');assert.equal(trainer.bag.potion,0);assert.equal(r.events[0].after[0].hp,Math.min(r.events[0].before[0].maxhp,21));
+assert.equal(r.events[0].kind,'item');assert.equal(r.events[0].item,'potion');assert.equal(trainer.bag.potion,0);assert.equal(r.events[0].after[0].hp,Math.min(r.events[0].before[0].maxhp,21));
 assert.equal(parseExplore('explore:route1:battle:10').activities,8,'legacy 10 activity saves clamp to 8');
 assert.equal(fatigueOf({fatigue:0}).color,'fresh');assert.equal(fatigueOf({fatigue:50}).color,'tired');assert.equal(fatigueOf({fatigue:80}).color,'exhausted');
 
 // IV training really consumes days, survives saves, cannot take the Pokémon out early.
 const trainee=await createPokemon({species:'Pidgey',level:8,rng:makeRng(8)});trainee.ivs.atk=24;agency.box.push(trainee);
-const targets={...trainee.ivs,atk:26};assert.equal(trainingQuote(trainee,targets).days,5);
+const targets={...trainee.ivs,atk:26};assert.equal(trainingQuote(trainee,targets).days,3);  // 24→25 1일 + 25→26 2일 (2026-10-23 단축)
 assert(startTraining(game,trainee,targets).ok);assert(!boxToParty(game,trainer.id,0).ok);
 assert(!changeMove(game,trainee,0,trainee.learned[0]).ok);
-tickTraining(game);assert.equal(trainee.ivs.atk,24);
+tickTraining(game);assert.equal(trainee.ivs.atk,25);
 const restored=restoreGame(snapshotGame(game));
-for(let i=0;i<4;i++){tickTraining(game);tickTraining(restored);}
+for(let i=0;i<2;i++){tickTraining(game);tickTraining(restored);}
 assert.deepEqual(snapshotGame(game),snapshotGame(restored));assert.equal(trainee.ivs.atk,26);assert(!trainee.training);
 assert(boxToParty(game,trainer.id,0).ok);
 assert(!startTraining(game,mon,Object.fromEntries(IV_KEYS.map(k=>[k,31]))).ok,'party mons cannot enter training');

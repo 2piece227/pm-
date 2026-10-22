@@ -1,11 +1,12 @@
 import { Dex } from '@pkmn/dex';
 import { levelUpMoves, realStats } from '../data/pokemon.js';
 import { fieldState } from './field-state.js';
+import { SUPPLIES } from '../data/supplies.js';
 
 export const MANAGEMENT = {
   movePrice: 100, abilityPrice: 1000,
-  supplies: { pokeBall: { name: '몬스터볼', price: 200 }, potion: { name: '상처약', price: 300, heal: 20 } },
-  ivDays: 2, highIvDays: 3,
+  supplies: SUPPLIES,   // 탐험 물품 45종 — data/supplies.js
+  ivDays: 1, highIvDays: 2,   // [임시값] 개체값 1포인트당 일수 (26 이상은 더 오래) — 2026-10-23 절반으로 단축
   /* 컨디션 [임시값] — 패배가 주 원인. 활동·휴식은 곁가지다 (사용자 확정 2026-10-22)
      lossHit: 한 번 질 때 (멘탈이 높을수록 덜), winRecover: 이길 때 회복,
      activityFatigue: 활동 1회, restRecovery: 휴식한 날 추가 회복, dailyRecovery: 매일 자연 회복 */

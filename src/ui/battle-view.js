@@ -140,6 +140,8 @@ const GENDER = { M: '<i class="g-m">♂</i>', F: '<i class="g-f">♀</i>' };
  * 그래서 개체가 바뀔 때만 뼈대를 만들고, 그 뒤로는 폭만 굴려서 실기처럼 깎아 내린다.
  */
 const hpBox = { p1: null, p2: null };
+/* 트레이너 이름표는 필드를 가리지 않게 HP 박스에 붙인다 */
+const trainerTag = { p1: '', p2: '' };
 
 /** 실기의 바 감소 속도 — 가득 찬 바가 다 빠지는 데 걸리는 시간 */
 const HP_DRAIN_FULL_MS = 1500;
@@ -153,7 +155,8 @@ function buildHpBox(side, f) {
     '<div class="hpb-row"><i class="st"></i><span class="hplabel">HP</span>' +
     '<span class="hpb-bar"><i></i></span></div>' +
     '<div class="hpb-num"></div><div class="hpb-boost"></div>' +
-    '<div class="hpb-balls"></div>';
+    '<div class="hpb-balls"></div>' +
+    `<div class="hpb-trainer">${trainerTag[side]}</div>`;
 
   const st = {
     key: null,
@@ -259,8 +262,10 @@ export function drawTrainers(names) {
     const knownName=$(`known-trainer-${side}`);if(knownName)knownName.textContent=name||side;
     const agency = typeof v === 'string' ? '' : v?.agency || '';
     const sprite = typeof v === 'string' ? '' : v?.sprite || '';
-    el.innerHTML = name ? `${sprite ? `<img class="bt-sprite" src="${sprite}" alt="" aria-hidden="true">` : ''}<span><b>${name}</b>${agency ? `<em>${agency}</em>` : ''}</span>` : '';
-    el.style.display = name ? '' : 'none';
+    trainerTag[side] = name ? `${sprite ? `<img class="bt-sprite" src="${sprite}" alt="" aria-hidden="true">` : ''}<span><b>${name}</b>${agency ? `<em>${agency}</em>` : ''}</span>` : '';
+    el.innerHTML = ''; el.style.display = 'none';
+    const tag = $(`hp-${side}`)?.querySelector('.hpb-trainer');
+    if (tag) tag.innerHTML = trainerTag[side];
   }
 }
 

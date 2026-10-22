@@ -3,6 +3,7 @@ import { renderShop, wireShop, itemIcon as heldIcon } from './shop.js';
 import { openItemPicker } from './item-picker.js';
 import { trainerPortrait, trainerFull } from './trainer-sprite.js';
 import { HELD_ITEMS } from '../data/items.gen.js';
+import { SUPPLIES, ballCount } from '../data/supplies.js';
 import { conditionOf } from '../engine/pokemon-management.js';
 import { badgeProgress as badgesOf } from '../engine/gym-progress.js';
 import { CAREER } from '../data/career.js';
@@ -150,7 +151,7 @@ function inboxItems() {
   /* 포획 배정인데 볼이 없으면 — 탐험이 헛돈다 */
   for (const t of playerRoster(game)) {
     const ex = parseExplore(game.actions[t.id]);
-    if (ex && ex.mode !== 'battle' && !(bagOf(t).pokeBall > 0)) out.push({ key:`noball-${t.id}-${game.day}`, day:game.day, needsDecision:true, title:`${t.name}의 몬스터볼이 떨어졌습니다`, body:`${ex.mode==='catch'?'포획 중심 배정이라 오늘은 아무 활동도 못 합니다':'포획·배틀 병행이지만 배틀만 하게 됩니다'}. 상점의 탐험 물품에서 몬스터볼을 지급하세요.` });
+    if (ex && ex.mode !== 'battle' && !(ballCount(bagOf(t)) > 0)) out.push({ key:`noball-${t.id}-${game.day}`, day:game.day, needsDecision:true, title:`${t.name}의 몬스터볼이 떨어졌습니다`, body:`${ex.mode==='catch'?'포획 중심 배정이라 오늘은 아무 활동도 못 합니다':'포획·배틀 병행이지만 배틀만 하게 됩니다'}. 상점의 탐험 물품에서 몬스터볼을 지급하세요.` });
   }
   /* 배정이 이어지니 지친 트레이너를 알려준다 — 쉬게 하는 건 대표의 판단 */
   for (const t of playerRoster(game)) if ((t.fatigue||0) >= 70) out.push({ key:`slump-${t.id}-${game.day}`, day:game.day, needsDecision:true, title:`${t.name}, 연패로 슬럼프에 빠졌습니다`, body:`컨디션이 ${conditionOf(t)}까지 떨어져 실력이 덜 나옵니다. 컨디션은 지면 크게 깎이고 이기면 돌아옵니다. 쉬운 상대와 붙여 자신감을 되찾게 하거나, 며칠 쉬게 하세요.` });
@@ -173,12 +174,14 @@ function inboxItems() {
     if(n.kind==='graduation' && playerRoster(game).some(t=>t.id===n.trainerId&&t.graduation?.decision==='pending'))continue;
     if (n.kind === 'explore') {
       const [first, ...rest] = n.text.split(' / ');
-      out.push({ key: `n-${n.day}-${n.trainerId}-${n.text.length}`, day: n.day, trainerId: n.trainerId, title: first.replace('탐험을 시작했다.', '탐험 보고'), body: rest.join('\n'), preview: rest.at(-1) });
+      out.push({ key: `n-${n.day}-${n.trainerId}-${n.text.length}`, day: n.day, kind: n.kind, trainerId: n.trainerId, title: first.replace('탐험을 시작했다.', '탐험 보고'), body: rest.join('\n'), preview: rest.at(-1) });
     } else {
-      out.push({ key: `n-${n.day}-${n.text}`, day: n.day, title: n.text, body: '', reportDay:['gym','training','cup','personnel','pwt'].includes(n.kind)?n.day:null });
+      out.push({ key: `n-${n.day}-${n.text}`, day: n.day, kind: n.kind, title: n.text, body: '', reportDay:['gym','training','cup','personnel','pwt'].includes(n.kind)?n.day:null });
     }
   }
-  return out.sort((a,b) => Number(!!b.needsDecision)-Number(!!a.needsDecision) || b.day - a.day || Number(b.key.startsWith('n-')) - Number(a.key.startsWith('n-')));
+  /* 같은 날 안에서는 배틀·탐험·대회 보고가 먼저, 트레이닝 센터 소식은 맨 뒤 */
+  const rank = m => m.kind === 'training' ? 3 : ['explore','gym','cup','pwt'].includes(m.kind) ? 0 : m.key.startsWith('n-') ? 1 : 2;
+  return out.sort((a,b) => Number(!!b.needsDecision)-Number(!!a.needsDecision) || b.day - a.day || rank(a) - rank(b));
 }
 
 function renderOffice() {
@@ -264,7 +267,7 @@ function renderDailySummary(rep, detailed = true) {
   return `<section class="card daily-summary"><div class="section-heading"><div><div class="eyebrow">DAILY REVIEW · ${rep.day}일차</div><h3>하루 운영 보고서</h3></div><b class="${rep.net < 0 ? 'negative' : 'positive'}">수지 ${rep.net >= 0 ? '+' : ''}${won(rep.net)}</b></div>
   ${(rep.explored || []).map(r=>`<div class="report-activity"><b>${esc(r.name)} · ${esc(r.location)}</b>
     ${r.events ? `<div class="activity-totals"><span>${r.events.length}/${r.budget} 활동</span><span>${r.wins}승 ${r.losses}패</span><span>포획 ${r.caught}마리</span><span>센터 ${r.centers}회</span><span>상금 +${won(r.money)}</span></div>
-      <details class="activity-details" ${detailed?'open':''}><summary>시간순 활동 기록</summary><ol class="activity-timeline">${r.events.map(e=>`<li class="activity-${e.kind}"><time>${e.time}<small>${e.slot}번째 활동</small></time><div><b>${e.kind==='center'?'포켓몬센터':e.kind==='potion'?'상처약 사용':e.kind==='catch'?'야생 포켓몬 탐색':'트레이너 배틀'} ${e.won===false?'· 패배':''}</b>${e.lines.map(l=>`<p>${esc(l)}</p>`).join('')}<small class="muted">파티 HP ${e.before.reduce((n,p)=>n+p.hp,0)} → ${e.after.reduce((n,p)=>n+p.hp,0)} / ${e.after.reduce((n,p)=>n+p.maxhp,0)}</small></div></li>`).join('')}</ol></details>` : `<ul>${r.lines.slice(1).map(l=>`<li>${esc(l)}</li>`).join('')}</ul>`}</div>`).join('')}
+      <details class="activity-details" ${detailed?'open':''}><summary>시간순 활동 기록</summary><ol class="activity-timeline">${r.events.map(e=>`<li class="activity-${e.kind}"><time>${e.time}<small>${e.slot}번째 활동</small></time><div><b>${e.kind==='center'?'포켓몬센터':e.kind==='potion'?'상처약 사용':e.kind==='item'?`${SUPPLIES[e.item]?.name||'도구'} 사용`:e.kind==='catch'?'야생 포켓몬 탐색':'트레이너 배틀'} ${e.won===false?'· 패배':''}</b>${e.lines.map(l=>`<p>${esc(l)}</p>`).join('')}<small class="muted">파티 HP ${e.before.reduce((n,p)=>n+p.hp,0)} → ${e.after.reduce((n,p)=>n+p.hp,0)} / ${e.after.reduce((n,p)=>n+p.maxhp,0)}</small></div></li>`).join('')}</ol></details>` : `<ul>${r.lines.slice(1).map(l=>`<li>${esc(l)}</li>`).join('')}</ul>`}</div>`).join('')}
   ${(rep.gyms||[]).map(m=>`<div class="report-activity">${renderBattleAnalysis(m.analysis)}<p><b>${esc(m.trainerName)} vs ${m.gymName} · ${m.won?'승리':'패배'}</b> <button class="ghost" data-watch-gym="${m.id}">관장전 다시 보기</button></p>${m.firstWin?`<p>${m.badge||'배지'} 획득 · 상금 +${won(m.reward)}${m.bonusPaid?` · 계약 배지 보너스 −${won(m.bonusPaid)}`:''}</p>`:m.won?'<p class="muted">이미 획득한 배지입니다. 첫 도전 보상은 중복 지급되지 않습니다.</p>':''}${(m.growth||[]).map(g=>`<p>${esc(K(g.species))} · 경험치 +${g.experience}${g.level>g.before?` · Lv.${g.before} → ${g.level}`:''}${g.learned.length?` · ${g.learned.map(x=>esc(M(x))).join(', ')} 습득`:''}</p>`).join('')}${(m.evolutions||[]).map(e=>`<p>${esc(K(e.before))} → ${esc(K(e.after))} 진화</p>`).join('')}</div>`).join('')}
   ${(rep.training||[]).map(t=>`<p>${esc(K(t.species))} · ${esc(t.text)}</p>`).join('')}
   ${rep.rested.length ? `<p class="muted">휴식 완료 · ${esc(rep.rested.join(', '))}</p>` : ''}
@@ -348,7 +351,7 @@ function renderTrainer(id) {
     <div class="tp-grid">
       <section class="card"><h3>능력치</h3>${STAT_KEYS.map(k => `<div class="stat-row"><span>${STAT_KO[k]}</span><span class="stat-bar"><i style="width:${Math.min(100, d[k] / 20 * 100)}%"></i></span>${at(d[k])}</div>`).join('')}</section>
       <section class="card"><h3>계약</h3><dl class="kv"><dt>주급</dt><dd>${c.wage ?? t.salary}</dd><dt>영입 개런티</dt><dd>${won(c.signing || 0)}</dd><dt>프로 승급 시</dt><dd>${c.proRaise ?? 0}% 인상</dd><dt>배지 보너스</dt><dd>${won(c.badgeBonus || 0)}/개</dd><dt>계약 기간</dt><dd>${c.years ?? '—'}년</dd></dl></section>
-      <section class="card"><h3>가방</h3><div class="bag-row">${heldIconSupply('poke-ball')}<span>몬스터볼</span><b>${bagOf(t).pokeBall || 0}</b></div><div class="bag-row">${heldIconSupply('potion')}<span>상처약</span><b>${bagOf(t).potion || 0}</b></div><button class="ghost" data-nav="shop">상점 · 물품 지급</button></section>
+      <section class="card"><h3>가방</h3>${Object.entries(bagOf(t)).filter(([k,n])=>n>0&&SUPPLIES[k]).map(([k,n])=>`<div class="bag-row">${heldIconSupply(SUPPLIES[k].icon)}<span>${esc(SUPPLIES[k].name)}</span><b>${n}</b></div>`).join('')||'<p class="muted">가방이 비어 있습니다. 몬스터볼이 없으면 포획을 못 합니다.</p>'}<button class="ghost" data-nav="shop">상점 · 물품 지급</button></section>
     </div>
     <section class="tp-party"><div class="section-heading"><h3>파티 <small>${t.party.length}/6</small></h3><button class="ghost" data-nav="box">박스 열기</button></div>
       <div class="party-cards">${t.party.map((m, i) => partyCard(t, m, i)).join('') || '<p class="muted">아직 파티가 없습니다.</p>'}</div></section>
@@ -392,7 +395,7 @@ function renderMap() {
     ${GYMS.some(g=>g.location===loc.id)?`<div class="gym-map-callout"><b>${GYMS.find(g=>g.location===loc.id).name} 체육관</b><button data-nav="gyms">관장 파티 확인 · 도전</button></div>`:''}
     <h4>출현 포켓몬 <small>${loc.wild.length}종</small></h4><div class="wild-grid">${loc.wild.map(w=>`<div>${monImage(w.species)}<b>${K(w.species)}</b><small>Lv.${w.min}–${w.max}</small></div>`).join('') || '<p class="muted">야생 포켓몬이 출현하지 않습니다.</p>'}</div>
     <h4>현지 트레이너</h4>${loc.trainers.map(n=>`<div class="npc-row"><b>${t?.beaten?.[`${loc.id}:${n.name}`]?'✓ ':''}${TRAINER_CLASSES[n.cls]?.name || n.cls} ${esc(n.name)}</b><p>${n.party.map(([s,l])=>`${K(s)} Lv.${l}`).join(' · ')}</p></div>`).join('')||'<p class="muted">배틀 상대가 없습니다.</p>'}
-    <div class="dispatch-form"><label>파견 트레이너<select id="map-trainer">${roster.map(x=>`<option value="${x.id}" ${x.id===t?.id?'selected':''}>${esc(x.name)} · 파티 ${x.party.length}마리</option>`).join('') || '<option>첫 계약이 필요합니다</option>'}</select></label><label>하루 활동 횟수<select id="activity-budget" aria-label="하루 활동 횟수">${[6,7,8].map(n=>`<option value="${n}" ${n===(ex?.activities || map.activities)?'selected':''}>${n}회${n===6?' · 기본':''}</option>`).join('')}</select></label>${t?(bagOf(t).pokeBall>0?`<p class="muted">가방: 몬스터볼 ${bagOf(t).pokeBall}개 · 상처약 ${bagOf(t).potion||0}개</p>`:`<p class="risk-note">${esc(t.name)}의 몬스터볼이 0개입니다. 이대로 포획을 보내면 아무 활동도 하지 못합니다. <button class="ghost" data-nav="shop">상점에서 지급</button></p>`):''}<p class="muted">센터·상처약 사용도 1회입니다. HP 50% 미만·기절·상태이상·PP 부족 시 회복 후 탐험을 이어갑니다.</p><div class="field-party">${(t?.party||[]).map(m=>`<span>${K(m.species)} <b>HP ${fieldState(m).hp}/${fieldState(m).maxhp}</b>${fieldState(m).status?' · '+statusLabel(fieldState(m).status):''}</span>`).join('')}</div><button data-act="mixed" ${t&&(loc.wild.length||loc.trainers.length)?'':'disabled'}>${ex?.locationId===loc.id&&ex.mode==='mixed'?'✓ 병행 탐험 배정됨':'포획·배틀 병행 배정'}</button><button data-act="catch" ${t&&loc.wild.length?'':'disabled'}>${ex?.locationId===loc.id&&ex.mode==='catch'?'✓ 포획 배정됨':'포켓몬 포획 배정'}</button><button class="ghost" data-act="battle" ${t&&loc.trainers.length?'':'disabled'}>${ex?.locationId===loc.id&&ex.mode==='battle'?'✓ 배틀 배정됨':'트레이너 배틀 배정'}</button><p class="muted">오늘: ${esc(describeAction(cur))}</p>${cur&&cur!=='rest'?'<button class="ghost" id="cancel-assignment">배정 취소 · 휴식</button>':''}</div>` : `<div class="eyebrow">WORLD ATLAS</div><h2>${region.name}</h2><p class="muted">현재 소속사의 활동 범위는 관동·성도입니다.</p>`}</aside></div>`;
+    <div class="dispatch-form"><label>파견 트레이너<select id="map-trainer">${roster.map(x=>`<option value="${x.id}" ${x.id===t?.id?'selected':''}>${esc(x.name)} · 파티 ${x.party.length}마리</option>`).join('') || '<option>첫 계약이 필요합니다</option>'}</select></label><label>하루 활동 횟수<select id="activity-budget" aria-label="하루 활동 횟수">${[6,7,8].map(n=>`<option value="${n}" ${n===(ex?.activities || map.activities)?'selected':''}>${n}회${n===6?' · 기본':''}</option>`).join('')}</select></label>${t?(ballCount(bagOf(t))>0?`<p class="muted">가방: ${Object.entries(bagOf(t)).filter(([k,n])=>n>0&&SUPPLIES[k]).map(([k,n])=>`${SUPPLIES[k].name} ${n}`).join(' · ')}</p>`:`<p class="risk-note">${esc(t.name)}의 몬스터볼이 0개입니다. 이대로 포획을 보내면 아무 활동도 하지 못합니다. <button class="ghost" data-nav="shop">상점에서 지급</button></p>`):''}<p class="muted">센터·상처약 사용도 1회입니다. HP 50% 미만·기절·상태이상·PP 부족 시 회복 후 탐험을 이어갑니다.</p><div class="field-party">${(t?.party||[]).map(m=>`<span>${K(m.species)} <b>HP ${fieldState(m).hp}/${fieldState(m).maxhp}</b>${fieldState(m).status?' · '+statusLabel(fieldState(m).status):''}</span>`).join('')}</div><button data-act="mixed" ${t&&(loc.wild.length||loc.trainers.length)?'':'disabled'}>${ex?.locationId===loc.id&&ex.mode==='mixed'?'✓ 병행 탐험 배정됨':'포획·배틀 병행 배정'}</button><button data-act="catch" ${t&&loc.wild.length?'':'disabled'}>${ex?.locationId===loc.id&&ex.mode==='catch'?'✓ 포획 배정됨':'포켓몬 포획 배정'}</button><button class="ghost" data-act="battle" ${t&&loc.trainers.length?'':'disabled'}>${ex?.locationId===loc.id&&ex.mode==='battle'?'✓ 배틀 배정됨':'트레이너 배틀 배정'}</button><p class="muted">오늘: ${esc(describeAction(cur))}</p>${cur&&cur!=='rest'?'<button class="ghost" id="cancel-assignment">배정 취소 · 휴식</button>':''}</div>` : `<div class="eyebrow">WORLD ATLAS</div><h2>${region.name}</h2><p class="muted">현재 소속사의 활동 범위는 관동·성도입니다.</p>`}</aside></div>`;
 }
 
 /* ---------------- 활동 일정 ---------------- */

@@ -17,6 +17,10 @@ import { curve } from '../ai/estimate.js';
 import { fieldState, healParty, partyCondition } from './field-state.js';
 import { bagOf, MANAGEMENT, evolvePokemon, evolutionOptions } from './pokemon-management.js';
 import { consumeBerries } from './shop.js';
+import { SUPPLIES, BALL_KEYS, ballCount } from '../data/supplies.js';
+import { CAPTURE_RATE } from '../data/items.gen.js';
+import { Dex } from '@pkmn/dex';
+import { movePP } from './field-state.js';
 
 export const EXPLORE_CONFIG = {
   day: { min: 6, max: 8, default: 6 },
@@ -142,6 +146,104 @@ async function applyExp(trainer, pairs, lines) {
   }
 }
 
+/* ---------------- 볼 · 포획 (원작 공식) ---------------- */
+
+const WATER = /수로|바다|섬|호수|강|해변|연못/, CAVE = /동굴|터널|산|굴|챔피언로드/;
+/** [임시값] 배틀로 약하게 만든 뒤 던질 때 남은 HP 비율 (퀵볼은 첫 턴이라 가득) */
+const WEAKENED_HP = 0.25;
+
+/** 9세대 볼 배율. 숫자 또는 {mod, rateAdd, hp} */
+export function ballModifier(key, ctx) {
+  const b = SUPPLIES[key]?.ball, sp = Dex.species.get(ctx.wild.species);
+  if (typeof b === 'number') return { mod: b };
+  switch (b) {
+    case 'net': return { mod: sp.types.some(t => t === 'Water' || t === 'Bug') ? 3.5 : 1 };
+    case 'dive': return { mod: WATER.test(ctx.loc?.name || '') ? 3.5 : 1 };
+    case 'nest': return { mod: Math.max(1, (41 - ctx.wild.level) / 10) };
+    case 'repeat': return { mod: ctx.owned.has(sp.baseSpecies || sp.name) ? 3.5 : 1 };
+    case 'timer': return { mod: Math.min(4, 1 + (ctx.turns || 0) * 1229 / 4096) };
+    case 'dusk': return { mod: CAVE.test(ctx.loc?.name || '') ? 3 : 1 };
+    case 'quick': return { mod: 5, hp: 1 };
+    case 'level': { const r = ctx.myTop / Math.max(1, ctx.wild.level); return { mod: r >= 4 ? 8 : r >= 2 ? 4 : r > 1 ? 2 : 1 }; }
+    case 'lure': return { mod: WATER.test(ctx.loc?.name || '') ? 4 : 1 };
+    case 'moon': return { mod: sp.evos.some(n => Dex.species.get(n).evoItem === 'Moon Stone') ? 4 : 1 };
+    case 'love': return { mod: ctx.party.some(m => m.species === ctx.wild.species && m.gender && ctx.wild.gender && m.gender !== ctx.wild.gender) ? 8 : 1 };
+    case 'heavy': { const w = sp.weightkg; return { mod: 1, rateAdd: w >= 300 ? 30 : w >= 200 ? 20 : w >= 100 ? 0 : -20 }; }
+    case 'fast': return { mod: sp.baseStats.spe >= 100 ? 4 : 1 };
+    default: return { mod: 1 };
+  }
+}
+
+/** 5세대 이후 포획 공식 — 흔들림 4번 */
+export function captureChance(rate, mod, hpFrac, statusBonus = 1) {
+  const a = (3 - 2 * hpFrac) / 3 * rate * mod * statusBonus;
+  if (a >= 255) return 1;
+  const b = 65536 / Math.pow(255 / Math.max(1e-6, a), 0.1875);
+  return Math.pow(b / 65536, 4);
+}
+
+/** 가방의 볼 중에서 고른다: 75% 이상 잡히는 가장 싼 볼, 없으면 가장 잘 잡히는 볼 */
+function chooseBall(game, trainer, wild, loc, myTop, turns) {
+  const bag = bagOf(trainer);
+  const a = game.league.agencies.find(x => x.id === game.playerAgencyId);
+  const owned = new Set([...(a?.box || []), ...(a?.roster || []).flatMap(t => t.party)].map(m => Dex.species.get(m.species).baseSpecies || m.species));
+  const ctx = { wild, loc, myTop, turns, owned, party: trainer.party };
+  const base = CAPTURE_RATE[wild.species] ?? CAPTURE_RATE[Dex.species.get(wild.species).baseSpecies] ?? 45;
+  const opts = BALL_KEYS.filter(k => bag[k] > 0).map(k => {
+    const m = ballModifier(k, ctx);
+    const rate = Math.max(1, Math.min(255, base + (m.rateAdd || 0)));
+    return { key: k, name: SUPPLIES[k].name, price: SUPPLIES[k].price, p: captureChance(rate, m.mod, m.hp ?? WEAKENED_HP) };
+  });
+  return opts.filter(o => o.p >= 0.75).sort((x, y) => x.price - y.price)[0] || opts.sort((x, y) => y.p - x.p || x.price - y.price)[0];
+}
+
+/* ---------------- 탐험 중 도구 사용 ---------------- */
+
+const has = (bag, kind, pred = () => true) => Object.keys(SUPPLIES).filter(k => SUPPLIES[k].kind === kind && bag[k] > 0 && pred(SUPPLIES[k])).sort((x, y) => SUPPLIES[x].price - SUPPLIES[y].price);
+const take = (bag, key) => { bag[key]--; return SUPPLIES[key]; };
+
+/** 쓸 수 있는 도구가 있으면 하나 쓴다 (기력 회복 → 상태이상 → PP → HP). 없으면 null → 센터 */
+function useFieldItem(trainer, health) {
+  const bag = bagOf(trainer), party = trainer.party;
+  const fs = party.map(m => { m.fieldState = fieldState(m); return m.fieldState; });
+  /* 쓰러진 포켓몬 */
+  const downIdx = fs.findIndex(s => s.hp <= 0);
+  if (downIdx >= 0) {
+    const key = has(bag, 'revive')[0];
+    if (key) { const d = take(bag, key), s = fs[downIdx]; s.hp = Math.max(1, Math.floor(s.maxhp * d.hp)); s.status = '';
+      return { key, text: `${K(party[downIdx].species)}에게 ${d.name} 사용 · 기력을 되찾았다! HP ${s.hp}` }; }
+  }
+  /* 상태이상 */
+  const stIdx = fs.findIndex(s => s.hp > 0 && s.status);
+  if (stIdx >= 0) {
+    const st = fs[stIdx].status;
+    const key = has(bag, 'cure', d => d.cures === 'all' || d.cures.includes(st)).sort((x, y) => Number(SUPPLIES[x].cures === 'all') - Number(SUPPLIES[y].cures === 'all'))[0]
+      || has(bag, 'heal', d => d.cures === 'all')[0];
+    if (key) { const d = take(bag, key); fs[stIdx].status = ''; if (d.kind === 'heal') fs[stIdx].hp = fs[stIdx].maxhp;
+      return { key, text: `${K(party[stIdx].species)}에게 ${d.name} 사용 · 상태이상이 나았다` }; }
+  }
+  /* PP */
+  const ppIdx = party.findIndex((m, i) => fs[i].hp > 0 && m.moves.every(mv => movePP(m, mv).current === 0));
+  if (ppIdx >= 0) {
+    const key = has(bag, 'pp')[0];
+    if (key) { const d = take(bag, key), m = party[ppIdx];
+      for (const mv of (d.all ? m.moves : [m.moves[0]])) { const id = Dex.moves.get(mv).id, max = movePP(m, mv).max; fs[ppIdx].pp[id] = d.pp === 'full' ? max : Math.min(max, (fs[ppIdx].pp[id] ?? max) + d.pp); }
+      return { key, text: `${K(m.species)}에게 ${d.name} 사용 · PP를 회복했다` }; }
+  }
+  /* HP — 모자란 만큼에 가장 알맞은 회복약 */
+  if (health.ratio < EXPLORE_CONFIG.center.visitBelow) {
+    const alive = fs.map((s, i) => [s, i]).filter(([s]) => s.hp > 0).sort((x, y) => x[0].hp / x[0].maxhp - y[0].hp / y[0].maxhp)[0];
+    if (alive) {
+      const [s, i] = alive, need = s.maxhp - s.hp, amt = d => d.hp === 'full' ? Infinity : d.hp;
+      const heals = has(bag, 'heal', d => !d.cures);
+      const key = heals.filter(k => amt(SUPPLIES[k]) >= need).sort((x, y) => amt(SUPPLIES[x]) - amt(SUPPLIES[y]))[0] || heals.sort((x, y) => amt(SUPPLIES[y]) - amt(SUPPLIES[x]))[0];
+      if (key) { const d = take(bag, key), healed = Math.min(amt(d), need); s.hp += healed;
+        return { key, text: `${K(party[i].species)}에게 ${d.name} 1개 사용 · HP ${healed} 회복` }; }
+    }
+  }
+  return null;
+}
+
 /* ---------------- 탐험 본체 ---------------- */
 
 /**
@@ -191,12 +293,13 @@ async function encounter(game, trainer, locationId, mode, slot) {
       applyLoss(trainer);
       await giveExp(trainer, level * EXPLORE_CONFIG.exp.lossPerLevel, lines);
     } else {
-      const c = EXPLORE_CONFIG.catch;
-      const p = Math.max(c.min, Math.min(c.max, c.base + (myTop - level) * c.perLevelDiff));
-      bagOf(trainer).pokeBall--;
-      lines.push('몬스터볼 1개 사용.');
-      if (rng() < p) {
+      const pick = chooseBall(game, trainer, wild, loc, myTop, battleResult.turns);
+      bagOf(trainer)[pick.key]--;
+      lines.push(`${pick.name} 1개 사용.`);
+      if (rng() < pick.p) {
         wild.caughtOnDay = game.day;
+        wild.ball = pick.key;
+        if (pick.key === 'healBall') delete wild.fieldState;
         wild.learned = [...wild.moves];
         out.caught = wild;
         lines.push(`${eulReul(K(w.species))} 잡았다! (Lv${level}) → 소속사 박스로 보냈다.`);
@@ -277,22 +380,20 @@ export async function explore(game, trainer, locationId, mode, { activities = EX
   if (!available.length) { out.lines.push('이 장소에서는 지정한 활동을 할 수 없습니다.'); return out; }
   let encounters = 0;
   for (let slot = 1; slot <= budget; slot++) {
-    if (!available.some(m=>m==='battle'||bagOf(trainer).pokeBall>0)) {out.lines.push('몬스터볼이 없어 포획을 중단하고 복귀했다. 상점에서 물품을 지급하세요.');break;}
+    if (!available.some(m=>m==='battle'||ballCount(bagOf(trainer))>0)) {out.lines.push('몬스터볼이 없어 포획을 중단하고 복귀했다. 상점에서 물품을 지급하세요.');break;}
     const before = trainer.party.map(fieldState);
     const health = partyCondition(trainer);
     let event;
-    if (health.ratio < EXPLORE_CONFIG.center.visitBelow && !health.fainted && !health.status && !health.exhausted && bagOf(trainer).potion>0) {
-      const target=trainer.party.filter(m=>fieldState(m).hp>0).sort((a,b)=>fieldState(a).hp/fieldState(a).maxhp-fieldState(b).hp/fieldState(b).maxhp)[0];
-      target.fieldState=fieldState(target);const healed=Math.min(MANAGEMENT.supplies.potion.heal,target.fieldState.maxhp-target.fieldState.hp);
-      target.fieldState.hp+=healed;bagOf(trainer).potion--;
-      event={kind:'potion',lines:[`${K(target.species)}에게 상처약 1개 사용 · HP ${healed} 회복 (활동 1회)`],money:0};
+    const used = (health.ratio < EXPLORE_CONFIG.center.visitBelow || health.fainted || health.status || health.exhausted) ? useFieldItem(trainer, health) : null;
+    if (used) {
+      event = { kind: 'item', item: used.key, lines: [`${used.text} (활동 1회)`], money: 0 };
     } else if (health.ratio < EXPLORE_CONFIG.center.visitBelow || health.fainted || health.status || health.exhausted) {
       const reason = health.fainted ? '쓰러진 포켓몬이 있어' : health.status ? '상태이상 치료가 필요해' : health.exhausted ? '기술 PP가 부족해' : '체력이 부족해';
       healParty(trainer);
       out.centers++;
       event = { kind: 'center', lines: [`${reason} 포켓몬센터에 들렀다. HP·상태이상·PP를 모두 회복했다. (활동 1회)`], money: 0 };
     } else {
-      const todayModes=available.filter(m=>m==='battle'||bagOf(trainer).pokeBall>0);
+      const todayModes=available.filter(m=>m==='battle'||ballCount(bagOf(trainer))>0);
       const kind = todayModes[encounters++ % todayModes.length];
       const r = await encounter(game, trainer, locationId, kind, slot);
       event = { kind, lines: r.lines, won: r.won, money: r.money, caught: r.caught, turns: r.turns,
@@ -317,6 +418,6 @@ export async function explore(game, trainer, locationId, mode, { activities = EX
     out.lines.push(`[${event.time} · ${slot}/${budget}] ${event.lines.join(' ')}`);
     await onActivity(event, budget);
   }
-  out.lines.push(`탐험 종료 — ${out.events.length}회 활동, ${out.wins}승 ${out.losses}패, 포획 ${out.catches.length}마리, 센터 ${out.centers}회, 상금 ${out.money}.${available.includes('catch')&&!(bagOf(trainer).pokeBall>0)?' 몬스터볼이 없어 포획은 못 했다.':''}`);
+  out.lines.push(`탐험 종료 — ${out.events.length}회 활동, ${out.wins}승 ${out.losses}패, 포획 ${out.catches.length}마리, 센터 ${out.centers}회, 상금 ${out.money}.${available.includes('catch')&&!(ballCount(bagOf(trainer))>0)?' 몬스터볼이 없어 포획은 못 했다.':''}`);
   return out;
 }

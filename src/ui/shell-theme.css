@@ -497,3 +497,34 @@ dialog.pkm:not([open]){display:none}
 .cand-head h3{margin:0}
 .assignment .tr-portrait{margin-right:2px}
 @media(max-width:1100px){.gym-row{grid-template-columns:60px minmax(0,1fr) auto!important}.gym-face{width:56px;height:52px}.gym-face .tr-full{width:58px;height:58px}}
+/* 범용(얼굴 없는) 트레이너 — FM 기본 사진처럼 밝은 회색 카드 */
+.tr-portrait.generic{background:linear-gradient(180deg,#f4f4f4 0%,#c9c9c9 60%,#9c9c9c 100%)}
+.tp-sprite:has(.generic),.faceoff .tr-full.generic{background:linear-gradient(180deg,#f4f4f4,#a9a9a9);border-radius:16px}
+.hpb-trainer .bt-sprite[src$="generic.png"]{background:linear-gradient(180deg,#f4f4f4,#a9a9a9)}
+
+/* ---- 대회 기록 · 대진표 ---- */
+.rec-head{margin:22px 0 10px}.rec-head small{font-size:11px;color:var(--sub);font-weight:500;margin-left:8px}
+.cup-record>summary{cursor:pointer;font-weight:800;font-size:14px}
+.cup-record>summary .cup-kind{font-size:10px;font-weight:900;letter-spacing:1.5px;color:var(--k,#7cf0b5);margin-right:6px}
+.cup-record{border-left:3px solid var(--k,#7cf0b5)}
+.bk-wrap>summary{cursor:pointer;color:var(--accent);font-weight:800;margin:8px 0}
+.bk-podium{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
+.bk-podium>div{padding:10px 14px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid var(--line2)}
+.bk-podium>div:first-child{background:linear-gradient(135deg,rgba(240,201,110,.22),rgba(240,201,110,.05));border-color:rgba(240,201,110,.4)}
+.bk-podium small{display:block;font-size:10px;color:var(--sub);font-weight:800}.bk-podium b{display:block;font-size:16px;font-weight:900}.bk-podium span{font-size:11px;color:var(--sub)}
+.bracket{display:flex;gap:14px;overflow-x:auto;padding:4px 2px 12px}
+.bk-round{flex:0 0 220px;display:flex;flex-direction:column;justify-content:space-around;gap:10px}
+.bk-round h5{margin:0 0 2px;font-size:11px;letter-spacing:1px;color:var(--accent);font-weight:900}
+.bk-match{border-radius:12px;border:1px solid var(--line2);background:rgba(255,255,255,.03);overflow:hidden}
+.bk-side{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line2)}
+.bk-side b{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bk-side small{font-size:9px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45%}
+.bk-side.win{background:rgba(97,219,194,.12)}.bk-side.win b{color:#bff7e9}
+.bk-side.lose{opacity:.6}
+.bk-side.mine b:after{content:' ★';color:var(--gold)}
+.bk-match footer{display:flex;align-items:center;justify-content:space-between;padding:4px 8px;font-size:10px;color:var(--sub)}
+.bk-match footer button{padding:3px 10px;font-size:10px;border-radius:8px}
+@media(max-width:760px){.bk-podium{grid-template-columns:1fr 1fr}.bk-round{flex-basis:180px}}
+.bag-now{padding:14px 18px;margin-bottom:12px}.bag-now h3{margin:0 0 8px}
+.bag-chips{display:flex;flex-wrap:wrap;gap:6px}.bag-chips span{display:inline-flex;align-items:center;gap:4px;padding:3px 10px 3px 4px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid var(--line2);font-size:12px}
+.bag-chips .item-ico{width:22px;height:22px}
+.support-item .supply-qty{width:56px;padding:5px;border-radius:8px;background:rgba(0,0,0,.25);color:var(--ink);border:1px solid var(--line)}

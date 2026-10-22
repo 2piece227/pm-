@@ -29,6 +29,7 @@ export function trainerPortrait(t, cls = '') {
 }
 /** 전신 */
 export function trainerFull(t, cls = '') {
-  return `<img class="tr-full ${cls}" src="${spriteUrl(spriteName(t))}" alt="${esc(t?.name || '트레이너')}" width="80" height="80" loading="lazy">`;
+  const name = spriteName(t);
+  return `<img class="tr-full ${cls} ${name === 'generic' ? 'generic' : ''}" src="${spriteUrl(name)}" alt="${esc(t?.name || '트레이너')}" width="80" height="80" loading="lazy">`;
 }
 export const gymLeaderFull = (gymId, cls = '') => `<img class="tr-full ${cls}" src="${spriteUrl(gymId)}" alt="" aria-hidden="true" width="80" height="80" loading="lazy">`;

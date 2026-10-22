@@ -1,5 +1,6 @@
 """
 범용 트레이너 도트 — public/assets/trainers/generic.png (80×80, 원작 트레이너 스프라이트와 같은 판형)
+FM 기본 얼굴처럼 얼굴이 없는 실루엣.
 
 네임드가 아닌 트레이너(생성 유스·NPC 소속사 선수·생성 사천왕/챔피언)는 FM의 기본 얼굴처럼
 이 한 장을 같이 쓴다. 외부 의존성 없이 순수 파이썬으로 PNG를 쓴다.
@@ -12,13 +13,9 @@ px = [[None] * W for _ in range(H)]
 
 def hexc(h): return tuple(int(h[i:i + 2], 16) for i in (1, 3, 5)) + (255,)
 C = {k: hexc(v) for k, v in {
-    'cap': '#3e9c8b', 'capHi': '#6cd3bf', 'brim': '#2b6f63', 'hair': '#4a3428',
-    'skin': '#f3c9a3', 'skinSh': '#d9a47e', 'eye': '#1d1f2a', 'mouth': '#b0675a',
-    'jacket': '#2f3a5c', 'jacketHi': '#47577f', 'zip': '#c9d2e6', 'shirt': '#e9edf3',
-    'strap': '#d4a94a', 'bag': '#c0862f', 'pants': '#3d4250', 'pantsHi': '#555b6c',
-    'shoe': '#c94a4a', 'sole': '#eeeeee', 'glove': '#e9edf3',
+    'body': '#17191f', 'shade': '#0f1014', 'trim': '#e8eaee', 'trim2': '#9aa0aa', 'rim': '#3a3f4a',
 }.items()}
-OUT = hexc('#161923')
+OUT = hexc('#8d939e')
 
 def put(x, y, c):
     if 0 <= x < W and 0 <= y < H: px[y][x] = c
@@ -35,37 +32,27 @@ def trap(y0, y1, l0, r0, l1, r1, c):
         rect(round(l0 + (l1 - l0) * t), y, round(r0 + (r1 - r0) * t), y, c)
 
 cx = 40
-# 다리·신발
-rect(31, 56, 38, 70, C['pants']); rect(42, 56, 49, 70, C['pants'])
-rect(32, 57, 33, 69, C['pantsHi']); rect(43, 57, 44, 69, C['pantsHi'])
-rect(29, 71, 38, 74, C['shoe']); rect(42, 71, 51, 74, C['shoe'])
-rect(29, 75, 38, 75, C['sole']); rect(42, 75, 51, 75, C['sole'])
-# 몸통(재킷)
-trap(33, 55, 28, 52, 30, 50, C['jacket'])
-trap(34, 54, 29, 32, 31, 33, C['jacketHi'])
-rect(39, 35, 41, 55, C['shirt']); rect(40, 36, 40, 55, C['zip'])
-# 가방끈·가방
-for i in range(22):
-    put(31 + i, 34 + i, C['strap']); put(32 + i, 34 + i, C['strap'])
-rect(47, 50, 54, 57, C['bag'])
-# 팔·장갑
-trap(34, 50, 23, 27, 21, 26, C['jacket']); trap(34, 50, 53, 57, 54, 59, C['jacket'])
-rect(21, 51, 26, 55, C['glove']); rect(54, 51, 59, 55, C['glove'])
-# 목·얼굴
-rect(37, 30, 43, 33, C['skinSh'])
-ellipse(cx, 23, 8, 8, C['skin'])
-for y in range(16, 31): put(cx + 7, y, C['skinSh']) if px[y][cx + 7] == C['skin'] else None
-# 머리카락(모자 아래 옆머리)
-rect(31, 15, 33, 24, C['hair']); rect(47, 15, 49, 24, C['hair'])
-# 모자
-ellipse(cx, 15, 10, 8, C['cap'], y_max=16)
-ellipse(cx - 3, 11, 4, 2, C['capHi'], y_max=13)
-rect(30, 16, 52, 18, C['brim']); rect(48, 17, 54, 18, C['brim'])
-rect(34, 9, 38, 9, C['capHi'])
-# 눈·입
-rect(36, 22, 37, 24, C['eye']); rect(43, 22, 44, 24, C['eye'])
-put(36, 22, C['sole']); put(43, 22, C['sole'])
-rect(39, 28, 41, 28, C['mouth'])
+B = C['body']
+# FM 기본 얼굴처럼 얼굴 없는 실루엣 — 머리·목·어깨·저지, 전신
+ellipse(cx, 17, 8, 10, B)                 # 머리
+ellipse(cx, 10, 8, 4, B)                  # 머리 윗선(머리카락 볼륨)
+rect(36, 26, 44, 31, B)                   # 목
+trap(30, 36, 33, 47, 24, 56, B)           # 어깨 경사
+trap(36, 56, 24, 56, 27, 53, B)           # 몸통(저지)
+trap(34, 54, 20, 25, 18, 24, B); trap(34, 54, 55, 60, 56, 62, B)   # 팔
+ellipse(21, 56, 3, 3, B); ellipse(59, 56, 3, 3, B)                 # 손
+rect(29, 56, 38, 72, B); rect(42, 56, 51, 72, B)                   # 다리
+rect(27, 73, 38, 75, B); rect(42, 73, 53, 75, B)                   # 신발
+# 저지 트림: V넥 흰 선 + 어깨 줄무늬 (FM 기본 사진의 유니폼 느낌)
+for i in range(7):
+    put(34 + i, 30 + i, C['trim']); put(46 - i, 30 + i, C['trim'])
+for sx, d in ((27, 1), (53, -1)):
+    for k in range(3):
+        for j in range(3): put(sx + d * (k * 3 + j), 33 + k - (j == 1), C['trim2'])
+# 은은한 테두리 빛 (왼쪽 위에서)
+for y in range(H):
+    for x in range(W):
+        if px[y][x] == B and (x == 0 or px[y][x - 1] is None or (y > 0 and px[y - 1][x] is None)): px[y][x] = C['rim']
 
 # 외곽선: 채워진 칸에 닿은 빈 칸
 filled = [[c is not None for c in row] for row in px]
@@ -73,14 +60,7 @@ for y in range(H):
     for x in range(W):
         if filled[y][x]: continue
         if any(0 <= x + dx < W and 0 <= y + dy < H and filled[y + dy][x + dx] for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
-            px[y][x] = OUT
-# 오른쪽 그늘 (원작 스프라이트처럼 빛은 왼쪽 위)
-for y in range(H):
-    for x in range(cx + 3, W):
-        c = px[y][x]
-        if c and c != OUT and c not in (C['eye'], C['sole']):
-            px[y][x] = tuple(int(v * .86) for v in c[:3]) + (255,)
-
+            px[y][x] = OUT[:3] + (150,)
 raw = b''.join(b'\x00' + b''.join(bytes(c if c else (0, 0, 0, 0)) for c in row) for row in px)
 def chunk(t, d): return struct.pack('>I', len(d)) + t + d + struct.pack('>I', zlib.crc32(t + d) & 0xffffffff)
 png = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', W, H, 8, 6, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(raw, 9)) + chunk(b'IEND', b'')

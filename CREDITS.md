@@ -12,8 +12,8 @@
 
 | 항목 | 출처 | 비고 |
 |---|---|---|
-| `public/assets/trainers/*.png` (블루 · 관동 관장 8명: FRLG판 / 성도 관장 8명: HGSS판) | [Pokémon Showdown](https://play.pokemonshowdown.com/sprites/trainers/) 트레이너 스프라이트 | 원작 네임드에게만 쓴다. 포켓몬 IP는 Nintendo·Creatures·GAME FREAK 소유. |
-| `public/assets/trainers/generic.png` (범용 트레이너 도트) | 자체 제작 — `tools/gen-generic-trainer.py` | 네임드가 아닌 트레이너가 모두 같이 쓴다(FM 기본 얼굴처럼). |
+| `public/assets/trainers/*.png` (블루 = 한국판 명칭의 여성 '블루'(영문판 Green, Showdown `green`) · 관동 관장 8명: FRLG판 / 성도 관장 8명: HGSS판) | [Pokémon Showdown](https://play.pokemonshowdown.com/sprites/trainers/) 트레이너 스프라이트 | 원작 네임드에게만 쓴다. 포켓몬 IP는 Nintendo·Creatures·GAME FREAK 소유. |
+| `public/assets/trainers/generic.png` (범용 트레이너 도트 — 얼굴 없는 실루엣) | 자체 제작 — `tools/gen-generic-trainer.py` | 네임드가 아닌 트레이너가 모두 같이 쓴다(FM 기본 얼굴처럼). |
 | `public/assets/battle-bg/*.png` (배틀 필드 15종) | [Pokémon Showdown](https://play.pokemonshowdown.com/fx/) 배틀 배경(smogon/pokemon-showdown-client) | 관장 타입별 필드. 각 배경의 원작자 표기는 Showdown 클라이언트 크레딧을 따른다. |
 | `public/assets/items/*.png` (지닌 도구 165종 · 기술머신 타입 18종) | [PokeAPI/sprites](https://github.com/PokeAPI/sprites) `sprites/items` | 상점·도구 칸·기술머신 표. |
 | `src/data/items.gen.js` 도구 이름·설명·가격, 기술머신 목록 | [PokeAPI](https://github.com/PokeAPI/pokeapi) `data/v2/csv` (items, item_names, item_flavor_text, item_categories, machines, moves, move_flavor_text) | `node tools/gen-items.mjs`로 생성. 한국어 공식 명칭·설명. |

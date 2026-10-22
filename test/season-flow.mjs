@@ -45,7 +45,7 @@ assert(ne.matches.every(m=>m.winnerId===ne.matches.at(-1).winnerId||m.round<ne.m
 const second=npc.competitions.events.find(x=>x.date===21);npc.day=15;
 const nt=playerAgency(npc).roster.find(x=>x.isYouth);assert(registerYouth(npc,second.id,nt.id).ok);
 assert(registerYouth(npc,second.id,nt.id,true).ok);assert.equal(second.registrations.length,0);
-assert(renderSeason(g).includes('저장된 경기 관전'));
+assert(renderSeason(g).includes('data-cup-watch=')&&renderSeason(g).includes('class="bracket"'));
 assert.equal(clean(restoreGame(snapshotGame(g)).competitions.events[0]),clean(e));
 const old=snapshotGame(g);old.snapshotVersion=3;delete old.competitions;
 const migrated=restoreGame(old);assert(migrated.competitions.events.every(x=>x.date>=g.day));assert.equal(migrated.rng.getState(),g.rng.getState());

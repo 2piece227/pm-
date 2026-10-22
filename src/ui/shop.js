@@ -10,7 +10,7 @@ import { renderSupport } from './management-pages.js';
 import { TYPE_KO } from './pokemon-panel.js';
 import { escapeHtml as esc } from './management-widgets.js';
 
-const ui = { tab: 'held', q: '', cat: 'all', type: 'all' };
+const ui = { tab: 'supplies', q: '', cat: 'all', type: 'all' };
 const ASSET = (import.meta.env?.BASE_URL ?? '/') + 'assets/items/';
 const M = s => ko(MOVE_KO, s);
 const CAT = { Physical: '물리', Special: '특수', Status: '변화' };
@@ -23,7 +23,7 @@ const HELD_CATS = { all: '전체', battle: '배틀 도구', type: '타입 강화
 export function renderShop(game) {
   const a = agencyOf(game), stock = itemsOf(a), tms = tmsOf(a);
   const owned = Object.values(stock).reduce((n, v) => n + v, 0), ownedTm = Object.values(tms).reduce((n, v) => n + v, 0);
-  const tabs = [['held', '지닌 도구'], ['berry', '열매'], ['tm', '기술머신'], ['supplies', '탐험 물품']];
+  const tabs = [['supplies', '탐험 물품'], ['held', '지닌 도구'], ['berry', '열매'], ['tm', '기술머신']];
   const q = ui.q.trim();
   let body = '';
   if (ui.tab === 'supplies') body = `<div class="shop-supplies">${renderSupport(game)}</div>`;
