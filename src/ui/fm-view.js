@@ -1,7 +1,7 @@
 import { youthCount, youthCapacity, careerLabel, isRegisteredPro, ensureSeats, seatLabel, swapSeat, proCapacity } from '../engine/career.js';
 import { renderShop, wireShop, itemIcon as heldIcon } from './shop.js';
 import { openItemPicker } from './item-picker.js';
-import { holdInfo } from '../engine/shop.js';
+import { holdInfo, megaReadiness, buyKeyStone, KEY_STONE } from '../engine/shop.js';
 import { bindLiveSearch } from './live-search.js';
 import { trainerPortrait, trainerFull } from './trainer-sprite.js';
 import { HELD_ITEMS } from '../data/items.gen.js';
@@ -161,6 +161,7 @@ function inboxItems() {
     const t=playerRoster(game).find(x=>x.id===f.trainerId), g=gymById(f.gymId);
     if (t&&g) out.push({ key:`fx-${f.id}-${game.day}`, day:game.day, title:`${f.day===game.day?'오늘':'내일'} ${t.name} vs ${g.name} 관장전`, body:`${gameDate(f.day)}에 ${g.name} 체육관에서 경기가 열립니다. 그날은 탐험 대신 관장전을 치르고, 끝나면 관전이 열립니다.` });
   }
+  for (const t of playerRoster(game)) for (const m of t.party) { const r = megaReadiness(game, m); if (r && r.state !== 'ok' && r.state !== 'box') out.push({ key:`mega-${t.id}-${m.species}-${r.state}`, day:game.day, needsDecision:true, title:`${t.name}의 ${K(m.species)}는 메가진화하지 못합니다`, body:`${r.text}. ${r.state==='nokey'?'트레이너 화면이나 상점 메가스톤 탭에서 키스톤을 주세요.':'맞는 메가스톤으로 바꿔 주세요.'}` }); }
   /* 오늘 배정이 비어 있으면 알려준다 — FM의 "할 일" 메시지 */
   const todayCup=cupToday(game),todayEntrants=todayCup?cupEntrants(game,todayCup):[];
   const competing=new Set(todayEntrants.length>=2?todayEntrants.map(t=>t.id):[]);
@@ -322,6 +323,12 @@ function renderSquad() {
     ${other.length ? block('자격 확인 필요', '', other, other.length, '') : ''}`;
 }
 
+/** 메가스톤을 지녔을 때 상태 한 줄 (키스톤 없음·맞지 않는 스톤을 바로 알린다) */
+function megaNote(m) {
+  const r = megaReadiness(game, m); if (!r) return '';
+  return `<p class="mega-note ${r.state}">${r.state === 'ok' ? '✦ ' : '⚠ '}${esc(r.text)}${r.state === 'nokey' ? ` <button class="ghost" data-give-keystone="${r.trainerId}">키스톤 주기 · ₽${won(KEY_STONE.price)}</button>` : ''}</p>`;
+}
+
 function partyCard(t, m, i) {
   const st = realStats(m), fs = fieldState(m), base = expForLevel(m.level), next = expForLevel(m.level + 1);
   const xp = Math.max(0, Math.min(100, ((m.exp - base) / Math.max(1, next - base)) * 100)), hp = Math.round(fs.hp / Math.max(1, fs.maxhp) * 100);
@@ -330,7 +337,7 @@ function partyCard(t, m, i) {
     <header>${monImage(m.species)}<div><b>${esc(K(m.species))}</b><small>Lv.${m.level} · ${sp.types.map(x => TYPE_KO[x]).join('/')}</small></div><button class="ghost to-box" data-t="${t.id}" data-i="${i}" ${t.party.length === 1 ? 'disabled' : ''} title="박스로 보내기">박스로</button></header>
     <div class="pc-bars"><label>HP ${fs.hp}/${fs.maxhp}${fs.status ? ` · ${statusLabel(fs.status)}` : ''}<span class="bar hp"><i style="width:${hp}%"></i></span></label><label>EXP<span class="bar xp"><i style="width:${xp}%"></i></span></label></div>
     <div class="pc-meta"><span>특성 <b>${esc(ko(ABILITY_KO, m.ability))}</b></span><span>공${st.atk} 방${st.def} 특공${st.spa} 특방${st.spd} 속${st.spe}</span></div>
-    <button class="item-slot ${item ? 'has' : ''}" data-give-item data-t="${t.id}" data-i="${i}">${item ? `${heldIcon(m.item)}<span><b>${esc(item.ko)}</b><small>지닌 도구 · 바꾸기</small></span>` : '<span class="plus">＋</span><span><b>도구 지니게 하기</b><small>창고에서 고르기</small></span>'}</button>
+    <button class="item-slot ${item ? 'has' : ''}" data-give-item data-t="${t.id}" data-i="${i}">${item ? `${heldIcon(m.item)}<span><b>${esc(item.ko)}</b><small>지닌 도구 · 바꾸기</small></span>` : '<span class="plus">＋</span><span><b>도구 지니게 하기</b><small>창고에서 고르기</small></span>'}</button>${megaNote(m)}
     <div class="pc-moves">${Array.from({ length: 4 }, (_, slot) => { const mv = m.moves[slot], d = mv ? Dex.moves.get(mv) : null; return `<button class="pc-move manage-mon" data-slot="${slot}" data-t="${t.id}" data-i="${i}">${d ? `<span class="move-type" data-type="${d.type}">${TYPE_KO[d.type]}</span><b>${esc(M(mv))}</b>` : '<b class="muted">빈 칸</b>'}</button>`; }).join('')}</div>
     <footer><button class="ghost manage-mon" data-t="${t.id}" data-i="${i}">기술·특성 관리</button><button class="ghost evolve-mon" data-t="${t.id}" data-i="${i}" ${ready ? '' : 'disabled'}>${ready ? '진화하기' : '진화 조건 미달'}</button></footer>
   </article>`;
@@ -348,7 +355,7 @@ function renderTrainer(id) {
       <div class="tp-sprite">${trainerFull(t)}</div>
       <div class="tp-id"><span class="seat ${t.isYouth ? 'youth' : t.proSeat || 'race'}">${seatLabel(t)}</span><h2>${esc(t.name)}</h2><p>${esc(t.nature?.style || '균형형')} · 레이팅 ${trainerRating(t).toFixed(1)} · ${t.record?.wins || 0}승 ${t.record?.losses || 0}패 · 관동 ${b.kanto}/8 · 성도 ${b.johto}/8</p><p class="muted">오늘: ${esc(scheduledAction(t))}</p></div>
       <div class="tp-cond"><small>컨디션</small><b>${cond}</b>${condBar(t)}<small>${fatigueIcon(t)} ${t.mentalDebuff > 0.5 ? `연패 페널티 −${t.mentalDebuff.toFixed(1)}` : '패배가 쌓이면 떨어지고, 승리하면 회복됩니다'}</small></div>
-      <div class="tp-actions"><button data-nav="map" data-trainer="${t.id}">지도로 보내기</button><button class="ghost" data-nav="gyms" data-trainer="${t.id}">관장전 신청</button>${swap}</div>
+      <div class="tp-actions">${t.keyStone ? '<span class="tag eq ks-tag">키스톤 보유 · 메가진화 가능</span>' : `<button class="ghost" data-give-keystone="${t.id}">키스톤 주기 · ₽${won(KEY_STONE.price)}</button>`}<button data-nav="map" data-trainer="${t.id}">지도로 보내기</button><button class="ghost" data-nav="gyms" data-trainer="${t.id}">관장전 신청</button>${swap}</div>
     </section>
     <div class="tp-grid">
       <section class="card"><h3>능력치</h3>${STAT_KEYS.map(k => `<div class="stat-row"><span>${STAT_KO[k]}</span><span class="stat-bar"><i style="width:${Math.min(100, d[k] / 20 * 100)}%"></i></span>${at(d[k])}</div>`).join('')}</section>
@@ -485,6 +492,7 @@ function wire() {
     const mon=b.dataset.t ? findTrainer(game.league,b.dataset.t)?.party[Number(b.dataset.i)] : playerAgency(game).box[Number(b.dataset.b)];
     if(mon)openItemPicker(game,mon,()=>{persist();render();},()=>{screen='shop';detailId=null;render();});
   });
+  main.querySelectorAll('[data-give-keystone]').forEach(b=>b.onclick=()=>{const r=buyKeyStone(game,b.dataset.giveKeystone);alert(r.msg);persist();render();});
   const seatTarget=$('seat-target');
   main.querySelectorAll('[data-seat-swap],[data-seat-swap-race]').forEach(b=>b.onclick=()=>{
     const r=b.dataset.seatSwap?swapSeat(game,b.dataset.seatSwap,seatTarget.value):swapSeat(game,seatTarget.value,b.dataset.seatSwapRace);

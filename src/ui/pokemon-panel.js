@@ -11,7 +11,7 @@ import { fieldState, movePP } from '../engine/field-state.js';
 import { realStats, expForLevel } from '../data/pokemon.js';
 import { monImage, wireMonImages, escapeHtml as esc } from './management-widgets.js';
 import { MOVE_DESC_KO, ABILITY_DESC_KO, HELD_ITEMS } from '../data/items.gen.js';
-import { tmsOf, tmLearnable, teachTM, TM_BY_MOVE, holdInfo } from '../engine/shop.js';
+import { tmsOf, tmLearnable, teachTM, TM_BY_MOVE, holdInfo, megaReadiness } from '../engine/shop.js';
 import { bindLiveSearch } from './live-search.js';
 
 export const TYPE_KO={Normal:'노말',Fire:'불꽃',Water:'물',Grass:'풀',Electric:'전기',Ice:'얼음',Fighting:'격투',Poison:'독',Ground:'땅',Flying:'비행',Psychic:'에스퍼',Bug:'벌레',Rock:'바위',Ghost:'고스트',Dragon:'드래곤',Dark:'악',Steel:'강철',Fairy:'페어리'};
@@ -48,6 +48,7 @@ export function openPokemonPanel(game, mon, onChange, initialTab = 'moves', init
       <div class="pkm-stats">${Object.keys(STAT_KO).map(k=>{const plus=nat.plus===k,minus=nat.minus===k;return `<div class="${plus?'plus':minus?'minus':''}"><span>${STAT_KO[k]}${plus?' ▲':minus?' ▼':''}</span><i class="sbar"><i style="width:${Math.min(100,sp.baseStats[k]/180*100)}%"></i></i><b>${st[k]}</b></div>`;}).join('')}</div>
       <dl class="pkm-info"><dt>성격</dt><dd>${NATURE_KO[mon.nature]||esc(mon.nature)}${nat.plus?` <small>${STAT_KO[nat.plus]}↑ ${STAT_KO[nat.minus]}↓</small>`:''}</dd><dt>특성</dt><dd>${esc(A(mon.ability))}</dd><dt>친밀도</dt><dd>${mon.friendship??70} <small>/ 255</small></dd></dl>
       <button class="pkm-item ${item?'has':''}" data-open-item>${item?`<img src="${ASSET}${item.icon}.png" alt="" width="30" height="30"><span><b>${esc(item.ko)}</b><small>지닌 도구 · 바꾸기</small></span>`:'<span class="plus">＋</span><span><b>도구 지니게 하기</b><small>소속사 창고에서 고르기</small></span>'}</button>
+      ${(() => { const r = megaReadiness(game, mon); return r ? `<p class="mega-note ${r.state}">${r.state === 'ok' ? '✦ ' : '⚠ '}${esc(r.text)}</p>` : ''; })()}
       <div class="pkm-wallet">소속사 자금 <b>₽${agencyOf(game).funds.toLocaleString()}</b></div>
     </aside>`;
   };

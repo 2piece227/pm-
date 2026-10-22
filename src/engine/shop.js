@@ -22,6 +22,18 @@ export const TM_BY_MOVE = Object.fromEntries(TMS.map(t => [t.move, t]));
 
 /* 키스톤(메가링) — 트레이너마다 하나. 원작에선 이야기로 받는 물건이라 가격은 [임시값] */
 export const KEY_STONE = { name: '키스톤', price: 15000 };
+/** 메가진화 준비 상태 — 스톤을 지녔을 때 왜 안 되는지 알려준다 */
+export function megaReadiness(game, mon) {
+  const st = HELD_ITEMS[mon?.item];
+  if (!st || st.cat !== 'mega') return null;
+  const base = Dex.species.get(mon.species).baseSpecies || mon.species;
+  const owner = agencyOf(game).roster.find(t => t.party.includes(mon));
+  if (st.evolves !== base) return { state: 'wrong', text: `${st.ko}는 이 포켓몬의 메가스톤이 아닙니다` };
+  if (!owner) return { state: 'box', text: '파티에 넣으면 메가진화할 수 있습니다' };
+  if (!owner.keyStone) return { state: 'nokey', trainerId: owner.id, text: `${owner.name}에게 키스톤이 없어 메가진화하지 못합니다` };
+  return { state: 'ok', text: '메가진화 준비 완료 · 첫 공격 턴에 메가진화' };
+}
+
 export function buyKeyStone(game, trainerId) {
   const a = agencyOf(game), t = a.roster.find(x => x.id === trainerId);
   if (!t) return fail('우리 트레이너가 아닙니다.');

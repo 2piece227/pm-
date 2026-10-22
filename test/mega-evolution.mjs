@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { runBattle, createTrainerAI, makeRng } from '../src/engine/run-battle.js';
 import { toKoreanLog } from '../src/ui/protocol-ko.js';
 import { HELD_ITEMS } from '../src/data/items.gen.js';
+import { createGame, playerAgency } from '../src/engine/game.js';
+import { createPokemon } from '../src/data/pokemon.js';
+import { megaReadiness, buyKeyStone } from '../src/engine/shop.js';
 
 const st = { judge: 15, ops: 15, focus: 15, know: 15, mental: 15 };
 const teamA = `Charizard @ Charizardite X\nAbility: Blaze\nLevel: 50\n- Flare Blitz\n- Dragon Claw\n- Earthquake\n- Dragon Dance\n\nGyarados @ Gyaradosite\nAbility: Intimidate\nLevel: 50\n- Waterfall\n- Crunch`;
@@ -35,4 +38,14 @@ assert(msgs.some(m => m === '리자몽의 리자몽나이트X와\n블루의 키�
 assert(msgs.some(m => m === '리자몽은 메가리자몽X로\n메가진화했다!'));
 const after = out[out.findIndex(l => /메가진화했다/.test(l.msg || ''))].field;
 assert.equal(after.p1.species, 'Charizard-Mega-X'); assert.equal(after.p1.name, '리자몽');
-console.log('PASS: 92 Korean mega stones, key stone required, AI megas before first attack, once per battle, Korean messages, sprite species switch');
+/* 왜 메가진화를 안 하는지 알려준다: 맞지 않는 스톤 / 키스톤 없음 / 준비 완료 */
+const g = await createGame({ seed: 4, startEmpty: true }), ag = playerAgency(g); ag.funds = 100000;
+const tr = { id: 'b', name: '블루', party: [], stats: st };
+ag.roster = [tr];
+const zard = await createPokemon({ species: 'Charizard', level: 40, rng: () => 0.5 }), bulba = await createPokemon({ species: 'Bulbasaur', level: 10, rng: () => 0.5 });
+tr.party = [zard, bulba]; zard.item = 'Charizardite X'; bulba.item = 'Venusaurite';
+assert.equal(megaReadiness(g, bulba).state, 'wrong');
+assert.equal(megaReadiness(g, zard).state, 'nokey');
+assert(buyKeyStone(g, 'b').ok); assert.equal(megaReadiness(g, zard).state, 'ok');
+assert.equal(megaReadiness(g, { species: 'Pikachu', item: 'Leftovers' }), null);
+console.log('PASS: 92 Korean mega stones, key stone required, AI megas before first attack, once per battle, Korean messages, sprite species switch, readiness warnings (wrong stone / no key stone)');
