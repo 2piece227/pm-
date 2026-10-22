@@ -2,7 +2,7 @@ import { internationallyLocked } from '../data/international.js';
 import { PERSONNEL as P, COACH_CANDIDATES } from '../data/personnel.js';
 import { SEASON } from '../data/season.js';
 import { seasonDate } from './season.js';
-import { youthCount, youthCapacity } from './career.js';
+import { youthCount, youthCapacity, isRegisteredPro, proCount, proCapacity, ensureSeats } from './career.js';
 import { YOUTH_CANDIDATES } from '../data/youth-candidates.js';
 import { candidateProposal, evaluateOffer, contractFrom } from './contract.js';
 import { STAT_KEYS } from '../data/agencies.js';
@@ -30,7 +30,7 @@ export function personnelCandidate(t){
   return {id:t.id,name:t.name,pref};
 }
 export function contractProposal(game,t){return candidateProposal(personnelCandidate(t),player(game));}
-function room(a,t){return a.roster.length<P.rosterLimit&&(!t.isYouth||youthCount(a)<youthCapacity(a));}
+function room(a,t){return a.roster.length<P.rosterLimit&&(!t.isYouth||youthCount(a)<youthCapacity(a))&&(t.isYouth||!isRegisteredPro(t)||proCount(a)<proCapacity());}
 export function transferQuote(game,id){
   if(internationallyLocked(game,id))return null;
   const state=ensurePersonnel(game),free=state.freeAgents.find(t=>t.id===id);
@@ -57,7 +57,7 @@ export function negotiatePersonnel(game,id,offer,{renew=false,quotedFee=0}={}){
   if(!renew){
     if(q.from){const seller=game.league.agencies.find(a=>a.id===q.from);seller.funds+=fee;seller.roster=seller.roster.filter(x=>x.id!==id);}
     else game.personnel.freeAgents=game.personnel.freeAgents.filter(x=>x.id!==id);
-    a.roster.push(t);t.agencyId=a.id;
+    a.roster.push(t);t.agencyId=a.id;ensureSeats(a);
   }
   t.contract={...previous,...contractFrom(offer,game.day),kind:t.isYouth?'youth':'pro',endsOn:game.day+offer.years*SEASON.days};t.salary=offer.wage;
   t.lastPersonnelAgreementDay=game.day;

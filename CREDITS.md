@@ -12,6 +12,9 @@
 
 | 항목 | 출처 | 비고 |
 |---|---|---|
+| `public/assets/items/*.png` (지닌 도구 165종 · 기술머신 타입 18종) | [PokeAPI/sprites](https://github.com/PokeAPI/sprites) `sprites/items` | 상점·도구 칸·기술머신 표. |
+| `src/data/items.gen.js` 도구 이름·설명·가격, 기술머신 목록 | [PokeAPI](https://github.com/PokeAPI/pokeapi) `data/v2/csv` (items, item_names, item_flavor_text, item_categories, machines, moves, move_flavor_text) | `node tools/gen-items.mjs`로 생성. 한국어 공식 명칭·설명. |
+| `src/data/items.gen.js` 기술 설명 | [pagefaultgames/pokerogue-locales](https://github.com/pagefaultgames/pokerogue-locales) `ko/move.json` effect | 없으면 PokeAPI 한국어 기술 설명. |
 | `public/assets/badges/1~16.png` (관동·성도 배지) | [PokeAPI/sprites](https://github.com/PokeAPI/sprites) `sprites/badges` | 체육관 순회 배지 케이스·관장전 목록. |
 | `public/assets/items/*.png` (12종: 카드키, 에어메일, 학습장치, 몬스터볼, 타운맵, 기술머신, 상처약, 타우린류, VS시커, 다우징머신, 부적금화, 마스터볼) | [PokeAPI/sprites](https://github.com/PokeAPI/sprites) `sprites/items` | 원작 도구 도트. 포켓몬 IP는 Nintendo·Creatures·GAME FREAK 소유. 메뉴 아이콘이 CDN에 의존하지 않도록 로컬에 둔다. |
 

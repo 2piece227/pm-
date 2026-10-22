@@ -5,14 +5,19 @@ import { fieldState } from './field-state.js';
 export const MANAGEMENT = {
   movePrice: 100, abilityPrice: 1000,
   supplies: { pokeBall: { name: '몬스터볼', price: 200 }, potion: { name: '상처약', price: 300, heal: 20 } },
-  ivDays: 2, highIvDays: 3, restRecovery: 35, activityFatigue: 4,
+  ivDays: 2, highIvDays: 3,
+  /* 컨디션 [임시값] — 패배가 주 원인. 활동·휴식은 곁가지다 (사용자 확정 2026-10-22)
+     lossHit: 한 번 질 때 (멘탈이 높을수록 덜), winRecover: 이길 때 회복,
+     activityFatigue: 활동 1회, restRecovery: 휴식한 날 추가 회복, dailyRecovery: 매일 자연 회복 */
+  lossHit: 9, winRecover: 3, activityFatigue: 0.4, restRecovery: 4, dailyRecovery: 2,
 };
 export const IV_KEYS = ['hp','atk','def','spa','spd','spe'];
 export const IV_LABELS = {hp:'HP',atk:'공격',def:'방어',spa:'특수공격',spd:'특수방어',spe:'스피드'};
 export const agencyOf = game => game.league.agencies.find(a => a.id === game.playerAgencyId);
 export const ownedMon = (game, mon) => agencyOf(game).box.includes(mon) || agencyOf(game).roster.some(t=>t.party.includes(mon));
 export const bagOf = trainer => trainer.bag ??= {pokeBall:0,potion:0};
-export const fatigueOf = t => (t.fatigue || 0) < 35 ? {face:'☺',label:'상쾌함',color:'fresh'} : (t.fatigue || 0) < 70 ? {face:'😐',label:'피로 누적',color:'tired'} : {face:'😠',label:'휴식 필요',color:'exhausted'};
+export const conditionOf = t => Math.round(100 - Math.min(100, t?.fatigue || 0));
+export const fatigueOf = t => (t.fatigue || 0) < 35 ? {face:'☺',label:'컨디션 좋음',color:'fresh'} : (t.fatigue || 0) < 70 ? {face:'😐',label:'흔들림 · 패배 누적',color:'tired'} : {face:'😠',label:'슬럼프 · 연패',color:'exhausted'};
 const fail = msg => ({ok:false,msg});
 
 export function buySupplies(game, trainerId, item, count) {

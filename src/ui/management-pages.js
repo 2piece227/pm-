@@ -16,7 +16,7 @@ const gymUi = { region: 'kanto', gymId: null, day: null };
 const ASSET = (import.meta.env?.BASE_URL ?? '/') + 'assets/';
 const badgeImg = (g, earned = true) => `<img class="badge-img ${earned ? '' : 'missing'}" src="${ASSET}badges/${g.region === 'kanto' ? g.order : 8 + g.order}.png" alt="${g.badge}${earned ? '' : ' (미획득)'}" title="${g.badge}" width="32" height="32">`;
 const K=s=>ko(SPECIES_KO,s);
-export function fatigueIcon(t){const f=fatigueOf(t);return `<span class="fatigue ${f.color}" role="img" aria-label="${f.label}" title="${f.label} · 휴식일에 회복">${f.face}</span>`;}
+export function fatigueIcon(t){const f=fatigueOf(t);return `<span class="fatigue ${f.color}" role="img" aria-label="${f.label}" title="${f.label} · 지면 떨어지고 이기면 돌아온다">${f.face}</span>`;}
 
 export function renderSupport(game){
   return `<div class="page-h"><h2>트레이너 지원</h2><span class="muted">구입한 물품은 선택한 트레이너의 가방에 지급됩니다</span></div><p class="muted">몬스터볼은 포획 시도에 1개, 상처약은 탐험 중 HP가 부족할 때 1개씩 사용합니다. 상처약은 HP 20 회복이며 기절·상태이상·PP는 센터에서 치료합니다.</p><div id="management-notice" role="status"></div>

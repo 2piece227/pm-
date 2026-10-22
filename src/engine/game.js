@@ -26,7 +26,7 @@ import { gymById } from '../data/gyms.js';
 import { badgeProgress } from './gym-progress.js';
 import { locationById } from '../data/routes.js';
 import { SPECIES_KO, ko, iGa } from '../data/ko.js';
-import { setupCareerStart, youthCount, youthCapacity } from './career.js';
+import { setupCareerStart, youthCount, youthCapacity, ensureSeats } from './career.js';
 import { cupToday, cupEntrants, runCup } from './season.js';
 import { ensureInternational, internationalSeason, ensureOfficials, tickInternational } from './international.js';
 import { pwtBreak } from '../data/international.js';
@@ -295,6 +295,7 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
   if(game.opening?.tutorialContractNeeded)throw new Error('첫 유스 계약을 완료한 뒤 하루를 진행하세요.');
   if (game.pendingStarter) throw new Error('첫 파트너를 선택한 뒤 하루를 진행하세요.');
   if (game.gameOver) return game.lastReport;
+  for (const a of game.league.agencies) ensureSeats(a);
 
   const report = {
     day: game.day,
@@ -487,6 +488,8 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
     game.gameOver = { reason: '자금 고갈 — 소속사 해체', day: game.day };
   }
 
+  /* 컨디션은 시간이 지나면 조금씩 돌아온다 — 회복의 열쇠는 휴식이 아니라 승리 */
+  for (const t of player.roster) t.fatigue = Math.max(0, (t.fatigue || 0) - MANAGEMENT.dailyRecovery);
   game.day++;
   clearActions(game);
   pruneFixtures(game);

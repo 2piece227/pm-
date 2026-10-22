@@ -7,9 +7,38 @@ export const youthCount = agency => agency.roster.filter(t=>t.isYouth).length;
 export const youthCapacity = agency => agency.youthCapacity ?? CAREER.youthCapacity;
 export const proEligible = trainer => badgeProgress(trainer).best >= 8 || !!trainer.legacyPro;
 export const isRegisteredPro = trainer => !trainer.isYouth && proEligible(trainer);
+export const proCapacity = () => CAREER.proSeats.race + CAREER.proSeats.reserve;
+export const proCount = agency => agency.roster.filter(isRegisteredPro).length;
+/** 프로 좌석을 정리한다 — 레귤러 2석을 먼저 채우고 나머지는 리저브 */
+export function ensureSeats(agency) {
+  const pros = agency.roster.filter(isRegisteredPro);
+  for (const t of agency.roster) if (!isRegisteredPro(t)) delete t.proSeat;
+  let race = pros.filter(t => t.proSeat === 'race');
+  for (const t of race.slice(CAREER.proSeats.race)) t.proSeat = 'reserve';
+  race = race.slice(0, CAREER.proSeats.race);
+  for (const t of pros) if (t.proSeat !== 'race' && t.proSeat !== 'reserve') {
+    if (race.length < CAREER.proSeats.race) { t.proSeat = 'race'; race.push(t); } else t.proSeat = 'reserve';
+  }
+  if (race.length < CAREER.proSeats.race) for (const t of pros) if (t.proSeat === 'reserve' && race.length < CAREER.proSeats.race) { t.proSeat = 'race'; race.push(t); }
+  return { race, reserve: pros.filter(t => t.proSeat === 'reserve') };
+}
+export const isRaceSeat = trainer => isRegisteredPro(trainer) && trainer.proSeat !== 'reserve';
+/** 리저브를 레귤러로 올리고 지정한 레귤러를 리저브로 — F1 드라이버 교체 */
+export function swapSeat(game, reserveId, raceId) {
+  const a = game.league.agencies.find(a => a.id === game.playerAgencyId);
+  ensureSeats(a);
+  const r = a.roster.find(t => t.id === reserveId), d = a.roster.find(t => t.id === raceId);
+  if (!r || !d || r.proSeat !== 'reserve' || d.proSeat !== 'race') return { ok: false, msg: '리저브와 레귤러를 한 명씩 고르세요.' };
+  r.proSeat = 'race'; d.proSeat = 'reserve';
+  for (const e of game.competitions?.events || []) if (e.status === 'scheduled' && e.kind === 'city') e.registrations = e.registrations.filter(id => id !== d.id);
+  game.league.newsFeed.unshift({ day: game.day, kind: 'career', trainerId: r.id, text: `좌석 교체 — ${r.name} 레귤러, ${d.name} 리저브` });
+  return { ok: true, msg: `좌석을 바꿨습니다. 레귤러 ${r.name}, 리저브 ${d.name}. 리저브는 시티컵에 나갈 수 없습니다.` };
+}
+export const seatLabel = t => t.isYouth ? '유스' : !isRegisteredPro(t) ? '자격 확인 필요' : t.proSeat === 'reserve' ? '리저브' : '레귤러';
+
 export function careerLabel(trainer) {
   if(trainer.isYouth) return proEligible(trainer) ? '콜업 가능 · 유스 등록' : '유스';
-  return isRegisteredPro(trainer) ? '프로' : '자격 확인 필요';
+  return isRegisteredPro(trainer) ? (trainer.proSeat === 'reserve' ? '프로 · 리저브' : '프로 · 레귤러') : '자격 확인 필요';
 }
 
 /** New games only. Saves never have existing trainers replaced with presets. */
@@ -30,6 +59,7 @@ export async function setupCareerStart(game) {
       t.promotionApplied=!t.isYouth;
     }
   }
+  for(const agency of game.league.agencies)ensureSeats(agency);
   game.opening.done=true; // First youth tutorial is independent of recruitment eligibility.
   game.opening.tutorialContractNeeded=true;
   game.careerStartApplied=true;
@@ -45,6 +75,8 @@ function owned(game,id){return game.league.agencies.find(a=>a.id===game.playerAg
 export function callUp(game,id){
   const t=owned(game,id);
   if(!t||!t.isYouth||!proEligible(t))return {ok:false,msg:'한 지방 배지 8개를 갖춘 소속 유스만 콜업할 수 있습니다.'};
+  const agency=game.league.agencies.find(a=>a.id===game.playerAgencyId);
+  if(proCount(agency)>=proCapacity())return {ok:false,msg:`프로 자리가 가득 찼습니다 (레귤러 ${CAREER.proSeats.race} + 리저브 ${CAREER.proSeats.reserve}). 프로를 방출·이적한 뒤 콜업하세요.`};
   t.contract??={};
   if(!t.promotionApplied){
     const wage=t.contract.wage??t.salary??0;
@@ -52,6 +84,7 @@ export function callUp(game,id){
     t.salary=t.contract.wage;t.promotionApplied=true;
   }
   t.isYouth=false;
+  ensureSeats(agency);
   t.graduation={...t.graduation,decision:'promoted',decidedDay:game.day};
   game.league.newsFeed.unshift({day:game.day,kind:'career',trainerId:id,text:`${t.name} 프로 콜업 · 주급 ${t.contract.wage} · 유스 슬롯 1개 개방`});
   return {ok:true,msg:'프로로 등록했습니다. 유스 슬롯이 비었습니다.'};

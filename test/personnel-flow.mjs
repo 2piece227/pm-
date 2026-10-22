@@ -1,3 +1,4 @@
+import { proCount, proCapacity, isRegisteredPro } from '../src/engine/career.js';
 import assert from 'node:assert/strict';
 import { createGame, playerAgency, advanceDay, dailyUpkeep } from '../src/engine/game.js';
 import { ensurePersonnel, contractProposal, negotiatePersonnel, releaseQuote, releaseContract, transferQuote, hireCoach, assignCamp, tickPersonnel } from '../src/engine/personnel.js';
@@ -32,6 +33,7 @@ const rival=g.league.agencies.find(x=>x.id!==a.id&&x.roster.length>1),target=riv
 assert(q);assert(!negotiatePersonnel(g,target.id,contractProposal(g,target),{quotedFee:q.fee}).ok);
 g.day=15;const sellerFunds=rival.funds,playerFunds=a.funds,o=contractProposal(g,target);
 assert(!negotiatePersonnel(g,target.id,o,{quotedFee:q.fee+1}).ok);assert.equal(a.funds,playerFunds);
+if(!target.isYouth&&proCount(a)>=proCapacity()){assert(!negotiatePersonnel(g,target.id,o,{quotedFee:q.fee}).ok,'프로 3명이 차면 프로를 더 영입할 수 없다');const x=a.roster.find(r=>isRegisteredPro(r)&&r!==t);a.roster.splice(a.roster.indexOf(x),1);}
 assert(negotiatePersonnel(g,target.id,o,{quotedFee:q.fee}).ok);assert.equal(rival.funds,sellerFunds+q.fee);assert.equal(a.funds,playerFunds-q.fee-o.signing);assert(a.roster.includes(target));assert(!rival.roster.includes(target));
 const exp=a.roster.find(x=>x.id!==target.id);exp.contract.endsOn=g.day;tickPersonnel(g);assert(!a.roster.includes(exp));assert(g.personnel.freeAgents.includes(exp));
 const legacy=snapshotGame(g);legacy.snapshotVersion=4;delete legacy.personnel;for(const ag of legacy.league.agencies)for(const tr of ag.roster){delete tr.contract.endsOn;tr.contract.signedOnDay=1;tr.contract.years=1;}legacy.day=1000;

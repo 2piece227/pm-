@@ -1,4 +1,11 @@
-import { youthCount, youthCapacity, careerLabel, isRegisteredPro } from '../engine/career.js';
+import { youthCount, youthCapacity, careerLabel, isRegisteredPro, ensureSeats, seatLabel, swapSeat, proCapacity } from '../engine/career.js';
+import { renderShop, wireShop, itemIcon as heldIcon } from './shop.js';
+import { openItemPicker } from './item-picker.js';
+import { HELD_ITEMS } from '../data/items.gen.js';
+import { conditionOf } from '../engine/pokemon-management.js';
+import { badgeProgress as badgesOf } from '../engine/gym-progress.js';
+import { CAREER } from '../data/career.js';
+import { ABILITY_KO } from '../data/ko.js';
 import { renderCareer, wireCareer } from './career.js';
 import { renderSeason, wireSeason, renderCupReport } from './season.js';
 import { ensureSeason, cupEligible, cupToday, cupEntrants } from '../engine/season.js';
@@ -32,7 +39,8 @@ import { monImage, wireMonImages, gameDate, dayProgress } from './management-wid
 import { saveGame } from '../engine/save.js';
 import { snapshotGame, restoreGame } from '../engine/checkpoint.js';
 import { runDay } from './day-runner.js';
-import { openPokemonPanel, moveTile } from './pokemon-panel.js';
+import { openPokemonPanel, moveTile, TYPE_KO } from './pokemon-panel.js';
+import { Dex } from '@pkmn/dex';
 import { evolutionOptions, bagOf } from '../engine/pokemon-management.js';
 import { renderSupport, renderTraining, renderGyms, wireManagementPages, fatigueIcon } from './management-pages.js';
 import { watchGymMatch } from './gym-watch.js';
@@ -84,7 +92,7 @@ const MENU = [
   { grp: '활동' },
   { id: 'map', label: '탐험 지도', icon: 'town-map' },
   { id: 'gyms', label: '체육관 순회', icon: 'tm-fighting' },
-  { id: 'support', label: '트레이너 지원', icon: 'potion' },
+  { id: 'shop', label: '상점', icon: 'potion' },
   { id: 'training', label: '트레이닝 센터', icon: 'protein' },
   { id: 'schedule', label: '일정 · 대회', icon: 'vs-seeker' },
   { grp: '영입' },
@@ -141,10 +149,10 @@ function inboxItems() {
   /* 포획 배정인데 볼이 없으면 — 탐험이 헛돈다 */
   for (const t of playerRoster(game)) {
     const ex = parseExplore(game.actions[t.id]);
-    if (ex && ex.mode !== 'battle' && !(bagOf(t).pokeBall > 0)) out.push({ key:`noball-${t.id}-${game.day}`, day:game.day, needsDecision:true, title:`${t.name}의 몬스터볼이 떨어졌습니다`, body:`${ex.mode==='catch'?'포획 중심 배정이라 오늘은 아무 활동도 못 합니다':'포획·배틀 병행이지만 배틀만 하게 됩니다'}. 트레이너 지원에서 몬스터볼을 지급하세요.` });
+    if (ex && ex.mode !== 'battle' && !(bagOf(t).pokeBall > 0)) out.push({ key:`noball-${t.id}-${game.day}`, day:game.day, needsDecision:true, title:`${t.name}의 몬스터볼이 떨어졌습니다`, body:`${ex.mode==='catch'?'포획 중심 배정이라 오늘은 아무 활동도 못 합니다':'포획·배틀 병행이지만 배틀만 하게 됩니다'}. 상점의 탐험 물품에서 몬스터볼을 지급하세요.` });
   }
   /* 배정이 이어지니 지친 트레이너를 알려준다 — 쉬게 하는 건 대표의 판단 */
-  for (const t of playerRoster(game)) if ((t.fatigue||0) >= 70 && parseExplore(game.actions[t.id])) out.push({ key:`tired-${t.id}-${game.day}`, day:game.day, needsDecision:true, title:`${t.name}에게 휴식이 필요합니다`, body:`피로가 ${Math.round(t.fatigue)}까지 쌓여 실력이 떨어지고 있습니다. 탐험 배정은 바꿀 때까지 매일 이어지니, 트레이너 화면이나 지도에서 하루 쉬게 해주세요.` });
+  for (const t of playerRoster(game)) if ((t.fatigue||0) >= 70) out.push({ key:`slump-${t.id}-${game.day}`, day:game.day, needsDecision:true, title:`${t.name}, 패배가 쌓여 슬럼프야`, body:`컨디션이 ${conditionOf(t)}까지 떨어져 실력이 덜 나옵니다. 컨디션은 지면 크게 깎이고 이기면 돌아옵니다. 쉬운 상대와 붙여 자신감을 되찾게 하거나, 며칠 쉬게 하세요.` });
   for (const f of fixturesOf(game)) if (f.status==='booked' && f.day-game.day<=1) {
     const t=playerRoster(game).find(x=>x.id===f.trainerId), g=gymById(f.gymId);
     if (t&&g) out.push({ key:`fx-${f.id}-${game.day}`, day:game.day, title:`${f.day===game.day?'오늘':'내일'} ${t.name} vs ${g.name} 관장전`, body:`${gameDate(f.day)}에 ${g.name} 체육관에서 경기가 열립니다. 그날은 탐험 대신 관장전을 치르고, 끝나면 관전이 열립니다.` });
@@ -214,7 +222,7 @@ function renderNextUp(needsFirst) {
   return `<section class="next-match"><div class="kicker">TODAY</div><h2>오늘의 목적지를 정해</h2><p>트레이너를 지도로 보내 포획과 배틀로 키워.</p><div class="actions"><button data-nav="map">탐험 지도 →</button></div></section>`;
 }
 
-/** 팀 현황 — 평균 능력(OVR), 피로, 최근 5경기, 에이스 */
+/** 팀 현황 — 평균 능력(OVR), 컨디션, 최근 5경기, 에이스 */
 function renderTeamStatus(roster) {
   if (!roster.length) return `<section class="card team-status"><div class="section-heading"><h3>팀 현황</h3></div><p class="muted">계약한 트레이너가 생기면 여기서 컨디션과 에이스를 볼 수 있어.</p></section>`;
   const avg = (f) => roster.reduce((n,t)=>n+f(t),0)/roster.length;
@@ -225,7 +233,7 @@ function renderTeamStatus(roster) {
   const form = recentForm(5);
   const aceOwner = roster.flatMap(t=>t.party.map(m=>({t,m}))).sort((a,b)=>b.m.level-a.m.level)[0];
   return `<section class="card team-status"><div class="section-heading"><h3>팀 현황</h3><button class="ghost" data-nav="squad">트레이너</button></div>
-    <div class="team-ovr"><div class="ovr"><div>${ovr}<small>OVR</small></div></div><dl><dt>피로</dt><dt>멘탈</dt><dt>최근 5경기</dt><dd>${fatigueOf({fatigue}).face} ${fatigue}</dd><dd>${mental}</dd><dd><span class="form-dots">${form.map(r=>`<i class="${r===true?'w':r===false?'l':'n'}">${r===true?'W':r===false?'L':'-'}</i>`).join('')}</span></dd></dl></div>
+    <div class="team-ovr"><div class="ovr"><div>${ovr}<small>OVR</small></div></div><dl><dt>컨디션</dt><dt>멘탈</dt><dt>최근 5경기</dt><dd>${fatigueOf({fatigue}).face} ${100-fatigue}</dd><dd>${mental}</dd><dd><span class="form-dots">${form.map(r=>`<i class="${r===true?'w':r===false?'l':'n'}">${r===true?'W':r===false?'L':'-'}</i>`).join('')}</span></dd></dl></div>
     ${aceOwner?`<div class="ace">${monImage(aceOwner.m.species)}<div><small>ACE</small><b>${esc(K(aceOwner.m.species))} Lv.${aceOwner.m.level}</b><span>${esc(aceOwner.t.name)}의 파티 · ${aceOwner.m.moves.map(M).map(esc).join(' / ')}</span></div></div>`:''}</section>`;
 }
 
@@ -280,98 +288,72 @@ function at(v) {
   return `<span class="at ${cls}">${n}</span>`;
 }
 
-function renderSquad() {
-  const roster = playerRoster(game);
-  if (!roster.length) return '<div class="note">아직 계약한 트레이너가 없습니다.</div>';
-
-  return `
-    <div class="page-h"><h2>트레이너</h2><div class="note">${roster.length}명</div></div>
-    <table class="grid">
-      <thead><tr>
-        <th>이름</th>${STAT_KEYS.map((k) => `<th class="n">${STAT_KO[k]}</th>`).join('')}
-        <th class="n">전적</th><th class="n">주급</th><th>파티</th><th>오늘</th>
-      </tr></thead>
-      <tbody>${roster.map((t) => {
-    const d = displayStats(t);
-    const deb = t.mentalDebuff > 0.5 ? ` <span class="pill" style="color:var(--red)">−${t.mentalDebuff.toFixed(1)}</span>` : '';
-    return `<tr data-id="${t.id}">
-          <td class="nm">${fatigueIcon(t)} ${esc(t.name)} <span class="pill">${careerLabel(t)}</span>${deb}</td>
-          ${STAT_KEYS.map((k) => `<td class="n">${at(d[k])}</td>`).join('')}
-          <td class="n">${t.record?.wins || 0}승 ${t.record?.losses || 0}패</td>
-          <td class="n">${t.contract?.wage ?? t.salary}</td>
-          <td>${(t.party || []).map((m) => `${K(m.species)} <span class="lv">Lv${m.level}</span>`).join(', ') || '—'}</td>
-          <td class="note">${esc(scheduledAction(t))}</td>
-        </tr>`;
-  }).join('')}</tbody>
-    </table>`;
+/** 컨디션 막대 */
+function condBar(t) {
+  const c = conditionOf(t), cls = c >= 65 ? 'good' : c >= 30 ? 'mid' : 'bad';
+  return `<div class="cond-bar ${cls}" title="컨디션 ${c} · 패배가 쌓이면 떨어지고 이기면 돌아온다"><i style="width:${c}%"></i></div>`;
 }
 
-/** 포켓몬 한 줄 + 기술 고르기 */
-function monRow(m, { trainerId = null, index = null, editable = false, boxIndex = null } = {}) {
-  const base = expForLevel(m.level);
-  const next = expForLevel(m.level + 1);
-  const pct = Math.max(0, Math.min(100, ((m.exp - base) / Math.max(1, next - base)) * 100));
-  const st = realStats(m);
+/** 트레이너 명단 — F1처럼 레귤러 2석 · 리저브 1석 · 유스 3석 */
+function renderSquad() {
+  const a = playerAgency(game), roster = playerRoster(game);
+  if (!roster.length) return '<div class="note">아직 계약한 트레이너가 없습니다.</div>';
+  const seats = ensureSeats(a), youth = roster.filter(t => t.isYouth), other = roster.filter(t => !t.isYouth && !isRegisteredPro(t));
+  const card = (t) => {
+    const d = displayStats(t), b = badgesOf(t);
+    return `<button class="roster-card" data-open-trainer="${t.id}"><span class="avatar big">${esc(t.name[0])}</span><div class="rc-main"><div class="rc-name"><b>${esc(t.name)}</b><span class="seat ${t.isYouth ? 'youth' : t.proSeat || 'race'}">${seatLabel(t)}</span></div>
+      <div class="rc-stats">${STAT_KEYS.map(k => `<span><small>${STAT_KO[k]}</small>${at(d[k])}</span>`).join('')}</div>
+      <div class="rc-cond"><small>컨디션 ${conditionOf(t)}</small>${condBar(t)}${t.mentalDebuff > 0.5 ? `<small class="negative">연패 −${t.mentalDebuff.toFixed(1)}</small>` : ''}</div>
+      <p class="rc-today">${esc(scheduledAction(t))}</p></div>
+      <div class="rc-side"><div class="mini-party">${t.party.map(m => monImage(m.species)).join('')}</div><small>${t.record?.wins || 0}승 ${t.record?.losses || 0}패 · 관동 ${b.kanto}/8 · 성도 ${b.johto}/8 · 주급 ${t.contract?.wage ?? t.salary}</small></div></button>`;
+  };
+  const empty = (label) => `<div class="roster-card empty"><span class="avatar big">＋</span><div class="rc-main"><b>빈 자리</b><p class="muted">${label}</p></div></div>`;
+  const block = (title, sub, list, cap, emptyLabel) => `<section class="roster-block"><div class="section-heading"><h3>${title} <small>${list.length}/${cap}</small></h3><span class="muted">${sub}</span></div>${list.map(card).join('')}${Array.from({ length: Math.max(0, cap - list.length) }, () => empty(emptyLabel)).join('')}</section>`;
+  return `<div class="page-h"><div><div class="eyebrow">SQUAD · F1식 좌석</div><h2>트레이너</h2></div><span class="muted">프로는 레귤러 ${CAREER.proSeats.race}명 + 리저브 ${CAREER.proSeats.reserve}명까지. 리저브는 시티컵에 못 나가.</span></div>
+    ${block('레귤러 프로', '시티컵·공식전 출전', seats.race, CAREER.proSeats.race, '8배지 유스를 콜업하거나 이적으로 채워')}
+    ${block('리저브', '레귤러와 교체 가능 · 로컬컵은 출전', seats.reserve, CAREER.proSeats.reserve, '세 번째 프로가 들어오면 리저브가 돼')}
+    ${block('유스', '배지 8개를 모으면 콜업 결정', youth, youthCapacity(a), '스카우팅에서 계약')}
+    ${other.length ? block('자격 확인 필요', '', other, other.length, '') : ''}`;
+}
 
-  const moveEditor = `<div class="party-move-grid">${Array.from({length:4},(_,slot)=>`<button class="move-slot ghost manage-mon" data-slot="${slot}" data-t="${trainerId||''}" data-i="${index??''}" data-b="${boxIndex??''}">${moveTile(m.moves[slot],slot,m)}</button>`).join('')}</div>`;
-
-  const btn = boxIndex != null
-    ? `<button class="ghost to-party" data-b="${boxIndex}" style="padding:2px 9px;font-size:11px">파티로</button>`
-    : (trainerId && index != null && !editable ? '' : '');
-
-  return `<div class="mon">
-    ${monImage(m.species)}
-    <div style="flex:1;min-width:0">
-      <div class="nm">${K(m.species)} <span class="lv">Lv${m.level}</span>
-        ${trainerId && index != null ? `<button class="ghost to-box" data-t="${trainerId}" data-i="${index}" style="padding:1px 7px;font-size:10px;margin-left:6px">박스로</button>` : ''}
-        ${btn}</div>
-      <div class="lv">HP ${fieldState(m).hp}/${st.hp}${fieldState(m).status ? ` · ${statusLabel(fieldState(m).status)}` : ''} · 공 ${st.atk} · 방 ${st.def} · 특공 ${st.spa} · 특방 ${st.spd} · 속 ${st.spe} · ${esc(m.nature)}</div>
-      <div class="xpbar"><i style="width:${pct}%"></i></div>
-      ${editable ? moveEditor : ''}
-      <div class="pokemon-actions"><button class="ghost manage-mon" data-t="${trainerId||''}" data-i="${index??''}" data-b="${boxIndex??''}">기술·특성 관리</button><button class="ghost evolve-mon" data-t="${trainerId||''}" data-i="${index??''}" data-b="${boxIndex??''}" ${evolutionOptions(m).some(e=>e.ready)?'':'disabled'}>${evolutionOptions(m).some(e=>e.ready)?'진화하기':'진화 조건 미충족'}</button></div>
-    </div>
-    ${editable ? '' : moveEditor}
-  </div>`;
+function partyCard(t, m, i) {
+  const st = realStats(m), fs = fieldState(m), base = expForLevel(m.level), next = expForLevel(m.level + 1);
+  const xp = Math.max(0, Math.min(100, ((m.exp - base) / Math.max(1, next - base)) * 100)), hp = Math.round(fs.hp / Math.max(1, fs.maxhp) * 100);
+  const sp = Dex.species.get(m.species), ready = evolutionOptions(m).some(e => e.ready), item = m.item && HELD_ITEMS[m.item];
+  return `<article class="pcard">
+    <header>${monImage(m.species)}<div><b>${esc(K(m.species))}</b><small>Lv.${m.level} · ${sp.types.map(x => TYPE_KO[x]).join('/')}</small></div><button class="ghost to-box" data-t="${t.id}" data-i="${i}" ${t.party.length === 1 ? 'disabled' : ''} title="박스로 보내기">박스로</button></header>
+    <div class="pc-bars"><label>HP ${fs.hp}/${fs.maxhp}${fs.status ? ` · ${statusLabel(fs.status)}` : ''}<span class="bar hp"><i style="width:${hp}%"></i></span></label><label>EXP<span class="bar xp"><i style="width:${xp}%"></i></span></label></div>
+    <div class="pc-meta"><span>특성 <b>${esc(ko(ABILITY_KO, m.ability))}</b></span><span>공${st.atk} 방${st.def} 특공${st.spa} 특방${st.spd} 속${st.spe}</span></div>
+    <button class="item-slot ${item ? 'has' : ''}" data-give-item data-t="${t.id}" data-i="${i}">${item ? `${heldIcon(m.item)}<span><b>${esc(item.ko)}</b><small>지닌 도구 · 바꾸기</small></span>` : '<span class="plus">＋</span><span><b>도구 지니게 하기</b><small>창고에서 고르기</small></span>'}</button>
+    <div class="pc-moves">${Array.from({ length: 4 }, (_, slot) => { const mv = m.moves[slot], d = mv ? Dex.moves.get(mv) : null; return `<button class="pc-move manage-mon" data-slot="${slot}" data-t="${t.id}" data-i="${i}">${d ? `<span class="move-type" data-type="${d.type}">${TYPE_KO[d.type]}</span><b>${esc(M(mv))}</b>` : '<b class="muted">빈 칸</b>'}</button>`; }).join('')}</div>
+    <footer><button class="ghost manage-mon" data-t="${t.id}" data-i="${i}">기술·특성 관리</button><button class="ghost evolve-mon" data-t="${t.id}" data-i="${i}" ${ready ? '' : 'disabled'}>${ready ? '진화하기' : '진화 조건 미달'}</button></footer>
+  </article>`;
 }
 
 function renderTrainer(id) {
   const t = findTrainer(game.league, id);
   if (!t || t.agencyId!==game.playerAgencyId) return '<div class="note">현재 소속 트레이너가 아닙니다.</div>';
-  const d = displayStats(t);
-  const c = t.contract || {};
-
-  return `
-    <div class="page-h">
-      <h2>${fatigueIcon(t)} ${esc(t.name)}</h2>
-      <div class="note">${careerLabel(t)} · 레이팅 ${trainerRating(t).toFixed(1)} · ${t.record?.wins || 0}승 ${t.record?.losses || 0}패</div>
+  const a = playerAgency(game), seats = ensureSeats(a);
+  const d = displayStats(t), c = t.contract || {}, b = badgesOf(t), cond = conditionOf(t);
+  const swap = t.proSeat === 'reserve' && seats.race.length ? `<label class="seat-swap">레귤러와 교체<select id="seat-target">${seats.race.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('')}</select><button data-seat-swap="${t.id}">교체</button></label>`
+    : t.proSeat === 'race' && seats.reserve.length ? `<label class="seat-swap">리저브와 교체<select id="seat-target">${seats.reserve.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('')}</select><button data-seat-swap-race="${t.id}">교체</button></label>` : '';
+  return `<button class="ghost back-link" id="back-squad">← 트레이너 명단</button>
+    <section class="tp-hero">
+      <span class="avatar huge">${esc(t.name[0])}</span>
+      <div class="tp-id"><span class="seat ${t.isYouth ? 'youth' : t.proSeat || 'race'}">${seatLabel(t)}</span><h2>${esc(t.name)}</h2><p>${esc(t.nature?.style || '균형형')} · 레이팅 ${trainerRating(t).toFixed(1)} · ${t.record?.wins || 0}승 ${t.record?.losses || 0}패 · 관동 ${b.kanto}/8 · 성도 ${b.johto}/8</p><p class="muted">오늘: ${esc(scheduledAction(t))}</p></div>
+      <div class="tp-cond"><small>컨디션</small><b>${cond}</b>${condBar(t)}<small>${fatigueIcon(t)} ${t.mentalDebuff > 0.5 ? `연패 페널티 −${t.mentalDebuff.toFixed(1)}` : '패배가 쌓이면 떨어지고, 이기면 돌아와'}</small></div>
+      <div class="tp-actions"><button data-nav="map" data-trainer="${t.id}">지도로 보내기</button><button class="ghost" data-nav="gyms" data-trainer="${t.id}">관장전 신청</button>${swap}</div>
+    </section>
+    <div class="tp-grid">
+      <section class="card"><h3>능력치</h3>${STAT_KEYS.map(k => `<div class="stat-row"><span>${STAT_KO[k]}</span><span class="stat-bar"><i style="width:${Math.min(100, d[k] / 20 * 100)}%"></i></span>${at(d[k])}</div>`).join('')}</section>
+      <section class="card"><h3>계약</h3><dl class="kv"><dt>주급</dt><dd>${c.wage ?? t.salary}</dd><dt>영입 개런티</dt><dd>${won(c.signing || 0)}</dd><dt>프로 승급 시</dt><dd>${c.proRaise ?? 0}% 인상</dd><dt>배지 보너스</dt><dd>${won(c.badgeBonus || 0)}/개</dd><dt>계약 기간</dt><dd>${c.years ?? '—'}년</dd></dl></section>
+      <section class="card"><h3>가방</h3><div class="bag-row">${heldIconSupply('poke-ball')}<span>몬스터볼</span><b>${bagOf(t).pokeBall || 0}</b></div><div class="bag-row">${heldIconSupply('potion')}<span>상처약</span><b>${bagOf(t).potion || 0}</b></div><button class="ghost" data-nav="shop">상점 · 물품 지급</button></section>
     </div>
-    <button class="ghost" id="back-squad" style="margin-bottom:10px">← 트레이너</button>
-    ${renderCareer(game,t)}
-    <div class="cards">
-      <div class="card">
-        <h3>능력치</h3>
-        <table class="grid"><tbody>
-          ${STAT_KEYS.map((k) => `<tr><td>${STAT_KO[k]}</td><td class="n">${at(d[k])}</td></tr>`).join('')}
-          <tr><td>연패 페널티</td><td class="n">${t.mentalDebuff ? `−${t.mentalDebuff.toFixed(1)}` : '없음'}</td></tr>
-          <tr><td>오늘</td><td class="n">${esc(scheduledAction(t))}</td></tr>
-        </tbody></table>
-      </div>
-      <div class="card">
-        <h3>계약</h3>
-        <table class="grid"><tbody>
-          <tr><td>주급</td><td class="n">${c.wage ?? t.salary}</td></tr>
-          <tr><td>영입 개런티</td><td class="n">${won(c.signing || 0)}</td></tr>
-          <tr><td>프로 승급 시</td><td class="n">${c.proRaise ?? 0}% 인상</td></tr>
-          <tr><td>뱃지 보너스</td><td class="n">${won(c.badgeBonus || 0)}/개</td></tr>
-          <tr><td>계약 기간</td><td class="n">${c.years ?? '—'}년</td></tr>
-        </tbody></table>
-      </div>
-    </div>
-    <div class="card" style="margin-top:10px">
-      <h3>파티 <span class="note">${(t.party || []).length} / 6 · 기술은 배운 것 중에서 4개까지 고른다</span></h3>
-      ${(t.party || []).map((m, i) => monRow(m, { trainerId: t.id, index: i, editable: true })).join('') || '<div class="note">아직 없습니다.</div>'}
-    </div><section class="card" style="margin-top:12px"><h3>탐험 지원</h3><p>몬스터볼 ${bagOf(t).pokeBall||0}개 · 상처약 ${bagOf(t).potion||0}개</p><button data-nav="support">물품 지급</button><button class="ghost" data-nav="box">파티 변경 · 박스 열기</button><button class="ghost" data-nav="gyms" data-trainer="${t.id}">체육관 도전</button></section>`;
+    <section class="tp-party"><div class="section-heading"><h3>파티 <small>${t.party.length}/6</small></h3><button class="ghost" data-nav="box">박스 열기</button></div>
+      <div class="party-cards">${t.party.map((m, i) => partyCard(t, m, i)).join('') || '<p class="muted">아직 파티가 없어.</p>'}</div></section>
+    ${renderCareer(game,t)}`;
 }
+const heldIconSupply = (slug) => `<img class="item-ico" src="${(import.meta.env?.BASE_URL??'/')}assets/items/${slug}.png" alt="" aria-hidden="true" width="30" height="30">`;
 
 /* ---------------- 박스 ---------------- */
 
@@ -382,7 +364,7 @@ function renderBox() {
   const selected = a.box[boxSelection];
   return `<div class="page-h"><div><div class="eyebrow">POKÉMON STORAGE</div><h2>소속사 포켓몬 박스</h2></div><span class="muted">보관 ${a.box.length}마리</span></div>
     <div class="storage-layout"><section class="card"><div class="section-heading"><h3>보관 중인 포켓몬</h3><span class="muted">포획한 포켓몬은 여기에 도착합니다</span></div><div class="storage-grid">${Array.from({length:Math.max(30,Math.ceil(a.box.length/30)*30)},(_,i)=>a.box[i] ? `<button class="storage-slot ${boxSelection === i?'selected':''}" data-box-select="${i}">${monImage(a.box[i].species)}<b>${K(a.box[i].species)}</b><small>Lv. ${a.box[i].level}</small></button>`:'<div class="storage-slot empty"><span>＋</span></div>').join('')}</div></section>
-    <aside><section class="card storage-detail">${selected ? `<div class="eyebrow">선택한 포켓몬</div>${monImage(selected.species)}<h2>${K(selected.species)} <small>Lv. ${selected.level}</small></h2><p class="muted">${selected.caughtOnDay || 1}일차에 만난 동료</p><div class="move-pills">${selected.moves.map(m=>`<span>${esc(M(m))}</span>`).join('')}</div><div class="pokemon-actions"><button class="ghost manage-mon" data-b="${boxSelection}">기술·특성·진화 관리</button><button data-nav="training">트레이닝 센터</button></div><label>함께할 트레이너<select id="box-target">${roster.map(t=>`<option value="${t.id}" ${t.id===target?.id?'selected':''}>${esc(t.name)} · ${t.party.length}/6</option>`).join('')}</select></label><button class="to-party" data-b="${boxSelection}" ${!target || target.party.length>=6 || selected.training?'disabled':''}>${selected.training?'장기 훈련 중':'파티에 합류시키기'}</button>${target?.party.length>=6?'<p class="muted">파티가 가득 찼습니다. 한 마리를 박스로 옮겨주세요.</p>':''}` : '<h3>첫 만남을 기다리는 중</h3><p class="muted">지도에서 포켓몬 포획을 배정하세요.</p><button data-nav="map">탐험 지도 열기</button>'}</section>
+    <aside><section class="card storage-detail">${selected ? `<div class="eyebrow">선택한 포켓몬</div>${monImage(selected.species)}<h2>${K(selected.species)} <small>Lv. ${selected.level}</small></h2><p class="muted">${selected.caughtOnDay || 1}일차에 만난 동료</p><div class="move-pills">${selected.moves.map(m=>`<span>${esc(M(m))}</span>`).join('')}</div><button class="item-slot ${selected.item?'has':''}" data-give-item data-b="${boxSelection}">${selected.item&&HELD_ITEMS[selected.item]?`${heldIcon(selected.item)}<span><b>${esc(HELD_ITEMS[selected.item].ko)}</b><small>지닌 도구 · 바꾸기</small></span>`:'<span class="plus">＋</span><span><b>도구 지니게 하기</b><small>창고에서 고르기</small></span>'}</button><div class="pokemon-actions"><button class="ghost manage-mon" data-b="${boxSelection}">기술·특성·진화 관리</button><button data-nav="training">트레이닝 센터</button></div><label>함께할 트레이너<select id="box-target">${roster.map(t=>`<option value="${t.id}" ${t.id===target?.id?'selected':''}>${esc(t.name)} · ${t.party.length}/6</option>`).join('')}</select></label><button class="to-party" data-b="${boxSelection}" ${!target || target.party.length>=6 || selected.training?'disabled':''}>${selected.training?'장기 훈련 중':'파티에 합류시키기'}</button>${target?.party.length>=6?'<p class="muted">파티가 가득 찼습니다. 한 마리를 박스로 옮겨주세요.</p>':''}` : '<h3>첫 만남을 기다리는 중</h3><p class="muted">지도에서 포켓몬 포획을 배정하세요.</p><button data-nav="map">탐험 지도 열기</button>'}</section>
     <section class="card party-preview"><h3>${esc(target?.name || '트레이너')}의 파티</h3>${(target?.party||[]).map((m,i)=>`<div class="party-slot">${monImage(m.species)}<div><b>${K(m.species)}</b><small>Lv. ${m.level}</small></div><button class="ghost to-box" data-t="${target.id}" data-i="${i}" ${target.party.length===1?'disabled':''}>박스로</button></div>`).join('')}<p class="muted">${target?.party.length||0} / 6 · 마지막 동료는 파티에 남습니다.</p></section></aside></div>`;
 }
 
@@ -409,7 +391,7 @@ function renderMap() {
     ${GYMS.some(g=>g.location===loc.id)?`<div class="gym-map-callout"><b>${GYMS.find(g=>g.location===loc.id).name} 체육관</b><button data-nav="gyms">관장 파티 확인 · 도전</button></div>`:''}
     <h4>출현 포켓몬 <small>${loc.wild.length}종</small></h4><div class="wild-grid">${loc.wild.map(w=>`<div>${monImage(w.species)}<b>${K(w.species)}</b><small>Lv.${w.min}–${w.max}</small></div>`).join('') || '<p class="muted">야생 포켓몬이 출현하지 않습니다.</p>'}</div>
     <h4>현지 트레이너</h4>${loc.trainers.map(n=>`<div class="npc-row"><b>${t?.beaten?.[`${loc.id}:${n.name}`]?'✓ ':''}${TRAINER_CLASSES[n.cls]?.name || n.cls} ${esc(n.name)}</b><p>${n.party.map(([s,l])=>`${K(s)} Lv.${l}`).join(' · ')}</p></div>`).join('')||'<p class="muted">배틀 상대가 없습니다.</p>'}
-    <div class="dispatch-form"><label>파견 트레이너<select id="map-trainer">${roster.map(x=>`<option value="${x.id}" ${x.id===t?.id?'selected':''}>${esc(x.name)} · 파티 ${x.party.length}마리</option>`).join('') || '<option>첫 계약이 필요합니다</option>'}</select></label><label>하루 활동 횟수<select id="activity-budget" aria-label="하루 활동 횟수">${[6,7,8].map(n=>`<option value="${n}" ${n===(ex?.activities || map.activities)?'selected':''}>${n}회${n===6?' · 기본':''}</option>`).join('')}</select></label>${t?(bagOf(t).pokeBall>0?`<p class="muted">가방: 몬스터볼 ${bagOf(t).pokeBall}개 · 상처약 ${bagOf(t).potion||0}개</p>`:`<p class="risk-note">${esc(t.name)}의 몬스터볼이 0개야. 이대로 포획을 보내면 아무것도 못 하고 돌아와. <button class="ghost" data-nav="support">트레이너 지원에서 지급</button></p>`):''}<p class="muted">센터·상처약 사용도 1회입니다. HP 50% 미만·기절·상태이상·PP 부족 시 회복 후 탐험을 이어갑니다.</p><div class="field-party">${(t?.party||[]).map(m=>`<span>${K(m.species)} <b>HP ${fieldState(m).hp}/${fieldState(m).maxhp}</b>${fieldState(m).status?' · '+statusLabel(fieldState(m).status):''}</span>`).join('')}</div><button data-act="mixed" ${t&&(loc.wild.length||loc.trainers.length)?'':'disabled'}>${ex?.locationId===loc.id&&ex.mode==='mixed'?'✓ 병행 탐험 배정됨':'포획·배틀 병행 배정'}</button><button data-act="catch" ${t&&loc.wild.length?'':'disabled'}>${ex?.locationId===loc.id&&ex.mode==='catch'?'✓ 포획 배정됨':'포켓몬 포획 배정'}</button><button class="ghost" data-act="battle" ${t&&loc.trainers.length?'':'disabled'}>${ex?.locationId===loc.id&&ex.mode==='battle'?'✓ 배틀 배정됨':'트레이너 배틀 배정'}</button><p class="muted">오늘: ${esc(describeAction(cur))}</p>${cur&&cur!=='rest'?'<button class="ghost" id="cancel-assignment">배정 취소 · 휴식</button>':''}</div>` : `<div class="eyebrow">WORLD ATLAS</div><h2>${region.name}</h2><p class="muted">현재 소속사의 활동 범위는 관동·성도입니다.</p>`}</aside></div>`;
+    <div class="dispatch-form"><label>파견 트레이너<select id="map-trainer">${roster.map(x=>`<option value="${x.id}" ${x.id===t?.id?'selected':''}>${esc(x.name)} · 파티 ${x.party.length}마리</option>`).join('') || '<option>첫 계약이 필요합니다</option>'}</select></label><label>하루 활동 횟수<select id="activity-budget" aria-label="하루 활동 횟수">${[6,7,8].map(n=>`<option value="${n}" ${n===(ex?.activities || map.activities)?'selected':''}>${n}회${n===6?' · 기본':''}</option>`).join('')}</select></label>${t?(bagOf(t).pokeBall>0?`<p class="muted">가방: 몬스터볼 ${bagOf(t).pokeBall}개 · 상처약 ${bagOf(t).potion||0}개</p>`:`<p class="risk-note">${esc(t.name)}의 몬스터볼이 0개야. 이대로 포획을 보내면 아무것도 못 하고 돌아와. <button class="ghost" data-nav="shop">상점에서 지급</button></p>`):''}<p class="muted">센터·상처약 사용도 1회입니다. HP 50% 미만·기절·상태이상·PP 부족 시 회복 후 탐험을 이어갑니다.</p><div class="field-party">${(t?.party||[]).map(m=>`<span>${K(m.species)} <b>HP ${fieldState(m).hp}/${fieldState(m).maxhp}</b>${fieldState(m).status?' · '+statusLabel(fieldState(m).status):''}</span>`).join('')}</div><button data-act="mixed" ${t&&(loc.wild.length||loc.trainers.length)?'':'disabled'}>${ex?.locationId===loc.id&&ex.mode==='mixed'?'✓ 병행 탐험 배정됨':'포획·배틀 병행 배정'}</button><button data-act="catch" ${t&&loc.wild.length?'':'disabled'}>${ex?.locationId===loc.id&&ex.mode==='catch'?'✓ 포획 배정됨':'포켓몬 포획 배정'}</button><button class="ghost" data-act="battle" ${t&&loc.trainers.length?'':'disabled'}>${ex?.locationId===loc.id&&ex.mode==='battle'?'✓ 배틀 배정됨':'트레이너 배틀 배정'}</button><p class="muted">오늘: ${esc(describeAction(cur))}</p>${cur&&cur!=='rest'?'<button class="ghost" id="cancel-assignment">배정 취소 · 휴식</button>':''}</div>` : `<div class="eyebrow">WORLD ATLAS</div><h2>${region.name}</h2><p class="muted">현재 소속사의 활동 범위는 관동·성도입니다.</p>`}</aside></div>`;
 }
 
 /* ---------------- 활동 일정 ---------------- */
@@ -454,7 +436,7 @@ function render() {
   else if (screen === 'squad') main.innerHTML = renderSquad();
   else if (screen === 'box') main.innerHTML = renderBox();
   else if (screen === 'map') main.innerHTML = renderMap();
-  else if (screen === 'support') main.innerHTML = renderSupport(game);
+  else if (screen === 'support' || screen === 'shop') { screen = 'shop'; main.innerHTML = renderShop(game); }
   else if (screen === 'training') main.innerHTML = renderTraining(game);
   else if (screen === 'gyms') main.innerHTML = renderGyms(game,map.trainerId);
   else if (screen === 'schedule') main.innerHTML = renderSeason(game)+renderSchedule();
@@ -492,6 +474,16 @@ function wire() {
   if (back) back.onclick = () => { detailId = null; render(); };
 
   wireManagementPages(main,game,()=>{persist();render();},id=>openGymWatch(id),id=>{map.trainerId=id;render();});
+  wireShop(main,game,()=>{persist();render();});
+  main.querySelectorAll('[data-give-item]').forEach(b=>b.onclick=()=>{
+    const mon=b.dataset.t ? findTrainer(game.league,b.dataset.t)?.party[Number(b.dataset.i)] : playerAgency(game).box[Number(b.dataset.b)];
+    if(mon)openItemPicker(game,mon,()=>{persist();render();},()=>{screen='shop';detailId=null;render();});
+  });
+  const seatTarget=$('seat-target');
+  main.querySelectorAll('[data-seat-swap],[data-seat-swap-race]').forEach(b=>b.onclick=()=>{
+    const r=b.dataset.seatSwap?swapSeat(game,b.dataset.seatSwap,seatTarget.value):swapSeat(game,seatTarget.value,b.dataset.seatSwapRace);
+    alert(r.msg);persist();render();
+  });
   main.querySelectorAll('.manage-mon,.evolve-mon').forEach(b=>b.onclick=()=>{
     const mon=b.dataset.t ? findTrainer(game.league,b.dataset.t)?.party[Number(b.dataset.i)] : playerAgency(game).box[Number(b.dataset.b)];
     if(!mon)return;

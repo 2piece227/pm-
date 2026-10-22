@@ -10,6 +10,7 @@ import { applyLoss, applyWin } from './explore.js';
 import { agencyOf, evolutionOptions, evolvePokemon } from './pokemon-management.js';
 import { analyseBattle } from './battle-analysis.js';
 import { markGraduation } from './career.js';
+import { consumeBerries } from './shop.js';
 
 export async function challengeGym(game, trainer, gymId) {
   if(pwtBreak(game))throw new Error('PWT 기간에는 공식 체육관 도전이 중단됩니다.');
@@ -35,8 +36,8 @@ export async function challengeGym(game, trainer, gymId) {
     teamA:partyToTeam(trainer.party),teamB:partyToTeam(party),seed,collectThink:true});
   const analysis=analyseBattle(result,analysisContext);
   trainer.party.forEach((m,i)=>{m.fieldState=result.hpAfter.p1[i];});
+  consumeBerries(trainer.party,result.log);
   trainer.lastGymDay=game.day;trainer.locationId=gym.location;
-  trainer.fatigue=Math.min(100,(trainer.fatigue||0)+24);
   const won=result.winner==='p1';
   trainer.record[won?'wins':'losses']++;
   if(won) applyWin(trainer);else applyLoss(trainer);

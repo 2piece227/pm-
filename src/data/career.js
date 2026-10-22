@@ -1,6 +1,8 @@
 /** Editable starting balance. Generated trainers only; named affiliations stay undecided. */
 export const CAREER = {
   youthCapacity: 3,
+  /* F1처럼 소속사마다 레귤러 프로 2명 + 리저브 1명, 프로는 최대 3명 [확정 2026-10-22] */
+  proSeats: { race: 2, reserve: 1 },
   starting: {
     major: { pros:3, youths:1, profile:'elite' },
     semi: { pros:2, youths:1, profile:'strong' },

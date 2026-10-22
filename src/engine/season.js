@@ -1,7 +1,7 @@
 import { competitionTrainer, competitionAgency, payCompetitionPrize } from './international.js';
 import { SEASON, SEASON_PHASES, CUP_SCHEDULE, RANKING } from '../data/season.js';
 import { citySeedScores } from './regional-ranking.js';
-import { proEligible, isRegisteredPro } from './career.js';
+import { proEligible, isRegisteredPro, isRaceSeat } from './career.js';
 import { findTrainer, seedOrder } from './league.js';
 import { effectiveStats, STAT_KEYS } from '../data/agencies.js';
 import { partyToTeam, gainExp } from '../data/pokemon.js';
@@ -32,7 +32,7 @@ export function youthEligible(t){return !!t?.isYouth&&!proEligible(t)&&!!t.party
 export function cupEligible(t,e){
   if(!t?.party?.length)return false;
   if(e.kind==='youth')return youthEligible(t);
-  if(e.kind==='city')return isRegisteredPro(t)&&!['champion','elite-four'].includes(t.regionalRole);
+  if(e.kind==='city')return isRaceSeat(t)&&!['champion','elite-four'].includes(t.regionalRole);   // 리저브는 시티컵 불가
   return e.kind==='local';
 }
 export function registerCup(game,eventId,trainerId,remove=false){
@@ -95,8 +95,9 @@ export async function runCup(game,e,onProgress=async()=>{}){
     const growth=[];
     for(const mon of t.party.slice(0,e.rosterSize)){const before=mon.level;await gainExp(mon,SEASON.experience*count);growth.push({species:mon.species,before,level:mon.level,experience:SEASON.experience*count});}
     for(const key of STAT_KEYS)t.stats[key]=Math.min(t.potential?.[key]??t.stats[key],t.stats[key]+SEASON.growth*count);
-    t.fatigue=Math.min(100,(t.fatigue||0)+count*SEASON.fatigue);
     const wins=e.matches.filter(m=>m.winnerId===t.id&&!m.draw).length;
+    const losses=e.matches.filter(m=>!m.draw&&m.winnerId!==t.id&&(m.aId===t.id||m.bId===t.id)).length;
+    t.fatigue=Math.max(0,Math.min(100,(t.fatigue||0)+losses*SEASON.fatigue-wins*2));   // 컨디션은 패배로 깎인다
     t.record.wins+=wins;t.record.losses+=e.matches.filter(m=>!m.draw&&m.winnerId!==t.id&&(m.aId===t.id||m.bId===t.id)).length;
     e.scouting.push({trainerId:t.id,name:t.name,agencyName:x.agencyName,growth,text:`${count}경기 · ${wins}승 · 출전 당시 ${x.party.map(p=>`${ko(SPECIES_KO,p.species)} Lv.${p.level}`).join(', ')}. 상대와 파티 차이를 함께 보고 평가하세요.`});
   }

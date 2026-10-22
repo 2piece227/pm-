@@ -9,6 +9,7 @@
  * 고칠 게 생기면 아래 *_OVERRIDE에 적는다 — 생성표를 덮어쓴다.
  * 로케일이 기본 종만 갖고 있어서, **폼 변형은 여기서 손으로 적는다.**
  */
+import { HELD_ITEMS } from './items.gen.js';
 import {
   ABILITY_KO_ALL, MOVE_KO_ALL, MOVE_TYPE_ALL, SPECIES_KO_ALL, SPECIES_TYPES_ALL,
 } from './ko.gen.js';
@@ -38,12 +39,8 @@ export const SPECIES_TYPES = { ...SPECIES_TYPES_ALL, ...SPECIES_TYPES_OVERRIDE }
 
 
 
-export const ITEM_KO = {
-  Leftovers: '남은음식',
-  'Choice Specs': '구애안경',
-  'Life Orb': '생명의구슬',
-  'Choice Band': '구애머리띠',
-};
+/* 도구 이름 — 상점 데이터(items.gen.js, PokeAPI 한국어 공식 명칭)에서 가져온다 */
+export const ITEM_KO = Object.fromEntries(Object.entries(HELD_ITEMS).map(([en, v]) => [en, v.ko]));
 
 export const BOOST_KO = {
   atk: '공격',

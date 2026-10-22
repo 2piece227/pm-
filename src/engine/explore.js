@@ -16,6 +16,7 @@ import { createTrainerAI, runBattle } from './run-battle.js';
 import { curve } from '../ai/estimate.js';
 import { fieldState, healParty, partyCondition } from './field-state.js';
 import { bagOf, MANAGEMENT, evolvePokemon, evolutionOptions } from './pokemon-management.js';
+import { consumeBerries } from './shop.js';
 
 export const EXPLORE_CONFIG = {
   day: { min: 6, max: 8, default: 6 },
@@ -69,6 +70,8 @@ export function applyLoss(trainer) {
   const mental = curve(trainer.stats.mental);
   const hit = c.perLoss * Math.max(0.3, 1 - mental * c.mentalSoftens);
   trainer.mentalDebuff = Math.min(c.cap, (trainer.mentalDebuff || 0) + hit);
+  /* 컨디션은 패배로 무너진다 — 멘탈이 높을수록 덜 */
+  trainer.fatigue = Math.min(100, (trainer.fatigue || 0) + MANAGEMENT.lossHit * Math.max(0.4, 1 - mental * 0.03));
   return hit;
 }
 
@@ -77,6 +80,7 @@ export function applyWin(trainer) {
   trainer.lossStreak = 0;
   const mental = curve(trainer.stats.mental);
   trainer.mentalDebuff = Math.max(0, (trainer.mentalDebuff || 0) - c.recoverOnWin * (0.6 + mental * 0.04));
+  trainer.fatigue = Math.max(0, (trainer.fatigue || 0) - MANAGEMENT.winRecover);
 }
 
 /* ---------------- 배틀 ---------------- */
@@ -91,6 +95,7 @@ function fight(trainer, myParty, foe, foeParty, seed) {
     seed, initialState: { p1: myParty.map(fieldState) },
   });
   myParty.forEach((mon, i) => { mon.fieldState = { ...r.hpAfter.p1[i], pp: { ...mon.fieldState?.pp, ...r.hpAfter.p1[i].pp } }; });
+  consumeBerries(myParty, r.log);
   return r;
 }
 
@@ -272,7 +277,7 @@ export async function explore(game, trainer, locationId, mode, { activities = EX
   if (!available.length) { out.lines.push('이 장소에서는 지정한 활동을 할 수 없습니다.'); return out; }
   let encounters = 0;
   for (let slot = 1; slot <= budget; slot++) {
-    if (!available.some(m=>m==='battle'||bagOf(trainer).pokeBall>0)) {out.lines.push('몬스터볼이 없어 포획을 중단하고 복귀했다. 지원에서 물품을 지급하세요.');break;}
+    if (!available.some(m=>m==='battle'||bagOf(trainer).pokeBall>0)) {out.lines.push('몬스터볼이 없어 포획을 중단하고 복귀했다. 상점에서 물품을 지급하세요.');break;}
     const before = trainer.party.map(fieldState);
     const health = partyCondition(trainer);
     let event;
