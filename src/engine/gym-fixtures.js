@@ -69,7 +69,7 @@ export function bookGym(game, trainerId, gymId, day) {
   fixturesOf(game).push(fx);
   game.league.newsFeed.unshift({ day: game.day, kind: 'gym-booking', trainerId,
     text: `${gym.name} 체육관 — ${trainer.name}의 도전을 접수했습니다 · ${day}일차` });
-  return { ok: true, msg: `${gym.name} 체육관이 도전을 접수했어. ${day - game.day}일 뒤에 경기야.`, fixture: fx };
+  return { ok: true, msg: `${gym.name} 체육관이 도전을 접수했습니다. ${day - game.day}일 뒤에 경기가 열립니다.`, fixture: fx };
 }
 
 export function cancelFixture(game, fixtureId, reason = '대표가 취소') {

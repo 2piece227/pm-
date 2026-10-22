@@ -16,7 +16,7 @@ const gymUi = { region: 'kanto', gymId: null, day: null };
 const ASSET = (import.meta.env?.BASE_URL ?? '/') + 'assets/';
 const badgeImg = (g, earned = true) => `<img class="badge-img ${earned ? '' : 'missing'}" src="${ASSET}badges/${g.region === 'kanto' ? g.order : 8 + g.order}.png" alt="${g.badge}${earned ? '' : ' (미획득)'}" title="${g.badge}" width="32" height="32">`;
 const K=s=>ko(SPECIES_KO,s);
-export function fatigueIcon(t){const f=fatigueOf(t);return `<span class="fatigue ${f.color}" role="img" aria-label="${f.label}" title="${f.label} · 지면 떨어지고 이기면 돌아온다">${f.face}</span>`;}
+export function fatigueIcon(t){const f=fatigueOf(t);return `<span class="fatigue ${f.color}" role="img" aria-label="${f.label}" title="${f.label} · 패배하면 떨어지고 승리하면 회복됩니다">${f.face}</span>`;}
 
 export function renderSupport(game){
   return `<div class="page-h"><h2>트레이너 지원</h2><span class="muted">구입한 물품은 선택한 트레이너의 가방에 지급됩니다</span></div><p class="muted">몬스터볼은 포획 시도에 1개, 상처약은 탐험 중 HP가 부족할 때 1개씩 사용합니다. 상처약은 HP 20 회복이며 기절·상태이상·PP는 센터에서 치료합니다.</p><div id="management-notice" role="status"></div>
@@ -41,12 +41,12 @@ export function renderGyms(game,selectedId=null){
   if(target&&!targetStatus?.ok){gymUi.gymId=null;}
   const days=gymUi.gymId&&selected?bookingDays(game,selected,gymUi.gymId):[];
   if(days.length&&!days.some(d=>d.ok&&d.day===gymUi.day))gymUi.day=days.find(d=>d.ok)?.day??null;
-  return `<div class="page-h"><div><div class="eyebrow">GYM CIRCUIT</div><h2>체육관 순회</h2></div><span class="muted">날짜를 잡아 신청하면 체육관이 접수해. 그날은 탐험 대신 관장전을 치러.</span></div>
-  ${pwtBreak(game)?'<p class="risk-note">PWT 기간이라 공식 체육관 도전이 휴회 중이야.</p>':''}
+  return `<div class="page-h"><div><div class="eyebrow">GYM CIRCUIT</div><h2>체육관 순회</h2></div><span class="muted">날짜를 정해 신청하면 체육관이 접수합니다. 그날은 탐험 대신 관장전을 치릅니다.</span></div>
+  ${pwtBreak(game)?'<p class="risk-note">PWT 기간이라 공식 체육관 도전이 휴회 중입니다.</p>':''}
   <div class="gym-trainers" role="tablist" aria-label="도전 트레이너">${roster.map(t=>{const b=badgeProgress(t);return `<button class="gym-trainer-chip ${t.id===selected?.id?'on':''}" data-gym-trainer="${t.id}" role="tab" aria-pressed="${t.id===selected?.id}">${fatigueIcon(t)}<b>${esc(t.name)}</b><small>관동 ${b.kanto}/8 · 성도 ${b.johto}/8</small></button>`;}).join('')}</div>
   <div class="gym-top">
     <section class="card badge-case"><div class="section-heading"><h3>${esc(selected?.name||'')}의 배지 케이스</h3></div>${['kanto','johto'].map(r=>`<div class="badge-row"><span>${r==='kanto'?'관동':'성도'}</span>${GYMS.filter(g=>g.region===r).map(g=>badgeImg(g,earned.has(g.id))).join('')}</div>`).join('')}</section>
-    <section class="card fixtures"><div class="section-heading"><h3>잡혀 있는 관장전</h3><span class="muted">${booked.length}경기</span></div>${booked.map(f=>{const g=gymById(f.gymId),t=roster.find(x=>x.id===f.trainerId);return `<div class="fixture-row">${badgeImg(g)}<div><b>${esc(t?.name||'')} vs ${g.name}</b><small>${gameDate(f.day)} · ${f.day}일차</small></div><span class="dd">${f.day===game.day?'오늘':`D-${f.day-game.day}`}</span><button class="ghost" data-fixture-cancel="${f.id}">취소</button></div>`;}).join('')||'<p class="muted">아직 잡힌 경기가 없어. 아래에서 체육관을 골라 날짜를 신청해.</p>'}</section>
+    <section class="card fixtures"><div class="section-heading"><h3>잡혀 있는 관장전</h3><span class="muted">${booked.length}경기</span></div>${booked.map(f=>{const g=gymById(f.gymId),t=roster.find(x=>x.id===f.trainerId);return `<div class="fixture-row">${badgeImg(g)}<div><b>${esc(t?.name||'')} vs ${g.name}</b><small>${gameDate(f.day)} · ${f.day}일차</small></div><span class="dd">${f.day===game.day?'오늘':`D-${f.day-game.day}`}</span><button class="ghost" data-fixture-cancel="${f.id}">취소</button></div>`;}).join('')||'<p class="muted">아직 잡힌 경기가 없습니다. 아래에서 체육관을 골라 날짜를 신청하세요.</p>'}</section>
   </div>
   <div id="management-notice" role="status"></div>
   <div class="gym-layout"><section>
@@ -58,8 +58,8 @@ export function renderGyms(game,selectedId=null){
     <h4>경기 날짜</h4><div class="day-chips">${days.map(d=>`<button class="day-chip ${d.day===gymUi.day?'on':''}" data-gym-day="${d.day}" ${d.ok?'':'disabled'} title="${d.reason||gameDate(d.day)}"><small>D-${d.day-game.day}</small><b>${gameDate(d.day).replace(/\s*\(.*\)/,'')}</b>${d.reason?`<i>${d.reason}</i>`:''}</button>`).join('')}</div>
     <label>사전 운영 방침 · 관장전<select id="battle-policy">${Object.entries(BATTLE_POLICIES).map(([id,p])=>`<option value="${id}" ${policyId(selected.battlePolicy)===id?'selected':''}>${p.name}</option>`).join('')}</select></label><p class="muted">${BATTLE_POLICIES[policyId(selected.battlePolicy)].hint}</p>
     <div class="booking-actions"><button class="ghost" data-gym-close>닫기</button><button data-gym-confirm ${gymUi.day?'':'disabled'}>${gymUi.day?`${gameDate(gymUi.day)} 도전 접수`:'가능한 날짜 없음'}</button></div>
-    <small class="muted">${GYM_BOOKING.minLead}~${GYM_BOOKING.maxLead}일 뒤까지 신청 · 지면 ${GYM_BOOKING.rematchWait}일 뒤부터 재도전 · 경기 당일 센터에서 회복 후 출전</small>`;})():`<div class="eyebrow">HOW IT WORKS</div><h3>관장전 잡는 법</h3><ol class="howto"><li>위에서 트레이너를 골라.</li><li>체육관 옆 <b>일정 잡기</b>를 눌러 날짜를 정해.</li><li>체육관이 접수하면 그날 탐험 대신 관장전을 치르고, 끝나면 관전이 열려.</li></ol><p class="muted">배지를 이미 가진 체육관은 다시 신청할 수 없어. 한 지방 배지 8개를 모으면 프로 콜업을 결정할 수 있어.</p>`}</aside></div>
-  <section class="card gym-history-card"><div class="section-heading"><h3>지난 관장전</h3></div>${(game.gymHistory||[]).slice(0,12).map(m=>`<div class="history-row"><span class="result ${m.won?'w':'l'}">${m.won?'승':'패'}</span><div><b>${esc(m.trainerName)} vs ${m.gymName}</b><small>${m.day}일차${m.firstWin?` · ${m.badge} 획득`:''}</small></div><button class="ghost" data-watch-gym="${m.id}">다시 보기</button></div>`).join('')||'<p class="muted">첫 도전을 기다리고 있어.</p>'}</section>`;
+    <small class="muted">${GYM_BOOKING.minLead}~${GYM_BOOKING.maxLead}일 뒤까지 신청 · 지면 ${GYM_BOOKING.rematchWait}일 뒤부터 재도전 · 경기 당일 센터에서 회복 후 출전</small>`;})():`<div class="eyebrow">HOW IT WORKS</div><h3>관장전 잡는 법</h3><ol class="howto"><li>위에서 트레이너를 고릅니다.</li><li>체육관 옆 <b>일정 잡기</b>를 눌러 날짜를 정합니다.</li><li>체육관이 접수하면 그날 탐험 대신 관장전을 치르고, 끝나면 관전이 열립니다.</li></ol><p class="muted">배지를 이미 가진 체육관은 다시 신청할 수 없습니다. 한 지방 배지 8개를 모으면 프로 콜업을 결정할 수 있습니다.</p>`}</aside></div>
+  <section class="card gym-history-card"><div class="section-heading"><h3>지난 관장전</h3></div>${(game.gymHistory||[]).slice(0,12).map(m=>`<div class="history-row"><span class="result ${m.won?'w':'l'}">${m.won?'승':'패'}</span><div><b>${esc(m.trainerName)} vs ${m.gymName}</b><small>${m.day}일차${m.firstWin?` · ${m.badge} 획득`:''}</small></div><button class="ghost" data-watch-gym="${m.id}">다시 보기</button></div>`).join('')||'<p class="muted">첫 도전을 기다리고 있습니다.</p>'}</section>`;
 }
 
 export function wireManagementPages(root,game,refresh,watch,selectTrainer=()=>{}){

@@ -2,7 +2,7 @@
  * 상점·도구·기술 설명 데이터 생성기 — `src/data/items.gen.js`를 만든다.
  *
  * 출처 (CREDITS.md):
- *   - 기술 설명(한국어): pagefaultgames/pokerogue-locales ko/move.json 의 effect
+ *   - 기술·특성 설명(한국어): pagefaultgames/pokerogue-locales ko/move.json effect, ko/ability.json description
  *     없으면 PokeAPI move_flavor_text(한국어, 가장 최근 버전)
  *   - 도구 이름·설명·가격(한국어): PokeAPI items / item_names / item_flavor_text / item_categories
  *   - 기술머신 목록: PokeAPI machines (스칼렛·바이올렛 version_group 25, TM001~229)
@@ -42,6 +42,7 @@ const [items, itemNames, itemFlavor, categories, machines, moves, moveFlavor, ve
   csv('items'), csv('item_names'), csv('item_flavor_text'), csv('item_categories'), csv('machines'), csv('moves'), csv('move_flavor_text'), csv('version_groups'),
   text(`${LOC}/move.json`).then(JSON.parse),
 ]);
+const locAbility = JSON.parse(await text(`${LOC}/ability.json`));
 const vgOrder = Object.fromEntries(versionGroups.map(v => [v.id, Number(v.order)]));
 const latestKo = (rows, key) => {
   const out = {};
@@ -59,6 +60,14 @@ for (const mv of gen.moves.all()) {
   const loc = Object.entries(locMove).find(([k]) => dexId(k) === mv.id)?.[1]?.effect;
   const desc = clean(loc) || moveFlavorKo[pokeMoveId[mv.id]];
   if (desc) MOVE_DESC[mv.name] = desc;
+}
+
+/* ---------- 특성 설명 ---------- */
+const ABILITY_DESC = {};
+for (const ab of gen.abilities.all()) {
+  if (!ab.exists) continue;
+  const d = Object.entries(locAbility).find(([k]) => dexId(k) === ab.id)?.[1]?.description;
+  if (d) ABILITY_DESC[ab.name] = clean(d);
 }
 
 /* ---------- 지닌 도구 ---------- */
@@ -96,11 +105,12 @@ const TMS = machines.filter(m => m.version_group_id === SV).map(m => {
 const body = `/**
  * **자동 생성 파일 — 직접 고치지 마라.** \`node tools/gen-items.mjs\`로 다시 만든다.
  *
- *   기술 설명 ${Object.keys(MOVE_DESC).length}종 / 지닌 도구 ${Object.keys(HELD_ITEMS).length}종 / 기술머신 ${TMS.length}개
+ *   기술 설명 ${Object.keys(MOVE_DESC).length}종 / 특성 설명 ${Object.keys(ABILITY_DESC).length}종 / 지닌 도구 ${Object.keys(HELD_ITEMS).length}종 / 기술머신 ${TMS.length}개
  *   출처: pokerogue-locales(ko move effect), PokeAPI CSV(도구 이름·설명·가격, SV 기술머신), @pkmn/dex 9세대
  *   estimated: true 인 도구 가격과 기술머신 가격은 [임시값]
  */
 export const MOVE_DESC_KO = ${JSON.stringify(MOVE_DESC, null, 0)};
+export const ABILITY_DESC_KO = ${JSON.stringify(ABILITY_DESC, null, 0)};
 export const HELD_ITEMS = ${JSON.stringify(HELD_ITEMS, null, 0)};
 export const TMS = ${JSON.stringify(TMS, null, 0)};
 `;
