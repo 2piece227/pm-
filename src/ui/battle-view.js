@@ -149,8 +149,8 @@ const HP_DRAIN_MAX_MS = 1300;
 function buildHpBox(side, f) {
   const box = $(`hp-${side}`);
   box.innerHTML =
-    '<div class="hpb-n"><span><b class="nm"></b><i class="st"></i></span><em class="lv"></em></div>' +
-    '<div class="hpb-row"><span class="hplabel">HP</span>' +
+    '<div class="hpb-n"><span><b class="nm"></b></span><em class="lv"></em></div>' +
+    '<div class="hpb-row"><i class="st"></i><span class="hplabel">HP</span>' +
     '<span class="hpb-bar"><i></i></span></div>' +
     '<div class="hpb-num"></div><div class="hpb-boost"></div>' +
     '<div class="hpb-balls"></div>';
@@ -222,11 +222,13 @@ function drawHpBox(side, f) {
     st = buildHpBox(side, f);
     st.key = key;
     st.nm.innerHTML = `${f.name}${f.gender ? GENDER[f.gender] : ''}`;
-    st.lv.textContent = `Lv${f.level}`;
+    st.lv.innerHTML = `<small>Lv</small>${f.level}`;
   }
 
+  /* 원작 HP 박스처럼 HP 바 왼쪽의 색 배지 (맹독도 '독') */
   st.stat.textContent = f.status || '';
-  st.stat.style.display = f.status ? '' : 'none';
+  st.stat.dataset.st = f.statusCode || '';
+  st.stat.style.visibility = f.status ? 'visible' : 'hidden';
   st.boost.textContent = f.boosts || '';
   st.boost.style.display = f.boosts ? '' : 'none';
 
@@ -256,7 +258,8 @@ export function drawTrainers(names) {
     const name = typeof v === 'string' ? v : v?.name || '';
     const knownName=$(`known-trainer-${side}`);if(knownName)knownName.textContent=name||side;
     const agency = typeof v === 'string' ? '' : v?.agency || '';
-    el.innerHTML = name ? `<b>${name}</b>${agency ? `<em>${agency}</em>` : ''}` : '';
+    const sprite = typeof v === 'string' ? '' : v?.sprite || '';
+    el.innerHTML = name ? `${sprite ? `<img class="bt-sprite" src="${sprite}" alt="" aria-hidden="true">` : ''}<span><b>${name}</b>${agency ? `<em>${agency}</em>` : ''}</span>` : '';
     el.style.display = name ? '' : 'none';
   }
 }
@@ -502,8 +505,10 @@ function applyStatusLook(side, code) {
   const el = $(`sp-${side}`);
   if (!el) return;
   el.classList.remove(...STATUS_CLASS);
-  if (code && STATUS_ANIM[code]) el.classList.add(`st-${code}`);
-  freezeSprite(el, code === 'frz');
+  /* 원작(5세대)처럼 색은 씌우지 않고, 잠듦·얼음일 때만 도트의 움직임이 멈춘다 */
+  const still = code === 'frz' || code === 'slp';
+  if (still) el.classList.add(`st-${code}`);
+  freezeSprite(el, still);
 }
 
 /**
@@ -526,7 +531,7 @@ function freezeSprite(el, on) {
   /* 아직 GIF가 안 내려왔으면 다 받은 뒤에 다시 시도한다 */
   if (!img.naturalWidth) {
     img.addEventListener('load', () => {
-      if (el.classList.contains('st-frz')) freezeSprite(el, true);
+      if (el.classList.contains('st-frz') || el.classList.contains('st-slp')) freezeSprite(el, true);
     }, { once: true });
     return;
   }

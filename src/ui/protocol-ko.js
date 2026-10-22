@@ -11,7 +11,7 @@
  */
 import {
   ABILITY_KO, BOOST_KO, CANT_MSG, ITEM_KO, MOVE_KO, MOVE_TYPE, SPECIES_KO, SPECIES_TYPES,
-  STATUS_BADGE, STATUS_KO, STATUS_MSG, STATUS_TICK, WEATHER_MSG, ko,
+  STATUS_BADGE, STATUS_KO, STATUS_MSG, STATUS_TICK, WEATHER_MSG, CURE_MSG, ko,
   eunNeun, eulReul, iGa,
 } from '../data/ko.js';
 import { animArchetype } from '../data/move-anim.js';
@@ -400,13 +400,21 @@ ${ko(STATUS_KO, st)} 상태가 되었다!`,
         break;
       }
 
+      case '-cureteam': {
+        /* 방울소리·아로마테라피 — 그 편 전원의 상태이상이 풀린다 */
+        const id = parseIdent(parts[1]);
+        for (const k of Object.keys(status)) if (k.startsWith(id?.side || '?')) status[k] = null;
+        push('l-gold', `  ${id?.side} 상태이상 전원 회복`, {});
+        break;
+      }
+
       case '-curestatus': {
         const id = parseIdent(parts[1]);
         const st = parts[2];
         if (id && status[id.slot] === st) status[id.slot] = null;
         const name = monKo(id);
         push('l-gold', `  ${name} ${ko(STATUS_KO, st)} 회복`, {
-          msg: `${name}의 ${iGa(ko(STATUS_KO, st))}\n나았다!`,
+          msg: CURE_MSG[st] ? CURE_MSG[st](name) : `${name}의 ${iGa(ko(STATUS_KO, st))}\n나았다!`,
         });
         break;
       }
@@ -500,6 +508,8 @@ ${ko(STATUS_KO, st)} 상태가 되었다!`,
         const name = monKo(id);
         const f = CANT_MSG[reason];
         push('l-sub', `  ${name} 행동 불가 (${reason})`, {
+          /* 잠듦·마비·얼음으로 못 움직일 때도 원작처럼 그 상태이상 연출이 돈다 */
+          ...(['slp', 'par', 'frz'].includes(reason) ? { anim: { k: 'status', side: id.side, status: reason, text: ko(STATUS_KO, reason) } } : {}),
           msg: f ? f(eunNeun(name)) : `${eunNeun(name)}
 움직일 수 없다!`,
         });

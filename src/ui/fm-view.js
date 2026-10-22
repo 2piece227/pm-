@@ -1,6 +1,7 @@
 import { youthCount, youthCapacity, careerLabel, isRegisteredPro, ensureSeats, seatLabel, swapSeat, proCapacity } from '../engine/career.js';
 import { renderShop, wireShop, itemIcon as heldIcon } from './shop.js';
 import { openItemPicker } from './item-picker.js';
+import { trainerPortrait, trainerFull } from './trainer-sprite.js';
 import { HELD_ITEMS } from '../data/items.gen.js';
 import { conditionOf } from '../engine/pokemon-management.js';
 import { badgeProgress as badgesOf } from '../engine/gym-progress.js';
@@ -195,7 +196,7 @@ function renderOffice() {
     </div>
     <div class="dash-grid two">
       <section class="card dash-card"><div class="section-heading"><h3>오늘의 운영 계획</h3><button class="ghost" data-nav="map">일정 변경</button></div>
-      ${roster.length ? roster.map(t=>`<div class="assignment"><span class="avatar">${esc(t.name[0])}</span><div><b>${fatigueIcon(t)} ${esc(t.name)}</b><p>${esc(scheduledAction(t))}</p></div><div class="mini-party">${t.party.map(m=>monImage(m.species)).join('')}</div></div>`).join('') : '<p class="muted">아직 계약한 트레이너가 없습니다.</p>'}</section>
+      ${roster.length ? roster.map(t=>`<div class="assignment">${trainerPortrait(t)}<div><b>${fatigueIcon(t)} ${esc(t.name)}</b><p>${esc(scheduledAction(t))}</p></div><div class="mini-party">${t.party.map(m=>monImage(m.species)).join('')}</div></div>`).join('') : '<p class="muted">아직 계약한 트레이너가 없습니다.</p>'}</section>
       <section class="card dash-card"><div class="section-heading"><h3>업데이트 소식</h3></div>${UPDATE_NOTES.slice(0,3).map(n=>`<article class="patch"><header><span>${n.version}</span><b>${esc(n.title)}</b><small>${n.date}</small></header><ul>${n.items.map(i=>`<li>${esc(i)}</li>`).join('')}</ul></article>`).join('')}</section>
     </div>
     ${rep ? renderDailySummary(rep, false) : ''}`;
@@ -301,7 +302,7 @@ function renderSquad() {
   const seats = ensureSeats(a), youth = roster.filter(t => t.isYouth), other = roster.filter(t => !t.isYouth && !isRegisteredPro(t));
   const card = (t) => {
     const d = displayStats(t), b = badgesOf(t);
-    return `<button class="roster-card" data-open-trainer="${t.id}"><span class="avatar big">${esc(t.name[0])}</span><div class="rc-main"><div class="rc-name"><b>${esc(t.name)}</b><span class="seat ${t.isYouth ? 'youth' : t.proSeat || 'race'}">${seatLabel(t)}</span></div>
+    return `<button class="roster-card" data-open-trainer="${t.id}">${trainerPortrait(t,"big")}<div class="rc-main"><div class="rc-name"><b>${esc(t.name)}</b><span class="seat ${t.isYouth ? 'youth' : t.proSeat || 'race'}">${seatLabel(t)}</span></div>
       <div class="rc-stats">${STAT_KEYS.map(k => `<span><small>${STAT_KO[k]}</small>${at(d[k])}</span>`).join('')}</div>
       <div class="rc-cond"><small>컨디션 ${conditionOf(t)}</small>${condBar(t)}${t.mentalDebuff > 0.5 ? `<small class="negative">연패 −${t.mentalDebuff.toFixed(1)}</small>` : ''}</div>
       <p class="rc-today">${esc(scheduledAction(t))}</p></div>
@@ -339,7 +340,7 @@ function renderTrainer(id) {
     : t.proSeat === 'race' && seats.reserve.length ? `<label class="seat-swap">리저브와 교체<select id="seat-target">${seats.reserve.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('')}</select><button data-seat-swap-race="${t.id}">교체</button></label>` : '';
   return `<button class="ghost back-link" id="back-squad">← 트레이너 명단</button>
     <section class="tp-hero">
-      <span class="avatar huge">${esc(t.name[0])}</span>
+      <div class="tp-sprite">${trainerFull(t)}</div>
       <div class="tp-id"><span class="seat ${t.isYouth ? 'youth' : t.proSeat || 'race'}">${seatLabel(t)}</span><h2>${esc(t.name)}</h2><p>${esc(t.nature?.style || '균형형')} · 레이팅 ${trainerRating(t).toFixed(1)} · ${t.record?.wins || 0}승 ${t.record?.losses || 0}패 · 관동 ${b.kanto}/8 · 성도 ${b.johto}/8</p><p class="muted">오늘: ${esc(scheduledAction(t))}</p></div>
       <div class="tp-cond"><small>컨디션</small><b>${cond}</b>${condBar(t)}<small>${fatigueIcon(t)} ${t.mentalDebuff > 0.5 ? `연패 페널티 −${t.mentalDebuff.toFixed(1)}` : '패배가 쌓이면 떨어지고, 승리하면 회복됩니다'}</small></div>
       <div class="tp-actions"><button data-nav="map" data-trainer="${t.id}">지도로 보내기</button><button class="ghost" data-nav="gyms" data-trainer="${t.id}">관장전 신청</button>${swap}</div>
@@ -407,7 +408,7 @@ function renderSchedule() {
   const roster = playerRoster(game);
   return `<div class="page-h"><div><div class="eyebrow">OPERATIONS CALENDAR</div><h2>활동 일정</h2></div><span class="muted">오늘의 배정과 주간 정산</span></div>
     <div class="week-calendar">${Array.from({length:7},(_,i)=>game.day+i).map(day=>`<section class="calendar-day ${day===game.day?'today':''}"><small>${day===game.day?'오늘':`${day-game.day}일 후`}</small><h3>${gameDate(day)}</h3>${day===game.day?roster.map(t=>`<p><b>${esc(t.name)}</b><br>${esc(scheduledAction(t))}</p>`).join(''):'<p class="muted">활동 미배정</p>'}${fixturesOf(game).filter(f=>f.status==='booked'&&f.day===day).map(f=>`<p class="pill fixture-pill">관장전 · ${esc(playerRoster(game).find(t=>t.id===f.trainerId)?.name||'')} vs ${gymById(f.gymId)?.name}</p>`).join('')}${(game.competitions?.events||[]).filter(e=>e.date===day||e.deadline===day).map(e=>`<p class="pill">${e.name} · ${e.date===day?'개최':'등록 마감'}</p>`).join('')}${day%7===0?'<span class="pill">주급 지급일</span>':''}</section>`).join('')}</div>
-    <section class="card" style="margin-top:22px"><div class="section-heading"><h3>오늘의 활동 지시</h3><button data-nav="map">목적지 선택 →</button></div><p class="muted">하루 6~8회의 활동을 배정합니다. 센터 방문도 활동에 포함되며, 배정하지 않은 트레이너와 포켓몬은 휴식하며 회복합니다.</p>${roster.map(t=>`<div class="assignment"><span class="avatar">${esc(t.name[0])}</span><div><b>${fatigueIcon(t)} ${esc(t.name)}</b><p>${esc(scheduledAction(t))}</p></div></div>`).join('')}</section>
+    <section class="card" style="margin-top:22px"><div class="section-heading"><h3>오늘의 활동 지시</h3><button data-nav="map">목적지 선택 →</button></div><p class="muted">하루 6~8회의 활동을 배정합니다. 센터 방문도 활동에 포함되며, 배정하지 않은 트레이너와 포켓몬은 휴식하며 회복합니다.</p>${roster.map(t=>`<div class="assignment">${trainerPortrait(t)}<div><b>${fatigueIcon(t)} ${esc(t.name)}</b><p>${esc(scheduledAction(t))}</p></div></div>`).join('')}</section>
     <section class="card" style="margin-top:22px"><h3>지난 활동</h3>${game.log.slice(0,7).map(rep=>`<div class="assignment"><b>${gameDate(rep.day)}</b><span class="muted">${rep.explored.map(r=>`${esc(r.name)} · ${esc(r.location)}`).join(' / ') || ((rep.cupId||rep.youthCupId)?'대회 및 소속사 운영':'휴식 및 소속사 운영')} · 수지 ${rep.net>=0?'+':''}${won(rep.net)}</span></div>`).join('') || '<p class="muted">아직 완료한 활동이 없습니다.</p>'}</section>`;
 }
 

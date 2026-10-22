@@ -13,6 +13,7 @@ import './ui/pokemon-management.css';
 
 import './ui/battle-ambience.css';
 import './ui/shell-theme.css';
+import './ui/battle-ui.css';
 
 /* 리뉴얼 배경 — 관동·성도 도트 타운맵 (base 경로를 따라야 해서 JS에서 넣는다) */
 document.documentElement.style.setProperty('--backdrop', `url(${import.meta.env.BASE_URL}assets/maps/kanto-johto-enls.png)`);

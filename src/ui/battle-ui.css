@@ -1,0 +1,58 @@
+/* ==========================================================================
+   배틀 화면 — 원작(4~5세대 HGSS/BW) 같은 HP 박스 · 상태이상 배지 · 메시지 창 · 도트 필드
+   ========================================================================== */
+.scene{--hp-hi:#58d880;--hp-md:#f8c830;--hp-lo:#f85838;border-radius:10px;overflow:hidden;image-rendering:pixelated;aspect-ratio:753/500}
+.scene .battle-backdrop{object-fit:cover}
+.scene[data-arena="field"] .plat{display:none}
+/* 그림 속 발판에 발을 맞춘다 (Showdown 배경의 앞·뒤 발판 위치) */
+.scene[data-arena="field"] .spr.foe{left:71%;right:auto;top:auto;bottom:45%;translate:-50% 0;width:26%}
+.scene[data-arena="field"] .spr.me{left:27%;right:auto;bottom:6%;translate:-50% 0;width:34%}
+
+/* ---- HP 박스 ---- */
+.hpbox{z-index:3;width:clamp(210px,40%,330px);padding:7px 14px 8px 16px;background:linear-gradient(180deg,#fbfbe8 0%,#f4f2d8 70%,#e2dfbc 100%);color:#383838;
+  border:3px solid #3c4a4a;box-shadow:inset 0 0 0 2px #fffff4,0 4px 0 rgba(0,0,0,.28);font-family:'Noto Sans KR',sans-serif}
+.hpbox.foe{left:3%;top:6%;border-radius:6px 22px 22px 6px}
+.hpbox.me{right:3%;bottom:6%;border-radius:22px 6px 6px 22px;padding-left:22px}
+.hpb-n{align-items:baseline;font-size:16px;font-weight:900;color:#383838;text-shadow:1px 1px 0 #d8d2b0;letter-spacing:-.2px}
+.hpb-n b{font-weight:900}
+.hpb-n i.g-m{color:#3070d8;text-shadow:none}.hpb-n i.g-f{color:#e0507a;text-shadow:none}
+.hpb-n em{color:#383838;font-size:15px;font-weight:900;text-shadow:1px 1px 0 #d8d2b0}
+.hpb-n em small{font-size:10px;margin-right:1px}
+.hpb-row{gap:0;margin-top:4px}
+.hpb-row i.st{font-style:normal;flex:none;min-width:34px;margin-right:6px;padding:1px 4px;border-radius:4px;font-size:10px;font-weight:900;text-align:center;color:#fff;
+  text-shadow:0 1px 0 rgba(0,0,0,.35);box-shadow:inset 0 -2px 0 rgba(0,0,0,.25);background:#888}
+.hpb-row i.st[data-st="brn"]{background:#e8673a}
+.hpb-row i.st[data-st="par"]{background:#d4b81a;color:#3a3000;text-shadow:none}
+.hpb-row i.st[data-st="psn"],.hpb-row i.st[data-st="tox"]{background:#a346b8}
+.hpb-row i.st[data-st="slp"]{background:#8a8a92}
+.hpb-row i.st[data-st="frz"]{background:#4aa8d8}
+.hplabel{flex:none;background:#3c4a4a;color:#f8c840;font-size:10px;font-weight:900;padding:1px 5px 1px 6px;border-radius:5px 0 0 5px;letter-spacing:0}
+.hpb-bar{height:10px;padding:2px;background:#3c4a4a;border-radius:0 6px 6px 0}
+.hpb-bar::before{content:'';position:absolute}
+.hpb-bar i{border-radius:2px;box-shadow:inset 0 3px 0 rgba(255,255,255,.38),inset 0 -2px 0 rgba(0,0,0,.18);background-color:#383838}
+.hpb-num{margin-top:3px;font-size:17px;font-weight:900;color:#383838;text-shadow:1px 1px 0 #d8d2b0;font-variant-numeric:tabular-nums;letter-spacing:1px}
+.hpb-boost{display:inline-block;margin-top:3px;padding:1px 6px;border-radius:4px;background:#3c4a4a;color:#f8e8a0;font-size:10px}
+.hpb-balls{gap:4px;margin-top:5px}
+.hpb-balls i{width:10px;height:10px;border-radius:50%;box-shadow:none;border:1px solid #303030;background:linear-gradient(180deg,#e84838 0 45%,#303030 45% 55%,#f8f8f8 55%)}
+.hpb-balls i.out{background:linear-gradient(180deg,#8a8a8a 0 45%,#303030 45% 55%,#bdbdbd 55%);opacity:.7}
+
+/* ---- 상태이상: 원작처럼 도트에 색을 입히지 않는다 (잠듦·얼음은 JS가 움직임만 멈춘다) ---- */
+.spr.st-slp svg,.spr.st-slp img,.spr.st-slp canvas,.spr.st-frz svg,.spr.st-frz img,.spr.st-frz canvas,
+.spr.st-brn svg,.spr.st-brn img,.spr.st-brn canvas,.spr.st-psn svg,.spr.st-psn img,.spr.st-psn canvas,
+.spr.st-tox svg,.spr.st-tox img,.spr.st-tox canvas,.spr.st-par svg,.spr.st-par img,.spr.st-par canvas{animation:none!important;filter:drop-shadow(0 3px 2px rgba(0,0,0,.32))!important}
+.spr.st-slp::after,.spr.st-frz::after,.spr.st-brn::after,.spr.st-psn::after,.spr.st-tox::after,.spr.st-par::after{display:none!important}
+
+/* ---- 트레이너 이름표 ---- */
+.btname{display:flex;align-items:center;gap:6px;background:rgba(20,24,34,.72);color:#f4f4f4;border-radius:8px;padding:3px 10px 3px 4px;z-index:2}
+.btname.foe{flex-direction:row-reverse;padding:3px 4px 3px 10px}
+.bt-sprite{width:34px;height:34px;object-fit:cover;object-position:50% 10%;image-rendering:pixelated;border-radius:6px;background:rgba(255,255,255,.08)}
+.btname.foe .bt-sprite{transform:scaleX(-1)}
+.btname.me{bottom:auto;top:62%;left:2%}
+.btname.foe{top:auto;bottom:38%;right:2%}
+
+/* ---- 메시지 창 (원작 대화 상자) ---- */
+.tbox{margin-top:8px;background:#f8f8f8;color:#383838;border:4px solid #4a6078;border-radius:10px;box-shadow:inset 0 0 0 3px #a8c0d8,inset 0 0 0 5px #f8f8f8,0 4px 0 rgba(0,0,0,.3);
+  padding:12px 18px;font-size:17px;font-weight:800;line-height:1.55;text-shadow:1px 1px 0 #d0d0d0;min-height:76px}
+.tbox .tline{color:#383838}
+
+@media(max-width:760px){.hpbox{width:46%;padding:5px 8px 6px 10px}.hpbox.me{padding-left:12px}.hpb-n{font-size:12px}.hpb-n em{font-size:11px}.hpb-num{font-size:12px}.hpb-row i.st{min-width:26px;font-size:9px}.tbox{font-size:14px;padding:8px 12px;min-height:60px}.bt-sprite{width:24px;height:24px}.btname{font-size:9px}}

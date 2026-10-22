@@ -16,15 +16,13 @@ export function mountBattleAmbience(scene,match){
  const visibility=()=>music.setHidden(document.hidden);document.addEventListener('visibilitychange',visibility);visibility();
  scene.dataset.weather='';
  const bg=new Image();bg.className='battle-backdrop';bg.alt='';bg.setAttribute('aria-hidden','true');
- bg.onload=()=>{if(alive){scene.prepend(bg);scene.dataset.arena=theme.biome;}};
- bg.src=theme.background;
- const base=new Image();base.onload=()=>{if(!alive)return;scene.querySelectorAll('.plat').forEach(p=>{
-  p.innerHTML=`<svg viewBox="${theme.crop.join(' ')}" preserveAspectRatio="none" aria-hidden="true"><image href="${theme.platform}" width="320" height="132"/></svg>`;
-  p.classList.add('pixel-platform');
- });};base.src=theme.platform;
+ /* 원작 같은 도트 배틀 필드 — 발판이 그림에 들어 있어서 따로 깔지 않는다 */
+ bg.onload=()=>{if(alive){scene.prepend(bg);scene.dataset.arena='field';scene.dataset.field=theme.field;}};
+ bg.src=theme.url;
+ const base={onload:null};
  return {
   setPaused:v=>music.setPaused(v),
   finish:()=>{music.dispose();toggle.disabled=true;volume.disabled=true;},
-  dispose:()=>{alive=false;music.dispose();music.audio.remove();document.removeEventListener('visibilitychange',visibility);toggle.onchange=null;volume.oninput=null;toggle.disabled=false;volume.disabled=false;bg.onload=null;base.onload=null;bg.remove();delete scene.dataset.arena;scene.querySelectorAll('.plat').forEach(p=>{p.innerHTML='';p.classList.remove('pixel-platform');});},
+  dispose:()=>{alive=false;music.dispose();music.audio.remove();document.removeEventListener('visibilitychange',visibility);toggle.onchange=null;volume.oninput=null;toggle.disabled=false;volume.disabled=false;bg.onload=null;base.onload=null;bg.remove();delete scene.dataset.arena;delete scene.dataset.field;scene.querySelectorAll('.plat').forEach(p=>{p.innerHTML='';p.classList.remove('pixel-platform');});},
  };
 }

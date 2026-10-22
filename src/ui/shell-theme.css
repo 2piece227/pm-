@@ -472,3 +472,28 @@ dialog.pkm:not([open]){display:none}
 .evo-cond{display:flex;flex-direction:column;gap:6px;align-items:flex-start}.evo-cond small{font-size:10px;color:var(--sub)}.evo-cond b{font-size:15px}
 .auto-evolve{display:flex;align-items:center;gap:8px;margin:16px 0 4px;font-size:12px}
 @media(max-width:900px){dialog.pkm{grid-template-columns:1fr;height:94dvh;overflow:auto}.pkm-side{border-right:0;border-bottom:1px solid var(--line2);display:grid;grid-template-columns:140px 1fr;gap:0 14px}.pkm-stage{grid-row:span 3;height:140px;margin:0}.pkm-stage img{width:120px;height:120px}.pkm-stats,.pkm-info,.pkm-item,.pkm-wallet,.pkm-bars{grid-column:1/-1}.pkm-main{min-height:auto}.pkm-body{overflow:visible}.mv-row{grid-template-columns:52px minmax(0,1fr) 40px 40px}.mv-row .num:nth-last-child(-n+2){display:none}.eq-grid{grid-template-columns:1fr}.evo-card{grid-template-columns:80px 30px 80px 1fr}.evo-from img,.evo-to img{width:70px;height:70px}.pkm-bar{position:sticky;bottom:0;flex-direction:column;align-items:stretch}}
+
+/* ==== 트레이너 도트 ==== */
+.tr-portrait{position:relative;flex:none;display:block;width:44px;height:48px;border-radius:12px;overflow:hidden;background:linear-gradient(160deg,#3a4a6b,#232b40);border:1px solid var(--rim)}
+.tr-portrait img{position:absolute;width:88px;height:88px;left:50%;top:-4px;transform:translateX(-50%);image-rendering:pixelated;max-width:none}
+.tr-portrait.named{background:linear-gradient(160deg,#5a4a7e,#2a2f4a)}
+.tr-portrait.big{width:56px;height:62px;border-radius:14px}
+.tr-portrait.big img{width:112px;height:112px;top:-6px}
+.tr-full{width:80px;height:80px;image-rendering:pixelated;object-fit:contain}
+.tp-sprite{width:110px;height:120px;display:grid;place-items:end center;border-radius:18px;background:radial-gradient(ellipse at 50% 88%,rgba(124,240,213,.28),transparent 60%),linear-gradient(160deg,#3a4a6b,#232b40);border:1px solid var(--rim)}
+.tp-sprite .tr-full{width:120px;height:120px;margin-bottom:-6px}
+.gym-trainer-chip{grid-template-columns:auto auto 1fr!important}
+.gym-trainer-chip .tr-portrait{grid-row:span 2}
+.gym-row{grid-template-columns:74px minmax(0,1.1fr) minmax(0,1fr) auto auto!important}
+.gym-face{position:relative;width:70px;height:62px;display:block}
+.gym-face .tr-full{position:absolute;left:-4px;bottom:-6px;width:70px;height:70px}
+.gym-face .badge-img{position:absolute;right:-2px;bottom:-2px;width:24px!important;height:24px!important}
+.gym-row.badge .gym-face .tr-full{filter:grayscale(.4)}
+.faceoff{display:flex;align-items:flex-end;justify-content:center;gap:6px;margin:4px 0 6px;padding:6px 0;border-radius:14px;background:radial-gradient(ellipse at 50% 90%,rgba(164,147,255,.25),transparent 65%)}
+.faceoff .tr-full{width:96px;height:96px}
+.faceoff .tr-full:last-child{transform:scaleX(-1)}
+.faceoff span{align-self:center;font-weight:900;font-size:18px;color:var(--gold);font-style:italic}
+.cand-head{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.cand-head h3{margin:0}
+.assignment .tr-portrait{margin-right:2px}
+@media(max-width:1100px){.gym-row{grid-template-columns:60px minmax(0,1fr) auto!important}.gym-face{width:56px;height:52px}.gym-face .tr-full{width:58px;height:58px}}

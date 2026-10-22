@@ -20,6 +20,7 @@ import { ko, SPECIES_KO, gwaWa, eulReul } from '../data/ko.js';
 import { writeSave, saveGame } from '../engine/save.js';
 import { agreeYouth, completeStarter } from '../engine/youth-contract.js';
 import { chooseStarter } from './management-widgets.js';
+import { trainerPortrait } from './trainer-sprite.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const won = (n) => Math.round(n).toLocaleString();
@@ -78,7 +79,7 @@ function view() {
 
   const list = youthCandidates(game).filter(x=>!game.league.agencies.some(a=>a.roster.some(t=>t.id===`y-${x.id}`))).map((x) => `
     <button class="card ${state.candidate?.id === x.id ? 'sel' : ''}" data-c="${x.id}" style="text-align:left">
-      <h3>${esc(x.name)}${x.tag ? ` <span class="note">${esc(x.tag)}</span>` : ''}</h3>
+      <div class="cand-head">${trainerPortrait({id:x.id,name:x.name})}<h3>${esc(x.name)}${x.tag ? ` <span class="note">${esc(x.tag)}</span>` : ''}</h3></div>
       <div class="note" style="margin-bottom:6px">${esc(x.blurb)}</div>
       ${STAT_KEYS.map((k) => `<div class="gauge"><span>${STAT_KO[k]}</span>${paBar(x.potential[k])}</div>`).join('')}
     </button>`).join('');
