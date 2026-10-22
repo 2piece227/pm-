@@ -15,7 +15,7 @@ const GEN = Dex.forGen(9);
 const SIDES = ['p1', 'p2'];
 
 export function createTrainerAI(def, style, rng) {
-  return new TrainerAI({
+  const ai = new TrainerAI({
     gen: GEN,
     name: def.name,
     stats: def.stats,
@@ -25,6 +25,9 @@ export function createTrainerAI(def, style, rng) {
     compliance: def.nature?.compliance,
     rng,
   });
+  /* 메가진화: 원작처럼 트레이너가 키스톤을 가지고 있어야 한다 (스톤은 포켓몬이 지닌다) */
+  ai.canMega = !!def.keyStone;
+  return ai;
 }
 
 /**
@@ -91,6 +94,11 @@ export function runBattle({ trainerA, trainerB, teamA, teamB, seed, collectThink
         continue;
       }
       const d = ai[side].chooseAction(battle, side);
+      /* 원작 트레이너처럼 메가진화가 가능해지면 첫 공격 턴에 바로 한다 (배틀당 1회는 엔진이 보장) */
+      if (d.choice.startsWith('move') && ai[side].canMega && req.active?.[0]?.canMegaEvo) {
+        d.choice += ' mega';
+        if (d.think) d.think.mega = true;
+      }
       choices[side] = d.choice;
       if (collectThink && d.think) think.push({ turn: battle.turn, side, think: d.think });
 

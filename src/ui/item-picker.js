@@ -8,7 +8,7 @@ import { itemsOf, giveItem, takeItem } from '../engine/shop.js';
 import { itemIcon } from './shop.js';
 import { monImage, wireMonImages, escapeHtml as esc } from './management-widgets.js';
 
-const CATS = { all: '전체', battle: '배틀', type: '타입 강화', berry: '열매', species: '전용' };
+const CATS = { all: '전체', battle: '배틀', type: '타입 강화', berry: '열매', species: '전용', mega: '메가스톤' };
 
 export function openItemPicker(game, mon, onChange, onShop = () => {}) {
   const dialog = document.createElement('dialog');

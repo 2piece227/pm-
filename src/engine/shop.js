@@ -18,6 +18,17 @@ export const tmsOf = agency => (agency.tms ??= {});
 export const itemKo = name => HELD_ITEMS[name]?.ko || name;
 export const TM_BY_MOVE = Object.fromEntries(TMS.map(t => [t.move, t]));
 
+/* 키스톤(메가링) — 트레이너마다 하나. 원작에선 이야기로 받는 물건이라 가격은 [임시값] */
+export const KEY_STONE = { name: '키스톤', price: 15000 };
+export function buyKeyStone(game, trainerId) {
+  const a = agencyOf(game), t = a.roster.find(x => x.id === trainerId);
+  if (!t) return fail('우리 트레이너가 아닙니다.');
+  if (t.keyStone) return fail(`${t.name}에게는 이미 키스톤이 있습니다.`);
+  if (a.funds < KEY_STONE.price) return fail('자금이 부족합니다.');
+  a.funds -= KEY_STONE.price; t.keyStone = true;
+  return { ok: true, msg: `${t.name}에게 키스톤을 줬습니다. 이제 메가스톤을 지닌 포켓몬이 메가진화할 수 있습니다.` };
+}
+
 export function buyItem(game, name, qty = 1) {
   const def = HELD_ITEMS[name], a = agencyOf(game);
   if (!def) return fail('파는 도구가 아닙니다.');

@@ -91,7 +91,7 @@ export function applyWin(trainer) {
 
 /** 실제 엔진으로 한 판. 결과는 승패 + 남은 체력만 쓴다 */
 function fight(trainer, myParty, foe, foeParty, seed) {
-  const me = createTrainerAI({ name: trainer.name, stats: effectiveStats(trainer) }, trainer.nature?.style || '균형형', rngFrom(seed));
+  const me = createTrainerAI({ name: trainer.name, stats: effectiveStats(trainer), keyStone: trainer.keyStone }, trainer.nature?.style || '균형형', rngFrom(seed));
   const them = createTrainerAI({ name: foe.name, stats: foe.stats }, '균형형', rngFrom(seed + 1));
   const r = runBattle({
     trainerA: me, trainerB: them,

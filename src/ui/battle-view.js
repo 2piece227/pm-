@@ -718,6 +718,16 @@ async function playAnim(anim, token, onImpact) {
       break;
     }
 
+    case 'mega': {
+      /* 메가진화 — 빛에 싸였다가 새 모습으로 (그림 교체는 다음 줄의 화면 갱신) */
+      const el = $(`sp-${anim.side}`);
+      el.classList.add('glow', 'mega-glow');
+      screenFlash('rgba(255,255,255,.55)', unit * 1.2);
+      await wait(unit * 1.6);
+      el.classList.remove('glow', 'mega-glow');
+      break;
+    }
+
     case 'weather':
       screenFlash('rgba(200,180,120,.35)', unit * 0.6);
       await wait(unit * 0.5);

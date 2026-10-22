@@ -12,7 +12,7 @@
 import {
   ABILITY_KO, BOOST_KO, CANT_MSG, ITEM_KO, MOVE_KO, MOVE_TYPE, SPECIES_KO, SPECIES_TYPES,
   STATUS_BADGE, STATUS_KO, STATUS_MSG, STATUS_TICK, WEATHER_MSG, CURE_MSG, ko,
-  eunNeun, eulReul, iGa, euro,
+  eunNeun, eulReul, iGa, euro, gwaWa,
 } from '../data/ko.js';
 import { animArchetype } from '../data/move-anim.js';
 import {PublicBattle} from '../engine/public-battle.js';
@@ -481,6 +481,27 @@ ${ko(STATUS_KO, st)} 상태가 되었다!`,
         else if (en === 'Mental Herb') msg = `${eunNeun(name)} 멘탈허브로\n원래 상태로 돌아왔다!`;
         else msg = `${eunNeun(name)} ${eulReul(item)}\n사용했다!`;
         push('l-gold', `  ${name} ${item} 소모`, { msg, noField: !msg });
+        break;
+      }
+
+      case 'detailschange': {
+        /* 메가진화 등으로 모습이 바뀐다 — 이름(닉네임)은 그대로, 그림·타입만 바뀐다 */
+        const id = parseIdent(parts[1]);
+        if (id && mon[id.slot]) mon[id.slot] = { ...mon[id.slot], ...parseDetails(parts[2]) };
+        break;
+      }
+
+      case '-mega': {
+        /* 원작(6세대) 문구: 스톤과 키스톤이 반응 → 메가진화 */
+        const id = parseIdent(parts[1]);
+        const name = monKo(id);
+        const stone = ko(ITEM_KO, parts[3] || '');
+        const trainer = trainerName(names[id.side]) || '트레이너';
+        const sp = mon[id.slot]?.species || '';
+        const forme = /-Mega(?:-([XYZ]))?/.exec(sp);
+        const megaName = `메가${ko(SPECIES_KO, parts[2] || sp)}${forme?.[1] && forme[1] !== 'Z' ? forme[1] : ''}`;
+        push('l-gold', `  ${name} 메가진화 반응`, { noField: true, msg: `${name}의 ${gwaWa(stone)}\n${trainer}의 키스톤이 반응했다!`, anim: { k: 'mega', side: id.side } });
+        push('l-gold', `  ${name} → ${megaName}`, { msg: `${eunNeun(name)} ${euro(megaName)}\n메가진화했다!` });
         break;
       }
 

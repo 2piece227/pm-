@@ -5,7 +5,9 @@ import { Dex } from '@pkmn/dex';
 import { HELD_ITEMS, TMS, MOVE_DESC_KO } from '../data/items.gen.js';
 import { ko, MOVE_KO } from '../data/ko.js';
 import { agencyOf } from '../engine/pokemon-management.js';
-import { buyItem, buyTM, itemsOf, tmsOf } from '../engine/shop.js';
+import { buyItem, buyTM, itemsOf, tmsOf, buyKeyStone, KEY_STONE } from '../engine/shop.js';
+import { ko as koT, SPECIES_KO } from '../data/ko.js';
+import { monImage } from './management-widgets.js';
 import { renderSupport } from './management-pages.js';
 import { TYPE_KO } from './pokemon-panel.js';
 import { escapeHtml as esc } from './management-widgets.js';
@@ -23,17 +25,26 @@ const HELD_CATS = { all: '전체', battle: '배틀 도구', type: '타입 강화
 export function renderShop(game) {
   const a = agencyOf(game), stock = itemsOf(a), tms = tmsOf(a);
   const owned = Object.values(stock).reduce((n, v) => n + v, 0), ownedTm = Object.values(tms).reduce((n, v) => n + v, 0);
-  const tabs = [['supplies', '탐험 물품'], ['held', '지닌 도구'], ['berry', '열매'], ['tm', '기술머신']];
+  const tabs = [['supplies', '탐험 물품'], ['held', '지닌 도구'], ['berry', '열매'], ['tm', '기술머신'], ['mega', '메가스톤']];
   const q = ui.q.trim();
   let body = '';
   if (ui.tab === 'supplies') body = `<div class="shop-supplies">${renderSupport(game)}</div>`;
+  else if (ui.tab === 'mega') {
+    const megaOwned = new Set([...a.box, ...a.roster.flatMap(t => t.party)].map(m => m.species));
+    const stones = Object.entries(HELD_ITEMS).filter(([en, v]) => v.cat === 'mega' && (!q || v.ko.includes(q) || koT(SPECIES_KO, v.evolves).includes(q) || en.toLowerCase().includes(q.toLowerCase())))
+      .sort((x, y) => Number(megaOwned.has(y[1].evolves)) - Number(megaOwned.has(x[1].evolves)) || Number(x[1].future) - Number(y[1].future) || x[1].ko.localeCompare(y[1].ko));
+    body = `<section class="card keystone"><div class="section-heading"><h3>${itemIcon('Key Stone') || `<img class="item-ico" src="${ASSET}key-stone.png" alt="" width="30" height="30">`} 키스톤 <small>트레이너마다 하나 · ₽${won(KEY_STONE.price)} [임시값]</small></h3></div>
+      <p class="muted">원작처럼 트레이너가 키스톤을 가지고, 포켓몬이 맞는 메가스톤을 지니면 배틀에서 한 번 메가진화합니다. 메가진화가 가능해지면 첫 공격 턴에 바로 메가진화합니다.</p>
+      <div class="ks-list">${a.roster.map(t => `<div class="ks-row"><b>${esc(t.name)}</b>${t.keyStone ? '<span class="tag eq">키스톤 보유</span>' : `<button data-buy-keystone="${t.id}" ${a.funds < KEY_STONE.price ? 'disabled' : ''}>키스톤 주기</button>`}</div>`).join('') || '<p class="muted">계약한 트레이너가 없습니다.</p>'}</div></section>
+      <div class="shop-grid">${stones.map(([en, v]) => `<article class="shop-item mega-item ${megaOwned.has(v.evolves) ? 'have' : ''}">${itemIcon(en)}<div class="nm"><b>${esc(v.ko)}</b><small>${esc(koT(SPECIES_KO, v.evolves))} → 메가${esc(koT(SPECIES_KO, v.evolves))}${v.future ? ' · 레전즈 Z-A' : ''}${megaOwned.has(v.evolves) ? ' · 우리 소속에 있음' : ''} · 보유 ${stock[en] || 0}</small></div><p>${esc(v.desc || `${koT(SPECIES_KO, v.evolves)}에게 지니게 하면 배틀 중 메가진화할 수 있다.`)}</p><footer><span class="price">₽${won(v.price)} <i>임시</i></span><select class="shop-qty" aria-label="${esc(v.ko)} 수량"><option>1</option><option>2</option></select><button data-buy-item="${esc(en)}" ${a.funds < v.price ? 'disabled' : ''}>구입</button></footer></article>`).join('') || '<p class="muted">찾는 메가스톤이 없습니다.</p>'}</div>`;
+  }
   else if (ui.tab === 'tm') {
     const rows = TMS.filter(t => { const mv = Dex.moves.get(t.move); return (!q || M(t.move).includes(q) || t.move.toLowerCase().includes(q.toLowerCase())) && (ui.type === 'all' || mv.type === ui.type); });
     body = `<div class="shop-filters"><select id="shop-type" aria-label="타입"><option value="all">모든 타입</option>${Object.entries(TYPE_KO).map(([k, v]) => `<option value="${k}" ${ui.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
       <table class="shop-table"><thead><tr><th>번호</th><th>기술</th><th>분류</th><th>위력</th><th>명중</th><th>보유</th><th>가격</th><th></th></tr></thead><tbody>${rows.map(t => { const mv = Dex.moves.get(t.move); return `<tr><td class="no">${String(t.no).padStart(3, '0')}</td><td>${tmIcon(t.move)}<div class="nm"><b><span class="move-type" data-type="${mv.type}">${TYPE_KO[mv.type]}</span> ${esc(M(t.move))}</b><small>${esc(MOVE_DESC_KO[t.move] || '')}</small></div></td><td>${CAT[mv.category]}</td><td>${mv.basePower || '—'}</td><td>${mv.accuracy === true ? '—' : mv.accuracy}</td><td class="own">${tms[t.move] || 0}</td><td class="price">₽${won(t.price)}</td><td><button data-buy-tm="${esc(t.move)}" ${a.funds < t.price ? 'disabled' : ''}>구입</button></td></tr>`; }).join('') || '<tr><td colspan="8" class="muted">찾는 기술머신이 없습니다.</td></tr>'}</tbody></table>
       <p class="muted">기술머신은 9세대처럼 한 번 쓰면 사라집니다. 포켓몬 관리 창의 기술 탭에서 사용할 수 있습니다. 가격은 [임시값]입니다.</p>`;
   } else {
-    const list = Object.entries(HELD_ITEMS).filter(([en, v]) => (ui.tab === 'berry' ? v.cat === 'berry' : v.cat !== 'berry') && (ui.tab === 'berry' || ui.cat === 'all' || v.cat === ui.cat) && (!q || v.ko.includes(q) || en.toLowerCase().includes(q.toLowerCase())))
+    const list = Object.entries(HELD_ITEMS).filter(([en, v]) => (ui.tab === 'berry' ? v.cat === 'berry' : v.cat !== 'berry' && v.cat !== 'mega') && (ui.tab === 'berry' || ui.cat === 'all' || v.cat === ui.cat) && (!q || v.ko.includes(q) || en.toLowerCase().includes(q.toLowerCase())))
       .sort((x, y) => x[1].price - y[1].price || x[1].ko.localeCompare(y[1].ko));
     body = `${ui.tab === 'held' ? `<div class="shop-filters">${Object.entries(HELD_CATS).map(([k, v]) => `<button class="${ui.cat === k ? 'selected' : 'ghost'}" data-shop-cat="${k}">${v}</button>`).join('')}</div>` : ''}
       <div class="shop-grid">${list.map(([en, v]) => `<article class="shop-item">${itemIcon(en)}<div class="nm"><b>${esc(v.ko)}</b><small>보유 ${stock[en] || 0}</small></div><p>${esc(v.desc)}</p><footer><span class="price">₽${won(v.price)}${v.estimated ? ' <i title="원작 가격이 없어 정한 값">임시</i>' : ''}</span><select class="shop-qty" aria-label="${esc(v.ko)} 수량">${[1, 2, 3, 5, 10].map(n => `<option>${n}</option>`).join('')}</select><button data-buy-item="${esc(en)}" ${a.funds < v.price ? 'disabled' : ''}>구입</button></footer></article>`).join('') || '<p class="muted">찾는 도구가 없습니다.</p>'}</div>`;
@@ -52,5 +63,6 @@ export function wireShop(root, game, refresh) {
   const search = root.querySelector('#shop-search');
   if (search) search.oninput = () => { const pos = search.selectionStart; ui.q = search.value; refresh(); const s = document.querySelector('#shop-search'); s?.focus(); s?.setSelectionRange(pos, pos); };
   root.querySelectorAll('[data-buy-item]').forEach(b => b.onclick = () => { const n = Number(b.closest('.shop-item').querySelector('.shop-qty').value); const r = buyItem(game, b.dataset.buyItem, n); refresh(); say(r.msg); });
+  root.querySelectorAll('[data-buy-keystone]').forEach(b => b.onclick = () => { const r = buyKeyStone(game, b.dataset.buyKeystone); refresh(); say(r.msg); });
   root.querySelectorAll('[data-buy-tm]').forEach(b => b.onclick = () => { const r = buyTM(game, b.dataset.buyTm, 1); refresh(); say(r.msg); });
 }

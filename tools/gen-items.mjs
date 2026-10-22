@@ -94,6 +94,17 @@ for (const it of gen.items.all()) {
   HELD_ITEMS[it.name] = { ko, cat, price, icon: p.identifier, desc: itemFlavorKo[p.id] || "", estimated: !(Number(p.cost) > 0) };
 }
 
+/* ---------- 메가스톤 — 9세대 데이터에선 과거/미래 도구라 따로 모은다. 원작 판매가가 없어 [임시값] ---------- */
+const MEGA_PRICE = 10000;
+for (const it of gen.items.all()) {
+  if (!it.exists || !it.megaStone || it.isNonstandard === 'CAP') continue;   // CAP(팬메이드) 제외
+  const p = pokeItem[it.id];
+  const ko = p && koName[p.id];
+  const mega = typeof it.megaStone === 'string' ? it.megaStone : Object.values(it.megaStone)[0];
+  const evolves = gen.species.get(mega).baseSpecies;
+  HELD_ITEMS[it.name] = { ko: ko || it.name, cat: 'mega', price: MEGA_PRICE, icon: p?.identifier || 'mega-ring', desc: (p && itemFlavorKo[p.id]) || '', estimated: true, mega, evolves, future: it.isNonstandard === 'Future', missingKo: !ko };
+}
+
 /* ---------- 탐험 물품 (트레이너 가방) — 볼·회복약·상태 회복·기력·PP ---------- */
 const SUPPLY_IDS = ['poke-ball','great-ball','ultra-ball','premier-ball','luxury-ball','heal-ball','net-ball','dive-ball','nest-ball','repeat-ball','timer-ball','dusk-ball','quick-ball',
   'level-ball','lure-ball','moon-ball','friend-ball','love-ball','heavy-ball','fast-ball',

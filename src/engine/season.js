@@ -61,7 +61,7 @@ export async function runCup(game,e,onProgress=async()=>{}){
   if(e.status!=='scheduled'||e.date!==game.day)return;
   const trainers=cupEntrants(game,e);
   e.decisions=game.league.agencies.filter(a=>a.id!==game.playerAgencyId).flatMap(a=>a.roster.filter(t=>cupEligible(t,e)).map(t=>({trainerId:t.id,score:npcEntryScore(a,t),entered:trainers.includes(t)})));
-  e.entrants=trainers.map(t=>({id:t.id,name:t.name,agencyId:t.agencyId,agencyName:competitionAgency(game,t),party:structuredClone(t.party.slice(0,e.rosterSize)),definition:structuredClone({name:t.name,isYouth:t.isYouth,badges:t.badges,legacyPro:t.legacyPro,regionalRole:t.regionalRole,stats:effectiveStats(t),nature:t.nature,battlePolicy:t.battlePolicy,mentalDebuff:t.mentalDebuff,lossStreak:t.lossStreak})}));
+  e.entrants=trainers.map(t=>({id:t.id,name:t.name,agencyId:t.agencyId,agencyName:competitionAgency(game,t),party:structuredClone(t.party.slice(0,e.rosterSize)),definition:structuredClone({name:t.name,isYouth:t.isYouth,badges:t.badges,legacyPro:t.legacyPro,regionalRole:t.regionalRole,stats:effectiveStats(t),nature:t.nature,battlePolicy:t.battlePolicy,mentalDebuff:t.mentalDebuff,lossStreak:t.lossStreak,keyStone:!!t.keyStone})}));
   if(trainers.length<2){e.status='cancelled';game.league.newsFeed.unshift({day:game.day,kind:'cup',text:`${e.name} · 참가자 부족으로 취소. 상금 지급 없음.`});return;}
   for(let i=e.entrants.length-1;i>0;i--){const j=Math.floor(game.rng()*(i+1));[e.entrants[i],e.entrants[j]]=[e.entrants[j],e.entrants[i]];}
   if(e.kind==='city'){const scores=citySeedScores(game,e);e.entrants.sort((a,b)=>(scores.get(b.id)??RANKING.base)-(scores.get(a.id)??RANKING.base));}

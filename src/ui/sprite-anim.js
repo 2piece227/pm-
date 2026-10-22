@@ -37,6 +37,11 @@ function stemOf(sp) {
   const forme = sp.forme ? `-${sp.forme.toLowerCase().replace(/[^a-z0-9]/g, '')}` : '';
   return `${sp.num}${forme}`;
 }
+/** PokeRogue 실제 파일명 — 폼 이름의 대시를 남긴다 (예: 6-mega-x, 128-paldea-combat) */
+function dashStemOf(sp) {
+  const forme = sp.forme ? `-${sp.forme.toLowerCase().replace(/[^a-z0-9-]/g, '')}` : '';
+  return `${sp.num}${forme}`;
+}
 
 /** 아틀라스 JSON을 공통 형태로 편다 */
 export function parseAtlas(raw, defaultMs) {
@@ -106,11 +111,13 @@ export function sheetPaths(species, side) {
   if (!sp || !sp.exists) return [];
   const dir = side === 'p1' ? 'back/' : '';
   const base = sp.baseSpecies && sp.baseSpecies !== sp.name ? Dex.species.get(sp.baseSpecies) : null;
-  const stems = base ? [stemOf(sp), stemOf(base)] : [stemOf(sp)];
+  const stems = [...new Set(base ? [dashStemOf(sp), stemOf(sp), stemOf(base)] : [stemOf(sp)])];
   const out = [];
+  const baseStem = base ? stemOf(base) : null;
   for (const stem of stems) {
-    out.push([`${dir}${stem}`, BASE_FRAME_MS]);
-    out.push([`exp/${dir}${stem}`, EXP_FRAME_MS]);
+    const isBase = stem === baseStem;   // 기본 종 그림은 폼 그림이 하나도 없을 때만
+    out.push([`${dir}${stem}`, BASE_FRAME_MS, isBase]);
+    out.push([`exp/${dir}${stem}`, EXP_FRAME_MS, isBase]);
   }
   return out;
 }
@@ -129,7 +136,9 @@ export async function loadPokemonSheet(species, side) {
     if (!sp || !sp.exists) return null;
 
     let still = null;   // 정지 한 장짜리는 애니메이션을 다 뒤진 뒤에 쓴다
-    for (const [path, ms] of sheetPaths(species, side)) {
+    for (const [path, ms, isBase] of sheetPaths(species, side)) {
+      /* 메가진화 등 폼 전용 그림이 정지 한 장뿐이어도 기본 종 애니메이션보다 우선한다 */
+      if (isBase && still) return still;
       const sheet = await fetchSheet(path, ms);
       if (!sheet) continue;
       if (sheet.frames.length > 1) return sheet;

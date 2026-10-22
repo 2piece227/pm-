@@ -88,3 +88,4 @@
 #watch-peek{user-select:none;-webkit-user-select:none;touch-action:none}
 #watch-peek:active{background:var(--accent);color:#0f2620}
 @media(max-width:760px){.ab-pop{min-width:110px;padding:4px 10px}.ab-pop b{font-size:13px}}
+.spr.mega-glow img,.spr.mega-glow canvas,.spr.mega-glow svg{filter:brightness(2.4) saturate(.2) drop-shadow(0 0 14px #fff) drop-shadow(0 0 26px #ffd86a)!important;transition:filter .3s}
