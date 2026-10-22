@@ -245,8 +245,10 @@ export function assignAction(game, trainerId, actionId) {
   game.actions[trainerId] = actionId;
 }
 
+/** 하루가 끝나면 1회성 배정(체육관 도전·대회 출전·견학)만 지운다.
+ *  탐험 배정은 FM 훈련 일정처럼 바꿀 때까지 유지된다. */
 export function clearActions(game) {
-  game.actions = {};
+  for (const [id, action] of Object.entries(game.actions || {})) if (!parseExplore(action)) delete game.actions[id];
 }
 
 /* ---------------- 성장 ---------------- */

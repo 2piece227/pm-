@@ -1,0 +1,148 @@
+/* ==========================================================================
+   Shell theme — v0.36 리뉴얼 (목표 품질: Yongsan Football Manager 26)
+   배경 그림 위에 반투명·블러 카드, 두꺼운 제목, 아이콘 사이드바, 네온 대회 카드.
+   management.css 뒤에 불러와서 덮어쓴다. 배틀 화면은 건드리지 않는다.
+   ========================================================================== */
+html:root:not([data-theme="light"]){
+  --bg:#0b0d15;--panel:rgba(20,25,38,.68);--panel2:rgba(28,35,52,.72);
+  --ink:#eef1f8;--sub:#9aa5bb;--line:rgba(150,235,215,.2);--line2:rgba(190,205,255,.11);
+  --accent:#61dbc2;--violet:#a493ff;--gold:#f0c96e;--blue:#8fb6ff;--pink:#ff8fd0;--red:#ff9498;
+  --glass:rgba(17,21,33,.62);--glass-hi:rgba(26,32,49,.74);--rim:rgba(160,230,215,.17);
+  --shadow:0 6px 22px rgba(0,0,0,.18);
+}
+body{font-family:'Noto Sans KR','Gothic A1',system-ui,sans-serif;background:var(--bg);letter-spacing:-.1px}
+
+/* ---- 배경: 관동·성도 도트 타운맵을 어둡게 깔고 그 위에 유리 카드 ---- */
+.app{position:relative;isolation:isolate}
+.app:before{content:'';position:fixed;inset:-20px;z-index:-2;background:var(--backdrop,none) center 30%/cover no-repeat;image-rendering:pixelated;filter:blur(3px) saturate(.75) brightness(.42)}
+.app:after{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(ellipse at 85% -10%,rgba(164,147,255,.22),transparent 45%),radial-gradient(ellipse at 0% 100%,rgba(97,219,194,.14),transparent 50%),linear-gradient(180deg,rgba(11,13,21,.55),rgba(11,13,21,.88))}
+.app .body{background:transparent}
+.main{background:transparent!important}
+
+/* ---- 상단 바 ---- */
+.app .topbar{background:rgba(12,15,25,.72);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line2);box-shadow:none}
+.tb-club{border-left:0;padding-left:0}
+.tb-club b{font-size:16px;font-weight:900;letter-spacing:-.4px}
+.tb-info>span{font-size:10px;letter-spacing:.6px}
+.tb-info b{font-size:14px;font-weight:800}
+.topbar #tb-continue{border-radius:12px;font-weight:900;font-size:14px;background:linear-gradient(135deg,#7cf0d5,#4fc9b0);box-shadow:0 0 0 1px rgba(124,240,213,.4),0 8px 24px rgba(97,219,194,.25)}
+.topbar #tb-continue:not(:disabled):hover{filter:brightness(1.08)}
+
+/* ---- 사이드바: 워드마크 + 아이콘 + 활성 알약 ---- */
+.side{background:rgba(10,12,20,.66);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-right:1px solid var(--line2);padding:18px 12px 24px;width:212px}
+.brand{display:flex;align-items:center;gap:10px;padding:6px 8px 20px;margin-bottom:6px;border-bottom:1px solid var(--line2)}
+.brand img{width:34px;height:34px;image-rendering:pixelated;filter:drop-shadow(0 3px 0 rgba(0,0,0,.35))}
+.brand-word{display:flex;flex-direction:column;line-height:1.02;font-weight:900;letter-spacing:.5px}
+.brand-word span{font-size:9px;color:var(--accent);letter-spacing:2.6px}
+.brand-word b{font-size:15px;color:var(--ink);letter-spacing:.4px}
+.brand-word i{font-style:normal;font-size:9px;color:var(--violet);letter-spacing:2.6px}
+.side .grp{padding:18px 12px 8px;font-size:10px;font-weight:800;letter-spacing:2.4px;color:#6f7b93}
+.side button{display:flex;align-items:center;gap:10px;width:100%;position:relative;border:0!important;border-radius:12px;margin:2px 0;padding:9px 10px;font-size:13px;font-weight:700;color:#aeb8cc!important;background:transparent;white-space:nowrap}
+.side button .ico{width:26px;height:26px;flex:none;display:grid;place-items:center;border-radius:8px;background:rgba(255,255,255,.04)}
+.side button .ico img{width:24px;height:24px;image-rendering:pixelated}
+.side button .lbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;text-align:left}
+.side button:hover{background:rgba(255,255,255,.05);color:#dfe6f3!important}
+.side button.on{color:#eafff9!important;background:linear-gradient(90deg,rgba(97,219,194,.24),rgba(164,147,255,.10) 70%,transparent);box-shadow:inset 0 0 0 1px rgba(124,240,213,.22)}
+.side button.on:before{content:'';position:absolute;left:-12px;top:8px;bottom:8px;width:4px;border-radius:0 4px 4px 0;background:linear-gradient(180deg,var(--accent),var(--violet))}
+.side button.on .ico{background:rgba(97,219,194,.18)}
+.side .badge{margin-left:auto;min-width:20px;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:900;text-align:center;color:#0f2620;background:var(--accent)}
+
+/* ---- 공통 카드: 유리 ---- */
+.card,.metric-grid>div,.mail-layout,.calendar-day,.office-hero,dialog .card{background:var(--glass);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);border:1px solid var(--rim);border-radius:18px;box-shadow:var(--shadow)}
+.card h3{font-size:15px;font-weight:800;letter-spacing:-.3px}
+.page-h h2{font-size:26px;font-weight:900;letter-spacing:-.8px}
+.eyebrow{font-weight:900;letter-spacing:2.2px}
+.grid{border-radius:14px;background:var(--glass);border:1px solid var(--rim)}
+.grid th{background:rgba(255,255,255,.04)}
+.grid td .nm,.grid td.nm{white-space:nowrap}
+.mail-list{background:rgba(10,13,22,.4)}
+.mail-item.selected{background:rgba(97,219,194,.12)}
+button.ghost{border-radius:10px}
+.route-row,.region-tabs button{border-radius:10px}
+.storage-grid{border-radius:14px}
+.wild-grid>div{border-radius:10px;background:rgba(255,255,255,.04)}
+
+/* ---- 대표실 대시보드 ---- */
+.dash-hero{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;margin-bottom:18px}
+.next-match{position:relative;overflow:hidden;padding:26px 28px;border-radius:20px;border:1px solid rgba(124,240,213,.35);background:linear-gradient(135deg,rgba(32,64,62,.78),rgba(36,32,66,.72));box-shadow:0 0 0 1px rgba(124,240,213,.08),0 14px 40px rgba(0,0,0,.25)}
+.next-match:after{content:'';position:absolute;right:-40px;top:-40px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(164,147,255,.28),transparent 70%)}
+.next-match .kicker{font-size:11px;font-weight:900;letter-spacing:2.4px;color:var(--accent)}
+.next-match h2{font-size:26px;font-weight:900;letter-spacing:-.8px;margin:10px 0 6px}
+.next-match p{color:#c4cfdf;margin:6px 0 0;font-size:13px}
+.next-match .dday{position:absolute;right:26px;top:22px;z-index:1;font-size:34px;font-weight:900;color:#fff;letter-spacing:-1px}
+.next-match .dday small{display:block;font-size:10px;font-weight:700;color:var(--sub);letter-spacing:1.5px;text-align:right}
+.next-match .actions{display:flex;gap:8px;margin-top:20px;flex-wrap:wrap;position:relative;z-index:1}
+.next-match .actions button{border-radius:10px;padding:9px 16px;font-weight:800}
+.next-match .actions button:not(.ghost){background:var(--accent);border:0}
+.team-status{padding:22px 24px}
+.team-ovr{display:flex;align-items:center;gap:16px;margin-bottom:14px}
+.team-ovr .ovr{display:grid;place-items:center;width:64px;height:64px;border-radius:16px;font-size:26px;font-weight:900;color:#0f2620;background:linear-gradient(135deg,#8ff5dc,#61dbc2);box-shadow:0 6px 18px rgba(97,219,194,.3)}
+.team-ovr .ovr small{display:block;font-size:9px;letter-spacing:1.5px;margin-top:-4px}
+.team-ovr dl{display:grid;grid-template-columns:repeat(3,auto);gap:4px 18px;margin:0}
+.team-ovr dt{font-size:10px;color:var(--sub)}.team-ovr dd{margin:0;font-weight:800;font-size:14px}
+.form-dots{display:flex;gap:4px}
+.form-dots i{width:18px;height:18px;border-radius:5px;display:grid;place-items:center;font-size:9px;font-style:normal;font-weight:900;color:#0c1a16}
+.form-dots .w{background:#73dfb4}.form-dots .l{background:#ff8f93}.form-dots .n{background:rgba(255,255,255,.08);color:var(--sub)}
+.ace{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.04);margin-top:12px}
+.ace img{width:56px;height:56px}
+.ace small{display:block;font-size:10px;color:var(--gold);font-weight:900;letter-spacing:1.6px}
+.ace b{font-size:14px}.ace span{display:block;color:var(--sub);font-size:11px;margin-top:2px}
+.dash-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-bottom:18px}
+.dash-grid.two{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}
+.dash-card{padding:20px 22px;min-width:0}
+.dash-card .section-heading{margin-bottom:10px}
+.dash-card .section-heading h3:before{content:'';display:inline-block;width:4px;height:14px;border-radius:2px;margin-right:8px;vertical-align:-2px;background:linear-gradient(180deg,var(--accent),var(--violet))}
+.news-row{color:var(--ink)!important;display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;width:100%;text-align:left;border:0;background:transparent;color:var(--ink);padding:11px 2px;border-top:1px solid var(--line2);border-radius:0}
+.news-row:first-of-type{border-top:0}
+.news-row .tag{grid-row:span 2;align-self:start;font-size:9px;font-weight:900;letter-spacing:1px;padding:4px 7px;border-radius:6px;background:rgba(97,219,194,.14);color:var(--accent)}
+.news-row .tag.urgent{background:rgba(255,148,152,.16);color:var(--red)}
+.news-row b{font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.news-row small{font-size:10px;color:var(--sub)}
+.cup-row,.rank-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line2);font-size:12px}
+.cup-row:first-of-type,.rank-row:first-of-type{border-top:0}
+.cup-row .kind{flex:none;width:8px;height:30px;border-radius:4px}
+.cup-row div{min-width:0;flex:1}.cup-row b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cup-row small,.rank-row small{color:var(--sub);font-size:10px}
+.cup-row .dd{font-weight:900;color:var(--accent);font-variant-numeric:tabular-nums}
+.rank-row .pos{width:24px;font-weight:900;color:var(--gold);text-align:center}
+.rank-row .who{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rank-row.mine{background:rgba(97,219,194,.1);border-radius:10px;padding-left:6px}
+.rank-row .score{font-weight:800;font-variant-numeric:tabular-nums}
+.patch{padding:12px 0;border-top:1px solid var(--line2)}
+.patch:first-of-type{border-top:0}
+.patch header{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.patch header b{font-size:13px}
+.patch header span{font-size:10px;font-weight:900;padding:2px 7px;border-radius:6px;background:rgba(164,147,255,.18);color:var(--violet)}
+.patch header small{margin-left:auto;color:var(--sub);font-size:10px}
+.patch ul{margin:0;padding-left:16px;color:#c3ccdb;font-size:12px;line-height:1.8}
+.kind-youth{--k:#7cf0b5}.kind-city{--k:#8fb6ff}.kind-local{--k:#f0c96e}.kind-pwt{--k:#ff8fd0}
+.cup-row .kind{background:var(--k,#7cf0b5);box-shadow:0 0 12px var(--k,#7cf0b5)}
+.metric-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px}
+.metric-strip>div{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:16px;background:var(--glass);border:1px solid var(--rim);backdrop-filter:blur(3px)}
+.metric-strip img{width:30px;height:30px;image-rendering:pixelated}
+.metric-strip span{display:block;font-size:10px;color:var(--sub)}
+.metric-strip b{font-size:18px;font-weight:900;font-variant-numeric:tabular-nums}
+.metric-strip small{color:var(--sub);font-size:10px;margin-left:4px}
+
+/* ---- 일정: 네온 대회 카드 ---- */
+.cup-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin:16px 0}
+.cup-card{position:relative;padding:22px 22px 18px;border-radius:20px;background:linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.01)),var(--glass);border:1.5px solid var(--k,#7cf0b5);box-shadow:0 0 0 1px rgba(0,0,0,.2),0 0 22px color-mix(in srgb,var(--k,#7cf0b5) 28%,transparent),inset 0 0 26px color-mix(in srgb,var(--k,#7cf0b5) 8%,transparent)}
+.cup-card .cup-ico{position:absolute;right:16px;top:14px;width:44px;height:44px;image-rendering:pixelated;opacity:.95}
+.cup-card .cup-kind{font-size:10px;font-weight:900;letter-spacing:2px;color:var(--k,#7cf0b5)}
+.cup-card h3{font-size:17px;font-weight:900;margin:8px 60px 8px 0;line-height:1.35}
+.cup-card p{font-size:12px;color:#c4cddc;line-height:1.7;margin:6px 0}
+.cup-card label{display:block;font-size:11px;color:var(--sub);margin:10px 0}
+.cup-card select{display:block;width:100%;margin-top:6px;padding:8px;border-radius:10px;background:rgba(0,0,0,.25);color:var(--ink);border:1px solid var(--line)}
+.cup-card .assignment{padding:10px 0}
+.season-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.season-head h2{font-size:24px;font-weight:900;margin:0;letter-spacing:-.6px}
+
+/* ---- 반응형 ---- */
+@media(max-width:1100px){.side{width:178px}.dash-hero,.dash-grid.two{grid-template-columns:1fr}.dash-grid{grid-template-columns:1fr 1fr}.metric-strip{grid-template-columns:1fr 1fr}}
+@media(max-width:760px){.side{width:100%;padding:6px}.brand{display:none}.side button{width:auto;padding:7px 9px}.side button .lbl{overflow:visible}.side button.on:before{display:none}.dash-grid{grid-template-columns:1fr}.next-match{padding:22px 18px}.next-match .dday{position:static;margin-bottom:6px}.next-match .dday small{text-align:left}.metric-strip{gap:8px}.metric-strip>div{padding:10px}.cup-cards{grid-template-columns:1fr}}
+@media(prefers-reduced-transparency:reduce){.card,.metric-grid>div,.side,.app .topbar{backdrop-filter:none;background:#161b28}}
+.cup-rules,.card>details{margin:10px 0;color:var(--sub);font-size:12px}.cup-rules summary,.card>details>summary{cursor:pointer;color:var(--accent);font-weight:700}
+.pixel-item{image-rendering:pixelated;width:36px;height:36px;background:none!important;border:0!important}
+.ov{background:radial-gradient(ellipse at 70% 15%,rgba(164,147,255,.25),transparent 55%),linear-gradient(180deg,rgba(11,13,21,.8),rgba(11,13,21,.95)),var(--backdrop,none) center 30%/cover no-repeat,#0b0d15;image-rendering:pixelated}.ov h1,.ov .ov-h{font-weight:900;letter-spacing:-1px}
+@media(max-width:760px){.app .topbar .tb-info{order:3;flex:1 1 100%;width:100%;flex-wrap:nowrap;justify-content:space-between;margin:0}.tb-club b{font-size:15px}}

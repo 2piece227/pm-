@@ -143,6 +143,26 @@ export async function gainExp(mon, amount) {
   return { levels: after - before, learned: newly };
 }
 
+/**
+ * 원작 5세대 이후 경험치 공식 (스케일드):
+ *   exp = (a × b × L / 5) × ((2L + 10) / (L + Lp + 10))^2.5 + 1
+ *   a = 트레이너 포켓몬이면 1.5, b = 기초 경험치, L = 쓰러뜨린 쪽 레벨, Lp = 받는 쪽 레벨
+ * 9세대처럼 학습장치가 항상 켜져 있어 파티 전원이 그대로 받는다.
+ * [임시값] 기초 경험치(b)는 데이터에 없어 종족값 합계 × 0.2로 근사한다
+ *   (꼬렛 253→51, 구구 251→50, 이상해씨 318→64 — 원작값과 거의 같다).
+ */
+export function baseExpYield(speciesName) {
+  const sp = GEN.species.get(speciesName);
+  if (!sp?.exists) return 50;
+  const bst = Object.values(sp.baseStats).reduce((a, b) => a + b, 0);
+  return Math.round(bst * 0.2);
+}
+export function expFromFoe(foe, receiverLevel, { trainer = false } = {}) {
+  const L = foe.level, Lp = receiverLevel;
+  const base = (trainer ? 1.5 : 1) * baseExpYield(foe.species) * L / 5;
+  return Math.floor(base * Math.pow((2 * L + 10) / (L + Lp + 10), 2.5)) + 1;
+}
+
 /** 훈련으로 노력치를 넣는다 — 한 스탯 252 / 총합 510이 상한 (원작과 같다) */
 export function addEv(mon, stat, amount) {
   const total = Object.values(mon.evs).reduce((a, b) => a + b, 0);

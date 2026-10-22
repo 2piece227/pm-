@@ -8,6 +8,12 @@
 | [@pkmn/dex](https://github.com/pkmn/ps) | 종족·기술·특성 데이터 | MIT |
 | [Vite](https://vite.dev) | 번들러 | MIT |
 
+## 도구 아이콘 (사이드바·대시보드·대회 카드·트레이너 지원)
+
+| 항목 | 출처 | 비고 |
+|---|---|---|
+| `public/assets/items/*.png` (12종: 카드키, 에어메일, 학습장치, 몬스터볼, 타운맵, 기술머신, 상처약, 타우린류, VS시커, 다우징머신, 부적금화, 마스터볼) | [PokeAPI/sprites](https://github.com/PokeAPI/sprites) `sprites/items` | 원작 도구 도트. 포켓몬 IP는 Nintendo·Creatures·GAME FREAK 소유. 메뉴 아이콘이 CDN에 의존하지 않도록 로컬에 둔다. |
+
 ## 포켓몬 스프라이트
 
 **전부 5세대(블랙·화이트) 도트로 통일하고, 가능한 한 움직이게 한다.**

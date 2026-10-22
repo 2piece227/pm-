@@ -9,7 +9,7 @@
  * 연패는 실력을 깎는다. 멘탈이 높을수록 덜 깎이고 빨리 회복한다 (§4.5).
  */
 import { locationById, TRAINER_CLASSES } from '../data/routes.js';
-import { createPokemon, gainExp, toShowdownBlock, partyToTeam, realStats } from '../data/pokemon.js';
+import { createPokemon, gainExp, expFromFoe, toShowdownBlock, partyToTeam, realStats } from '../data/pokemon.js';
 import { SPECIES_KO, MOVE_KO, ko, iGa, eulReul, eunNeun, euro, numIGa } from '../data/ko.js';
 import { STAT_KEYS, effectiveStats } from '../data/agencies.js';
 import { createTrainerAI, runBattle } from './run-battle.js';
@@ -25,10 +25,9 @@ export const EXPLORE_CONFIG = {
     perLevelDiff: 0.05,  // 내 파티 최고 레벨 − 야생 레벨, 한 레벨당
     min: 0.12,
     max: 0.92,
-    expOnCatch: 0.6,     // 잡으면 그 야생의 경험치 60%
   },
-  /* 경험치 — 원작 공식을 단순화: 상대 레벨 × 계수 */
-  exp: { wildPerLevel: 22, trainerPerLevel: 34, lossPerLevel: 6 },
+  /* 경험치 — 이기면 원작 공식(expFromFoe), 지면 상대 레벨 × 계수의 위로 경험치 [임시값] */
+  exp: { lossPerLevel: 6 },
   /* 센터 — 파티 체력이 이 아래로 떨어지면 들른다 */
   center: { visitBelow: 0.5 },
   /* 연패 페널티 (§4.5) — 멘탈이 낮을수록 세게, 오래 간다 */
@@ -108,13 +107,26 @@ function rngFrom(seed) {
 
 /* ---------------- 경험치 배분 ---------------- */
 
+/** 쓰러뜨린 상대들로 원작 공식 경험치를 준다 — 받는 쪽 레벨마다 양이 다르다 */
+async function giveFoeExp(trainer, foes, isTrainer, lines) {
+  const party = trainer.party || [];
+  if (!party.length) return;
+  const gains = party.map(mon => foes.reduce((n, f) => n + expFromFoe(f, mon.level, { trainer: isTrainer }), 0));
+  const lo = Math.min(...gains), hi = Math.max(...gains);
+  lines.push(`파티 경험치 +${lo === hi ? lo : `${lo}~${hi}`} 획득.`);
+  await applyExp(trainer, party.map((mon, i) => [mon, gains[i]]), lines);
+}
+
 async function giveExp(trainer, amount, lines) {
   const party = trainer.party || [];
   if (!party.length) return;
   const each = Math.round(amount / party.length);
   lines.push(`파티 경험치 +${each}씩 획득.`);
-  for (const mon of party) {
-    const before = mon.level;
+  await applyExp(trainer, party.map(mon => [mon, each]), lines);
+}
+
+async function applyExp(trainer, pairs, lines) {
+  for (const [mon, each] of pairs) {
     const r = await gainExp(mon, each);
     if (r.levels) {
       lines.push(`${iGa(K(mon.species))} 레벨 ${numIGa(mon.level)} 되었다.`);
@@ -183,10 +195,10 @@ async function encounter(game, trainer, locationId, mode, slot) {
         wild.learned = [...wild.moves];
         out.caught = wild;
         lines.push(`${eulReul(K(w.species))} 잡았다! (Lv${level}) → 소속사 박스로 보냈다.`);
-        await giveExp(trainer, level * EXPLORE_CONFIG.exp.wildPerLevel * c.expOnCatch, lines);
+        await giveFoeExp(trainer, [wild], false, lines);
       } else {
         lines.push(`${eunNeun(K(w.species))} 볼에서 빠져나와 달아났다.`);
-        await giveExp(trainer, level * EXPLORE_CONFIG.exp.wildPerLevel * 0.4, lines);
+        await giveFoeExp(trainer, [wild], false, lines);
       }
       out.won = true;
       applyWin(trainer);
@@ -219,7 +231,7 @@ async function encounter(game, trainer, locationId, mode, slot) {
       trainer.record.wins = (trainer.record.wins || 0) + 1;
       lines.push(`${cls.name} ${npc.name}에게 이겼다! 상금 ${money.toLocaleString()}.`);
       applyWin(trainer);
-      await giveExp(trainer, npcLevel * EXPLORE_CONFIG.exp.trainerPerLevel * npc.party.length, lines);
+      await giveFoeExp(trainer, foeParty, true, lines);
     } else {
       out.won = false;
       trainer.record.losses = (trainer.record.losses || 0) + 1;
@@ -300,6 +312,6 @@ export async function explore(game, trainer, locationId, mode, { activities = EX
     out.lines.push(`[${event.time} · ${slot}/${budget}] ${event.lines.join(' ')}`);
     await onActivity(event, budget);
   }
-  out.lines.push(`탐험 종료 — ${out.events.length}회 활동, ${out.wins}승 ${out.losses}패, 포획 ${out.catches.length}마리, 센터 ${out.centers}회, 상금 ${out.money}.`);
+  out.lines.push(`탐험 종료 — ${out.events.length}회 활동, ${out.wins}승 ${out.losses}패, 포획 ${out.catches.length}마리, 센터 ${out.centers}회, 상금 ${out.money}.${available.includes('catch')&&!(bagOf(trainer).pokeBall>0)?' 몬스터볼이 없어 포획은 못 했다.':''}`);
   return out;
 }
