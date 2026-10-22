@@ -94,6 +94,20 @@ for (const it of gen.items.all()) {
   HELD_ITEMS[it.name] = { ko, cat, price, icon: p.identifier, desc: itemFlavorKo[p.id] || "", estimated: !(Number(p.cost) > 0) };
 }
 
+/* ---------- 진화 도구 — 진화의 돌·통신 도구·유대의 끈·모으령의 코인·사탕공예 등 ----------
+   holdable: 9세대 데이터에 있는 도구라 지니게 할 수 있다(통신진화 도구는 지닌 채 유대의 끈을 쓴다) */
+const EVO_FALLBACK = 3000, EVO_PRICE_OVERRIDE = { 'Gimmighoul Coin': 10 };   // [임시값]
+const evoNames = new Set(['Black Augurite', 'Peat Block', 'Linking Cord', 'Gimmighoul Coin']);
+for (const sp of gen.species.all()) if (sp.exists && sp.evoItem) evoNames.add(sp.evoItem);
+for (const it of gen.items.all()) if (it.exists && / Sweet$/.test(it.name)) evoNames.add(it.name);
+const EVO_ITEMS = {};
+for (const name of [...evoNames].sort()) {
+  const p = pokeItem[dexId(name)]; const dexItem = gen.items.get(name);
+  const ko = p && koName[p.id]; if (!ko) { console.warn('evo item without ko', name); continue; }
+  const price = EVO_PRICE_OVERRIDE[name] ?? (Number(p.cost) > 0 ? Number(p.cost) : EVO_FALLBACK);
+  EVO_ITEMS[name] = { ko, price, icon: p.identifier, desc: itemFlavorKo[p.id] || '', holdable: !!dexItem?.exists, estimated: !!EVO_PRICE_OVERRIDE[name] || !(Number(p.cost) > 0) };
+}
+
 /* ---------- 메가스톤 — 9세대 데이터에선 과거/미래 도구라 따로 모은다. 원작 판매가가 없어 [임시값] ---------- */
 const MEGA_PRICE = 10000;
 for (const it of gen.items.all()) {
@@ -142,9 +156,11 @@ export const ABILITY_DESC_KO = ${JSON.stringify(ABILITY_DESC, null, 0)};
 export const HELD_ITEMS = ${JSON.stringify(HELD_ITEMS, null, 0)};
 export const TMS = ${JSON.stringify(TMS, null, 0)};
 export const SUPPLY_ITEMS = ${JSON.stringify(SUPPLY_ITEMS, null, 0)};
+export const EVO_ITEMS = ${JSON.stringify(EVO_ITEMS, null, 0)};
 export const CAPTURE_RATE = ${JSON.stringify(CAPTURE_RATE, null, 0)};
 `;
 fs.writeFileSync(OUT, body);
 const cats = Object.values(HELD_ITEMS).reduce((n, i) => (n[i.cat] = (n[i.cat] || 0) + 1, n), {});
+console.log(`evo items ${Object.keys(EVO_ITEMS).length}`);
 console.log(`supplies ${Object.keys(SUPPLY_ITEMS).length}, capture rates ${Object.keys(CAPTURE_RATE).length}`);
 console.log(`wrote ${OUT}: moves ${Object.keys(MOVE_DESC).length}, items ${Object.keys(HELD_ITEMS).length} ${JSON.stringify(cats)}, TMs ${TMS.length}`);

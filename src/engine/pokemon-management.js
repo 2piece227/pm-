@@ -2,6 +2,9 @@ import { Dex } from '@pkmn/dex';
 import { levelUpMoves, realStats } from '../data/pokemon.js';
 import { fieldState } from './field-state.js';
 import { SUPPLIES } from '../data/supplies.js';
+import { evolutionChoices, consumeForEvolution } from './evolution.js';
+import { HELD_ITEMS, EVO_ITEMS } from '../data/items.gen.js';
+import { ko, MOVE_KO } from '../data/ko.js';
 
 export const MANAGEMENT = {
   movePrice: 100, abilityPrice: 1000,
@@ -49,20 +52,21 @@ export function changeAbility(game, mon, ability) {
 }
 
 /** Level-only evolutions are actionable. Other canonical conditions are shown, never bypassed. */
-export function evolutionOptions(mon) {
-  return Dex.species.get(mon.species).evos.map(name=>{
-    const next=Dex.species.get(name);
-    const supported=!!next.evoLevel && !next.evoType && !next.evoCondition;
-    return {species:name,level:next.evoLevel,ready:supported&&mon.level>=next.evoLevel&&!mon.training,
-      reason:supported?`Lv.${next.evoLevel}`:next.evoItem?`${next.evoItem} 필요`:next.evoType==='trade'?'통신교환 필요':next.evoType==='levelFriendship'?'친밀도 조건 필요':'특수 진화 조건 필요'};
-  });
+/** 진화 후보 — 9세대 진화 방법 전부 (engine/evolution.js). game을 주면 창고 도구·파티 조건까지 본다 */
+export function evolutionOptions(mon, game = null) {
+  const agency = game ? agencyOf(game) : null;
+  const party = agency?.roster.find(t => t.party.includes(mon))?.party || [];
+  return evolutionChoices(mon, { stock: agency ? (agency.items ??= {}) : {}, party, itemKo: n => HELD_ITEMS[n]?.ko || EVO_ITEMS[n]?.ko || n, moveKo: n => ko(MOVE_KO, n) })
+    .map(o => ({ ...o, reason: o.need }));
 }
-export async function evolvePokemon(mon, target) {
-  if(!evolutionOptions(mon).some(e=>e.species===target&&e.ready)) return fail('아직 진화 조건을 충족하지 않았습니다.');
+export async function evolvePokemon(mon, target, game = null) {
+  if(!evolutionOptions(mon, game).some(e=>e.species===target&&e.ready)) return fail('아직 진화 조건을 충족하지 않았습니다.');
   const before=mon.species;
   const table=await levelUpMoves(target);
   // Recheck after async loading to prevent stale/double confirmations.
-  if(mon.species!==before||!evolutionOptions(mon).some(e=>e.species===target&&e.ready)) return fail('포켓몬 상태가 바뀌었습니다.');
+  const opt=evolutionOptions(mon, game).find(e=>e.species===target&&e.ready);
+  if(mon.species!==before||!opt) return fail('포켓몬 상태가 바뀌었습니다.');
+  if(opt.consume) consumeForEvolution(opt, mon, game ? (agencyOf(game).items ??= {}) : {});
   const old=Dex.species.get(before), next=Dex.species.get(target);
   const abilitySlot=Object.keys(old.abilities).find(k=>old.abilities[k]===mon.ability)||'0';
   mon.fieldState=fieldState(mon);

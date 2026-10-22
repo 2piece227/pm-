@@ -132,6 +132,8 @@ export async function gainExp(mon, amount) {
   if (after === before) return { levels: 0, learned: [] };
 
   mon.level = after;
+  /* 친밀도 — 레벨이 오를 때마다 (원작 8세대 이후: 100 미만 +5, 160 미만 +3, 그 이상 +2), 평온의방울은 1.5배 */
+  for (let l = before; l < after; l++) { const f = mon.friendship ?? 70; const g = f < 100 ? 5 : f < 160 ? 3 : 2; mon.friendship = Math.min(255, f + Math.floor(g * (mon.item === 'Soothe Bell' ? 1.5 : 1))); }
   const table = await levelUpMoves(mon.species);
   const newly = [...new Set(table.filter((m) => m.level > before && m.level <= after).map((m) => m.move))];
   mon.learned = [...new Set([...(mon.learned || []), ...newly])];

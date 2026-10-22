@@ -17,6 +17,7 @@ import { curve } from '../ai/estimate.js';
 import { fieldState, healParty, partyCondition } from './field-state.js';
 import { bagOf, MANAGEMENT, evolvePokemon, evolutionOptions } from './pokemon-management.js';
 import { consumeBerries } from './shop.js';
+import { recordBattle, addSteps } from './evolution.js';
 import { SUPPLIES, BALL_KEYS, ballCount } from '../data/supplies.js';
 import { CAPTURE_RATE } from '../data/items.gen.js';
 import { Dex } from '@pkmn/dex';
@@ -100,6 +101,7 @@ function fight(trainer, myParty, foe, foeParty, seed) {
   });
   myParty.forEach((mon, i) => { mon.fieldState = { ...r.hpAfter.p1[i], pp: { ...mon.fieldState?.pp, ...r.hpAfter.p1[i].pp } }; });
   consumeBerries(myParty, r.log);
+  recordBattle(myParty, r.log, 'p1');
   return r;
 }
 
@@ -407,9 +409,10 @@ export async function explore(game, trainer, locationId, mode, { activities = EX
     event.slot = slot;
     // Slots span 09:00–18:00; duration is a management abstraction, not battle turn time.
     event.time = `${String(9 + Math.floor((slot-1)*9/budget)).padStart(2,'0')}:${String(Math.floor(((slot-1)*540/budget)%60)).padStart(2,'0')}`;
+    addSteps(trainer.party);   // 함께 걸은 걸음 (파모트·꽃거롱·골든파리 진화)
     for(const mon of trainer.party) if(mon.autoEvolve){
-      const ready=evolutionOptions(mon).filter(e=>e.ready);
-      if(ready.length===1){const r=await evolvePokemon(mon,ready[0].species);if(r.ok)event.lines.push(`${K(r.before)} → ${K(r.after)} 진화!`);}
+      const ready=evolutionOptions(mon,game).filter(e=>e.auto);
+      if(ready.length===1){const r=await evolvePokemon(mon,ready[0].species,game);if(r.ok)event.lines.push(`${K(r.before)} → ${K(r.after)} 진화!`);}
     }
     event.before = before;
     event.after = trainer.party.map(fieldState);
@@ -418,6 +421,8 @@ export async function explore(game, trainer, locationId, mode, { activities = EX
     out.lines.push(`[${event.time} · ${slot}/${budget}] ${event.lines.join(' ')}`);
     await onActivity(event, budget);
   }
+  /* 하루 함께 다니면 친밀도 +1 (평온의방울 2) [임시값] */
+  if (out.events.length) for (const m of trainer.party) m.friendship = Math.min(255, (m.friendship ?? 70) + (m.item === 'Soothe Bell' ? 2 : 1));
   out.lines.push(`탐험 종료 — ${out.events.length}회 활동, ${out.wins}승 ${out.losses}패, 포획 ${out.catches.length}마리, 센터 ${out.centers}회, 상금 ${out.money}.${available.includes('catch')&&!(ballCount(bagOf(trainer))>0)?' 몬스터볼이 없어 포획은 못 했다.':''}`);
   return out;
 }

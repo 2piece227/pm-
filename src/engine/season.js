@@ -5,6 +5,7 @@ import { proEligible, isRegisteredPro, isRaceSeat } from './career.js';
 import { findTrainer, seedOrder } from './league.js';
 import { effectiveStats, STAT_KEYS } from '../data/agencies.js';
 import { partyToTeam, gainExp } from '../data/pokemon.js';
+import { recordBattle } from './evolution.js';
 import { createTrainerAI, runBattle, makeRng } from './run-battle.js';
 import { analyseBattle } from './battle-analysis.js';
 import { ko, SPECIES_KO } from '../data/ko.js';
@@ -81,6 +82,8 @@ export async function runCup(game,e,onProgress=async()=>{}){
         trainerName:a.name,gymName:b.name,agencyName:a.agencyName,opponentAgency:b.agencyName,eventName:e.name,
         won:winner.id===a.id,analysis:analyseBattle(r,{policy:a.definition.battlePolicy,mentalDebuff:a.definition.mentalDebuff,lossStreak:a.definition.lossStreak})};
       e.matches.push(m);next.push(winner);
+      /* 우리 선수는 배틀 기록으로 진화 카운터를 올린다 (저승갓숭·대도각참 등) */
+      for(const [x,side] of [[a,'p1'],[b,'p2']])if(x.agencyId===game.playerAgencyId){const real=competitionTrainer(game,x.id);if(real)recordBattle(real.party,r.log,side);}
       if(e.watchMode==='watch'&&(a.agencyId===game.playerAgencyId||b.agencyId===game.playerAgencyId))(game.pendingCupWatches??=[]).push(m.id);
       for(const x of [a,b])appearances.set(x.id,(appearances.get(x.id)||0)+1);
       await onProgress({id:m.id,state:'done',label:e.name,detail:`${a.name} vs ${b.name} · ${winner.name} 진출${tie?' (무승부 추첨)':''}`});

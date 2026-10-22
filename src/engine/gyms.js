@@ -11,6 +11,7 @@ import { agencyOf, evolutionOptions, evolvePokemon } from './pokemon-management.
 import { analyseBattle } from './battle-analysis.js';
 import { markGraduation } from './career.js';
 import { consumeBerries } from './shop.js';
+import { recordBattle } from './evolution.js';
 
 export async function challengeGym(game, trainer, gymId) {
   if(pwtBreak(game))throw new Error('PWT 기간에는 공식 체육관 도전이 중단됩니다.');
@@ -37,6 +38,7 @@ export async function challengeGym(game, trainer, gymId) {
   const analysis=analyseBattle(result,analysisContext);
   trainer.party.forEach((m,i)=>{m.fieldState=result.hpAfter.p1[i];});
   consumeBerries(trainer.party,result.log);
+  recordBattle(trainer.party,result.log,'p1');
   trainer.lastGymDay=game.day;trainer.locationId=gym.location;
   const won=result.winner==='p1';
   trainer.record[won?'wins':'losses']++;
@@ -58,8 +60,8 @@ export async function challengeGym(game, trainer, gymId) {
   const evolutions=[];
   if(won) for(const mon of trainer.party) {
     if(!mon.autoEvolve) continue;
-    const ready=evolutionOptions(mon).filter(e=>e.ready);
-    if(ready.length===1){const r=await evolvePokemon(mon,ready[0].species);if(r.ok)evolutions.push(r);}
+    const ready=evolutionOptions(mon,game).filter(e=>e.auto);
+    if(ready.length===1){const r=await evolvePokemon(mon,ready[0].species,game);if(r.ok)evolutions.push(r);}
   }
   for(const e of evolutions) game.league.newsFeed.unshift({day:game.day,kind:'evolution',text:`${trainer.name}의 ${ko(SPECIES_KO,e.before)} → ${ko(SPECIES_KO,e.after)} 진화!`});
   const entry={analysis,evolutions,growth,bonusPaid,badge:gym.badge,id:`gym-${game.day}-${trainer.id}`,day:game.day,gymId,trainerId:trainer.id,trainerName:trainer.name,

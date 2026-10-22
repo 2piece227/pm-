@@ -1,6 +1,8 @@
 import { youthCount, youthCapacity, careerLabel, isRegisteredPro, ensureSeats, seatLabel, swapSeat, proCapacity } from '../engine/career.js';
 import { renderShop, wireShop, itemIcon as heldIcon } from './shop.js';
 import { openItemPicker } from './item-picker.js';
+import { holdInfo } from '../engine/shop.js';
+import { bindLiveSearch } from './live-search.js';
 import { trainerPortrait, trainerFull } from './trainer-sprite.js';
 import { HELD_ITEMS } from '../data/items.gen.js';
 import { SUPPLIES, ballCount } from '../data/supplies.js';
@@ -323,7 +325,7 @@ function renderSquad() {
 function partyCard(t, m, i) {
   const st = realStats(m), fs = fieldState(m), base = expForLevel(m.level), next = expForLevel(m.level + 1);
   const xp = Math.max(0, Math.min(100, ((m.exp - base) / Math.max(1, next - base)) * 100)), hp = Math.round(fs.hp / Math.max(1, fs.maxhp) * 100);
-  const sp = Dex.species.get(m.species), ready = evolutionOptions(m).some(e => e.ready), item = m.item && HELD_ITEMS[m.item];
+  const sp = Dex.species.get(m.species), ready = evolutionOptions(m, game).some(e => e.ready), item = m.item && holdInfo(m.item);
   return `<article class="pcard">
     <header>${monImage(m.species)}<div><b>${esc(K(m.species))}</b><small>Lv.${m.level} · ${sp.types.map(x => TYPE_KO[x]).join('/')}</small></div><button class="ghost to-box" data-t="${t.id}" data-i="${i}" ${t.party.length === 1 ? 'disabled' : ''} title="박스로 보내기">박스로</button></header>
     <div class="pc-bars"><label>HP ${fs.hp}/${fs.maxhp}${fs.status ? ` · ${statusLabel(fs.status)}` : ''}<span class="bar hp"><i style="width:${hp}%"></i></span></label><label>EXP<span class="bar xp"><i style="width:${xp}%"></i></span></label></div>
@@ -368,7 +370,7 @@ function renderBox() {
   const selected = a.box[boxSelection];
   return `<div class="page-h"><div><div class="eyebrow">POKÉMON STORAGE</div><h2>소속사 포켓몬 박스</h2></div><span class="muted">보관 ${a.box.length}마리</span></div>
     <div class="storage-layout"><section class="card"><div class="section-heading"><h3>보관 중인 포켓몬</h3><span class="muted">포획한 포켓몬은 여기에 도착합니다</span></div><div class="storage-grid">${Array.from({length:Math.max(30,Math.ceil(a.box.length/30)*30)},(_,i)=>a.box[i] ? `<button class="storage-slot ${boxSelection === i?'selected':''}" data-box-select="${i}">${monImage(a.box[i].species)}<b>${K(a.box[i].species)}</b><small>Lv. ${a.box[i].level}</small></button>`:'<div class="storage-slot empty"><span>＋</span></div>').join('')}</div></section>
-    <aside><section class="card storage-detail">${selected ? `<div class="eyebrow">선택한 포켓몬</div>${monImage(selected.species)}<h2>${K(selected.species)} <small>Lv. ${selected.level}</small></h2><p class="muted">${selected.caughtOnDay || 1}일차에 만난 동료</p><div class="move-pills">${selected.moves.map(m=>`<span>${esc(M(m))}</span>`).join('')}</div><button class="item-slot ${selected.item?'has':''}" data-give-item data-b="${boxSelection}">${selected.item&&HELD_ITEMS[selected.item]?`${heldIcon(selected.item)}<span><b>${esc(HELD_ITEMS[selected.item].ko)}</b><small>지닌 도구 · 바꾸기</small></span>`:'<span class="plus">＋</span><span><b>도구 지니게 하기</b><small>창고에서 고르기</small></span>'}</button><div class="pokemon-actions"><button class="ghost manage-mon" data-b="${boxSelection}">기술·특성·진화 관리</button><button data-nav="training">트레이닝 센터</button></div><label>함께할 트레이너<select id="box-target">${roster.map(t=>`<option value="${t.id}" ${t.id===target?.id?'selected':''}>${esc(t.name)} · ${t.party.length}/6</option>`).join('')}</select></label><button class="to-party" data-b="${boxSelection}" ${!target || target.party.length>=6 || selected.training?'disabled':''}>${selected.training?'장기 훈련 중':'파티에 합류시키기'}</button>${target?.party.length>=6?'<p class="muted">파티가 가득 찼습니다. 한 마리를 박스로 옮겨주세요.</p>':''}` : '<h3>첫 만남을 기다리는 중</h3><p class="muted">지도에서 포켓몬 포획을 배정하세요.</p><button data-nav="map">탐험 지도 열기</button>'}</section>
+    <aside><section class="card storage-detail">${selected ? `<div class="eyebrow">선택한 포켓몬</div>${monImage(selected.species)}<h2>${K(selected.species)} <small>Lv. ${selected.level}</small></h2><p class="muted">${selected.caughtOnDay || 1}일차에 만난 동료</p><div class="move-pills">${selected.moves.map(m=>`<span>${esc(M(m))}</span>`).join('')}</div><button class="item-slot ${selected.item?'has':''}" data-give-item data-b="${boxSelection}">${selected.item&&holdInfo(selected.item)?`${heldIcon(selected.item)}<span><b>${esc(holdInfo(selected.item).ko)}</b><small>지닌 도구 · 바꾸기</small></span>`:'<span class="plus">＋</span><span><b>도구 지니게 하기</b><small>창고에서 고르기</small></span>'}</button><div class="pokemon-actions"><button class="ghost manage-mon" data-b="${boxSelection}">기술·특성·진화 관리</button><button data-nav="training">트레이닝 센터</button></div><label>함께할 트레이너<select id="box-target">${roster.map(t=>`<option value="${t.id}" ${t.id===target?.id?'selected':''}>${esc(t.name)} · ${t.party.length}/6</option>`).join('')}</select></label><button class="to-party" data-b="${boxSelection}" ${!target || target.party.length>=6 || selected.training?'disabled':''}>${selected.training?'장기 훈련 중':'파티에 합류시키기'}</button>${target?.party.length>=6?'<p class="muted">파티가 가득 찼습니다. 한 마리를 박스로 옮겨주세요.</p>':''}` : '<h3>첫 만남을 기다리는 중</h3><p class="muted">지도에서 포켓몬 포획을 배정하세요.</p><button data-nav="map">탐험 지도 열기</button>'}</section>
     <section class="card party-preview"><h3>${esc(target?.name || '트레이너')}의 파티</h3>${(target?.party||[]).map((m,i)=>`<div class="party-slot">${monImage(m.species)}<div><b>${K(m.species)}</b><small>Lv. ${m.level}</small></div><button class="ghost to-box" data-t="${target.id}" data-i="${i}" ${target.party.length===1?'disabled':''}>박스로</button></div>`).join('')}<p class="muted">${target?.party.length||0} / 6 · 마지막 동료는 파티에 남습니다.</p></section></aside></div>`;
 }
 
@@ -464,7 +466,7 @@ function wire() {
   main.querySelectorAll('[data-message]').forEach(b=>b.onclick=()=>{ const m=inboxItems()[Number(b.dataset.message)]; selectedMessage=m.key; read.add(m.key); game.readMessages=[...read]; persist(); render(); });
   main.querySelectorAll('[data-box-select]').forEach(b=>b.onclick=()=>{boxSelection=Number(b.dataset.boxSelect);render();});
   const search=$('route-search');
-  if(search) search.oninput=()=>{const pos=search.selectionStart;mapQuery=search.value;render();$('route-search').focus();$('route-search').setSelectionRange(pos,pos);};
+  if(search) bindLiveSearch(search,{setQuery:v=>{mapQuery=v;},renderHtml:()=>renderMap(),selector:'.route-list',wire:el=>el.querySelectorAll('[data-l]').forEach(b=>{b.onclick=()=>{map.locId=b.dataset.l;render();};})});
   const filter=$('route-filter');if(filter) filter.onchange=()=>{mapFilter=filter.value;render();};
   if($('cancel-assignment')) $('cancel-assignment').onclick=()=>{assignAction(game,map.trainerId,'rest');persist();render();};
 

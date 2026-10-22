@@ -2,12 +2,13 @@
  * 상점 — 탐험 물품(트레이너 가방) · 지닌 도구 · 열매 · 기술머신 (소속사 창고)
  */
 import { Dex } from '@pkmn/dex';
-import { HELD_ITEMS, TMS, MOVE_DESC_KO } from '../data/items.gen.js';
+import { HELD_ITEMS, TMS, MOVE_DESC_KO, EVO_ITEMS } from '../data/items.gen.js';
 import { ko, MOVE_KO } from '../data/ko.js';
 import { agencyOf } from '../engine/pokemon-management.js';
 import { buyItem, buyTM, itemsOf, tmsOf, buyKeyStone, KEY_STONE } from '../engine/shop.js';
 import { ko as koT, SPECIES_KO } from '../data/ko.js';
 import { monImage } from './management-widgets.js';
+import { bindLiveSearch } from './live-search.js';
 import { renderSupport } from './management-pages.js';
 import { TYPE_KO } from './pokemon-panel.js';
 import { escapeHtml as esc } from './management-widgets.js';
@@ -16,7 +17,7 @@ const ui = { tab: 'supplies', q: '', cat: 'all', type: 'all' };
 const ASSET = (import.meta.env?.BASE_URL ?? '/') + 'assets/items/';
 const M = s => ko(MOVE_KO, s);
 const CAT = { Physical: '물리', Special: '특수', Status: '변화' };
-export const itemIcon = (name) => HELD_ITEMS[name] ? `<img class="item-ico" src="${ASSET}${HELD_ITEMS[name].icon}.png" alt="" aria-hidden="true" width="30" height="30" loading="lazy">` : '';
+export const itemIcon = (name) => (HELD_ITEMS[name] || EVO_ITEMS[name]) ? `<img class="item-ico" src="${ASSET}${(HELD_ITEMS[name] || EVO_ITEMS[name]).icon}.png" alt="" aria-hidden="true" width="30" height="30" loading="lazy">` : '';
 export const tmIcon = (move) => `<img class="item-ico" src="${ASSET}tm-${(Dex.moves.get(move).type || 'Normal').toLowerCase()}.png" alt="" aria-hidden="true" width="30" height="30" loading="lazy">`;
 const won = n => Math.round(n).toLocaleString();
 
@@ -25,10 +26,15 @@ const HELD_CATS = { all: '전체', battle: '배틀 도구', type: '타입 강화
 export function renderShop(game) {
   const a = agencyOf(game), stock = itemsOf(a), tms = tmsOf(a);
   const owned = Object.values(stock).reduce((n, v) => n + v, 0), ownedTm = Object.values(tms).reduce((n, v) => n + v, 0);
-  const tabs = [['supplies', '탐험 물품'], ['held', '지닌 도구'], ['berry', '열매'], ['tm', '기술머신'], ['mega', '메가스톤']];
+  const tabs = [['supplies', '탐험 물품'], ['held', '지닌 도구'], ['berry', '열매'], ['tm', '기술머신'], ['evo', '진화 도구'], ['mega', '메가스톤']];
   const q = ui.q.trim();
   let body = '';
   if (ui.tab === 'supplies') body = `<div class="shop-supplies">${renderSupport(game)}</div>`;
+  else if (ui.tab === 'evo') {
+    const list = Object.entries(EVO_ITEMS).filter(([en, v]) => !q || v.ko.includes(q) || en.toLowerCase().includes(q.toLowerCase())).sort((x, y) => x[1].ko.localeCompare(y[1].ko));
+    body = `<p class="muted">진화의 돌·통신진화 도구·연결의끈(통신진화 대신)·모으령의코인(타부자고, 999개)·사탕공예(마휘핑). 통신진화 도구는 포켓몬에게 지니게 한 뒤 연결의끈을 씁니다. 진화는 포켓몬 관리 창의 진화 탭에서 합니다.</p>
+      <div class="shop-grid">${list.map(([en, v]) => `<article class="shop-item">${itemIcon(en)}<div class="nm"><b>${esc(v.ko)}</b><small>보유 ${stock[en] || 0}${v.holdable ? ' · 지닐 수 있음' : ''}</small></div><p>${esc(v.desc)}</p><footer><span class="price">₽${won(v.price)}${v.estimated ? ' <i>임시</i>' : ''}</span><select class="shop-qty" aria-label="${esc(v.ko)} 수량">${(en === 'Gimmighoul Coin' ? [1, 10, 100, 999] : [1, 2, 3, 5]).map(n => `<option>${n}</option>`).join('')}</select><button data-buy-item="${esc(en)}" ${a.funds < v.price ? 'disabled' : ''}>구입</button></footer></article>`).join('') || '<p class="muted">찾는 도구가 없습니다.</p>'}</div>`;
+  }
   else if (ui.tab === 'mega') {
     const megaOwned = new Set([...a.box, ...a.roster.flatMap(t => t.party)].map(m => m.species));
     const stones = Object.entries(HELD_ITEMS).filter(([en, v]) => v.cat === 'mega' && (!q || v.ko.includes(q) || koT(SPECIES_KO, v.evolves).includes(q) || en.toLowerCase().includes(q.toLowerCase())))
@@ -61,7 +67,7 @@ export function wireShop(root, game, refresh) {
   root.querySelectorAll('[data-shop-cat]').forEach(b => b.onclick = () => { ui.cat = b.dataset.shopCat; refresh(); });
   const type = root.querySelector('#shop-type'); if (type) type.onchange = () => { ui.type = type.value; refresh(); };
   const search = root.querySelector('#shop-search');
-  if (search) search.oninput = () => { const pos = search.selectionStart; ui.q = search.value; refresh(); const s = document.querySelector('#shop-search'); s?.focus(); s?.setSelectionRange(pos, pos); };
+  if (search) bindLiveSearch(search, { setQuery: v => { ui.q = v; }, renderHtml: () => renderShop(game), selector: 'section.shop', wire: el => wireShop(el, game, refresh) });
   root.querySelectorAll('[data-buy-item]').forEach(b => b.onclick = () => { const n = Number(b.closest('.shop-item').querySelector('.shop-qty').value); const r = buyItem(game, b.dataset.buyItem, n); refresh(); say(r.msg); });
   root.querySelectorAll('[data-buy-keystone]').forEach(b => b.onclick = () => { const r = buyKeyStone(game, b.dataset.buyKeystone); refresh(); say(r.msg); });
   root.querySelectorAll('[data-buy-tm]').forEach(b => b.onclick = () => { const r = buyTM(game, b.dataset.buyTm, 1); refresh(); say(r.msg); });

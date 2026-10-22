@@ -7,7 +7,7 @@
  *   - 배틀 뒤 소모: 원작처럼 먹은 열매만 사라진다. 다른 도구는 배틀이 끝나면 돌아온다 [임시값].
  */
 import { Dex } from '@pkmn/dex';
-import { HELD_ITEMS, TMS } from '../data/items.gen.js';
+import { HELD_ITEMS, TMS, EVO_ITEMS } from '../data/items.gen.js';
 import { agencyOf, ownedMon } from './pokemon-management.js';
 import { eulReul, ko, MOVE_KO } from '../data/ko.js';
 
@@ -15,7 +15,9 @@ const GEN = Dex.forGen(9);
 const fail = msg => ({ ok: false, msg });
 export const itemsOf = agency => (agency.items ??= {});
 export const tmsOf = agency => (agency.tms ??= {});
-export const itemKo = name => HELD_ITEMS[name]?.ko || name;
+export const itemKo = name => HELD_ITEMS[name]?.ko || EVO_ITEMS[name]?.ko || name;
+/** 지니게 할 수 있는 도구 정보 (배틀 도구·메가스톤·진화 도구 중 지닐 수 있는 것) */
+export const holdInfo = name => HELD_ITEMS[name] || (EVO_ITEMS[name]?.holdable ? { ...EVO_ITEMS[name], cat: 'evo' } : null);
 export const TM_BY_MOVE = Object.fromEntries(TMS.map(t => [t.move, t]));
 
 /* 키스톤(메가링) — 트레이너마다 하나. 원작에선 이야기로 받는 물건이라 가격은 [임시값] */
@@ -30,9 +32,9 @@ export function buyKeyStone(game, trainerId) {
 }
 
 export function buyItem(game, name, qty = 1) {
-  const def = HELD_ITEMS[name], a = agencyOf(game);
+  const def = HELD_ITEMS[name] || EVO_ITEMS[name], a = agencyOf(game);
   if (!def) return fail('파는 도구가 아닙니다.');
-  if (!Number.isInteger(qty) || qty < 1 || qty > 99) return fail('수량은 1~99개입니다.');
+  if (!Number.isInteger(qty) || qty < 1 || qty > 999) return fail('수량은 1~999개입니다.');
   const cost = def.price * qty;
   if (a.funds < cost) return fail('자금이 부족합니다.');
   a.funds -= cost; itemsOf(a)[name] = (itemsOf(a)[name] || 0) + qty;
@@ -53,7 +55,7 @@ export function buyTM(game, move, qty = 1) {
 export function giveItem(game, mon, name) {
   const a = agencyOf(game), bag = itemsOf(a);
   if (!ownedMon(game, mon)) return fail('우리 포켓몬이 아닙니다.');
-  if (!HELD_ITEMS[name] || !(bag[name] > 0)) return fail('창고에 그 도구가 없습니다.');
+  if (!holdInfo(name) || !(bag[name] > 0)) return fail('창고에 그 도구가 없습니다.');
   if (mon.item === name) return fail('이미 지니고 있습니다.');
   if (mon.item) bag[mon.item] = (bag[mon.item] || 0) + 1;
   bag[name]--; if (!bag[name]) delete bag[name];
