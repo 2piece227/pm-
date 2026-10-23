@@ -18,7 +18,7 @@
  * 브라우저 자동재생 정책상 사용자 제스처 전에는 소리가 안 난다.
  * 아무 클릭에서나 unlock()이 한 번 불리도록 걸어둔다.
  */
-import { seUrl, animSoundUrl, cryUrl } from '../data/battle-assets.js';
+import { seUrl, animSoundUrl, cryUrl, formCryUrl } from '../data/battle-assets.js';
 
 /**
  * 이름 → 실제 음원. **여기 없는 이름은 소리가 나지 않는다.**
@@ -143,6 +143,12 @@ export function playCry(dexNum) {
   playUrl('cry:' + dexNum, url, { volume: 0.85 }).then((ok) => {
     if (!ok) playUrl('cryx:' + dexNum, fallback, { volume: 0.85 });
   });
+}
+
+/** 폼 울음소리 (메가진화 직후) — 폼 전용 음원이 없으면 기본 종 울음으로 */
+export function playFormCry(stem, dexNum) {
+  if (!ready() || !stem) return;
+  playUrl('fcry:' + stem, formCryUrl(stem), { volume: 0.85 }).then((ok) => { if (!ok) playCry(dexNum); });
 }
 
 /**

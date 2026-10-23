@@ -29,6 +29,11 @@ export function cryUrl(dexNum) {
   };
 }
 
+/** 폼 전용 울음소리 (메가진화 등) — PokeRogue audio/cry/<번호-폼>.m4a. PokeAPI에는 메가 울음이 없다 */
+export function formCryUrl(stem) {
+  return `${POKEROGUE}/audio/cry/${stem}.m4a`;
+}
+
 /** 공용 배틀 효과음 (audio/se) — 파일명 그대로 */
 export function seUrl(name) {
   return `${POKEROGUE}/audio/se/${name}.wav`;

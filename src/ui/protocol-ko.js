@@ -274,6 +274,11 @@ export function toKoreanLog(protocolLog, names, think = []) {
           const w = WEATHER_MSG[src];
           if (w && w.damage) msg = w.damage(eulReul(name));
           else if (STATUS_TICK[src]) msg = STATUS_TICK[src](eunNeun(name));
+          /* 원작 문구: 반동·혼란 자해·흩뿌리기 */
+          else if (src === 'Recoil') msg = `${eunNeun(name)} 공격의\n반동으로 데미지를 입었다!`;
+          else if (src === 'confusion') msg = `${eunNeun(name)} 영문도 모른 채\n자신을 공격했다!`;
+          else if (src === 'Stealth Rock') msg = `${name}에게\n뾰족한 바위가 박혔다!`;
+          else if (src === 'Spikes') msg = `${eunNeun(name)} 압정뿌리기의\n데미지를 입었다!`;
           else if (parts.some((p) => p.startsWith('[from] item:'))) {
             const item = ko(ITEM_KO, src);
             if (src === 'Life Orb') msg = `${name}의\n생명이 조금 깎였다!`;
@@ -288,7 +293,7 @@ export function toKoreanLog(protocolLog, names, think = []) {
               ? `${eunNeun(name)} ${label}(으)로\n체력을 회복했다!`
               : `${label}!\n${eunNeun(name)} 데미지를 입었다!`;
           }
-          const label = ko(ABILITY_KO, ko(ITEM_KO, ko(MOVE_KO, src)));
+          const label = { Recoil: '반동', confusion: '혼란' }[src] || ko(ABILITY_KO, ko(ITEM_KO, ko(MOVE_KO, src)));
           /* 화상·독 같은 지속 피해는 실기처럼 **매 턴 그 상태이상 연출이 다시 돈다** */
           const tick = STATUS_TICK[src] ? src : null;
           push('l-gold', `  ${label}: ${name}  ${before}% → ${after}%`, {
@@ -503,7 +508,7 @@ ${ko(STATUS_KO, st)} 상태가 되었다!`,
         const sp = mon[id.slot]?.species || '';
         const forme = /-Mega(?:-([XYZ]))?/.exec(sp);
         const megaName = `메가${ko(SPECIES_KO, parts[2] || sp)}${forme?.[1] && forme[1] !== 'Z' ? forme[1] : ''}`;
-        push('l-gold', `  ${name} 메가진화 반응`, { noField: true, msg: `${name}의 ${gwaWa(stone)}\n${trainer}의 키스톤이 반응했다!`, anim: { k: 'mega', side: id.side } });
+        push('l-gold', `  ${name} 메가진화 반응`, { noField: true, msg: `${name}의 ${gwaWa(stone)}\n${trainer}의 키스톤이 반응했다!`, anim: { k: 'mega', side: id.side, species: sp } });
         push('l-gold', `  ${name} → ${megaName}`, { msg: `${eunNeun(name)} ${euro(megaName)}\n메가진화했다!` });
         break;
       }

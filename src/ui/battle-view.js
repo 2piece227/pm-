@@ -16,7 +16,9 @@ import {
 import { ANIM_ALIAS, ARCHETYPE_TRAITS } from '../data/move-anim.js';
 import * as sfx from './sfx.js';
 import { loadAnim, playMoveAnim, clearMoveAnim } from './move-fx.js';
-import { createSheetSprite, loadPokemonSheet, preloadSheets } from './sprite-anim.js';
+import { createSheetSprite, loadPokemonSheet, preloadSheets, dashStemOf } from './sprite-anim.js';
+import { animSheetUrl } from '../data/battle-assets.js';
+import { Dex } from '@pkmn/dex';
 import { dexNumOf } from './sprites.js';
 
 const $ = (id) => document.getElementById(id);
@@ -64,40 +66,55 @@ const spriteToken = { p1: 0, p2: 0 };
 /* 돌아가고 있는 시트 재생기 (교체할 때 멈춰야 한다) */
 const sheetSprite = { p1: null, p2: null };
 
-export function drawSprite(side, speciesName) {
+/** 스프라이트 그림만 바꿔 낀다 — 메가진화 이펙트 같은 위층(.spr-fx)은 남긴다 */
+function placeSpriteNode(el, node) {
+  el.querySelectorAll(':scope > :not(.spr-fx)').forEach((n) => n.remove());
+  el.prepend(node);
+}
+
+/**
+ * @param keepOld  폼 변화(메가진화 등)처럼 같은 자리에서 모습만 바뀔 때 — 새 그림이 올 때까지 옛 그림을 둔다.
+ *                 교체는 옛 포켓몬을 바로 치워야 섞여 보이지 않는다.
+ * @returns 새 그림이 붙으면 끝나는 Promise
+ */
+export function drawSprite(side, speciesName, { keepOld = false } = {}) {
   const el = $(`sp-${side}`);
-  el.className = `spr ${side === 'p1' ? 'me' : 'foe'}`;
+  if (!keepOld) el.className = `spr ${side === 'p1' ? 'me' : 'foe'}`;
   shown[side] = speciesName;
 
-  /* 이전 포켓몬을 **즉시** 치운다. 새 그림을 기다리는 동안 남겨두면
-     교체할 때 옛 도트가 잠깐 섞여 깜박이는 것처럼 보인다. */
-  sheetSprite[side]?.stop();
-  sheetSprite[side] = null;
-  el.innerHTML = '';
-  el.style.width = '';
-
   const myToken = ++spriteToken[side];
-  if (!speciesName) return;
+  const old = sheetSprite[side];
+  if (!keepOld) {
+    /* 이전 포켓몬을 **즉시** 치운다. 새 그림을 기다리는 동안 남겨두면
+       교체할 때 옛 도트가 잠깐 섞여 깜박이는 것처럼 보인다. */
+    old?.stop();
+    sheetSprite[side] = null;
+    el.querySelectorAll(':scope > :not(.spr-fx)').forEach((n) => n.remove());
+    el.style.width = '';
+  }
+  if (!speciesName) return Promise.resolve();
 
   /* BW 스프라이트는 종마다 덩치가 다르다. "픽셀당 배율"을 일정하게 유지해야
      실제 덩치 차이가 살아난다 (sprites.js의 REFERENCE_WIDTH 주석 참고) */
   const basePct = side === 'p1' ? 30 : 24;
 
   const useSheet = (sheet) => {
+    if (keepOld) { old?.stop(); }
     const player = createSheetSprite(sheet);
     sheetSprite[side] = player;
-    el.innerHTML = '';
-    el.appendChild(player.canvas);
+    placeSpriteNode(el, player.canvas);
     el.style.width = `${(basePct * sheet.w) / REFERENCE_WIDTH}%`;
-    el.classList.toggle('still', sheet.frames.length < 2);
   };
-  loadPokemonSheet(speciesName, side).then((sheet) => {
+  /* 메가진화·원시회귀는 BW 정지 한 장 + 도트 단위 대기 모션으로 통일한다 (사용자 확정 2026-10-24).
+     그 밖의 폼만 정지 한 장일 때 그 폼의 움직이는 BW GIF를 먼저 찾는다 */
+  const unified = /^(Mega|Primal)/.test(Dex.species.get(speciesName).forme || '');
+  return loadPokemonSheet(speciesName, side).then((sheet) => {
     if (myToken !== spriteToken[side]) return;
-    if (sheet && sheet.frames.length > 1) { useSheet(sheet); return; }
-    /* 정지 한 장뿐인 폼(메가진화 대부분)은 그 폼의 움직이는 BW GIF를 먼저 찾는다 */
+    if (sheet && (sheet.frames.length > 1 || unified)) { useSheet(sheet); return; }
     const ani = sheet ? animatedFormCandidates(speciesName, side) : [];
-    if (ani.length) { tryCandidates(el, side, myToken, speciesName, ani, 0, basePct, () => useSheet(sheet)); return; }
+    if (ani.length) { if (keepOld) { old?.stop(); sheetSprite[side] = null; } tryCandidates(el, side, myToken, speciesName, ani, 0, basePct, () => useSheet(sheet)); return; }
     if (sheet) { useSheet(sheet); return; }
+    if (keepOld) { old?.stop(); sheetSprite[side] = null; }
     /* 시트가 없는 종만 예전 GIF/PNG 경로로 떨어진다 */
     tryCandidates(el, side, myToken, speciesName, spriteCandidates(speciesName, side), 0, basePct);
   });
@@ -108,7 +125,9 @@ function tryCandidates(el, side, token, speciesName, cands, i, basePct, onExhaus
   if (token !== spriteToken[side]) return;
   if (i >= cands.length) {
     if (onExhausted) { onExhausted(); return; }
-    el.innerHTML = fallbackSvg();
+    const box = document.createElement('div');
+    box.innerHTML = fallbackSvg();
+    placeSpriteNode(el, box.firstChild);
     el.style.width = `${basePct}%`;
     return;
   }
@@ -137,8 +156,7 @@ function tryCandidates(el, side, token, speciesName, cands, i, basePct, onExhaus
         win.style.cssText = `position:relative;overflow:hidden;aspect-ratio:${bw}/${bh}`;
         img.style.cssText = `position:absolute;width:${(96 / bw) * 100}%;max-width:none;left:${(-x0 / bw) * 100}%;top:${(-y0 / bh) * 100}%`;
         win.appendChild(img);
-        el.innerHTML = '';
-        el.appendChild(win);
+        placeSpriteNode(el, win);
         el.style.width = `${(basePct * bw) / REFERENCE_WIDTH}%`;
         return;
       }
@@ -147,10 +165,8 @@ function tryCandidates(el, side, token, speciesName, cands, i, basePct, onExhaus
     const padded = kind === 'static' && !cropped;   // 못 자른 경우 (쇼다운 소스)
     node.style.transform = padded ? `translateY(${PADDED_SHIFT[side]})` : '';
 
-    el.innerHTML = '';
-    el.appendChild(node);
+    placeSpriteNode(el, node);
     el.style.width = `${(basePct * (cropped ? cropped.width : img.naturalWidth)) / REFERENCE_WIDTH}%`;
-    el.classList.toggle('still', kind === 'static');
   };
   img.src = url;
 }
@@ -297,18 +313,92 @@ export function drawTrainers(names) {
   }
 }
 
+/** 같은 포켓몬의 다른 모습인가 (메가진화·폼체인지) */
+function sameBase(a, b) {
+  if (!a || !b) return false;
+  const x = Dex.species.get(a), y = Dex.species.get(b);
+  return x.exists && y.exists && (x.baseSpecies || x.name) === (y.baseSpecies || y.name);
+}
+
 /** 화면을 갱신한다. HP 바가 다 깎일 때까지 기다리려면 반환값을 await하면 된다 */
 export function drawField(field, names) {
   const pending = [];
   for (const side of ['p1', 'p2']) {
     const f = field?.[side] || { name: '—', species: null, types: '', pct: 100, level: 50 };
-    if (f.species !== shown[side]) drawSprite(side, f.species);
+    if (f.species !== shown[side]) drawSprite(side, f.species, { keepOld: sameBase(f.species, shown[side]) });
     pending.push(drawHpBox(side, f));
   }
   const w = field?.weather;
   const scene = $('scene');
   if (scene) scene.dataset.weather = w || '';
   return Promise.all(pending);
+}
+
+/* ---------------- 메가진화 ---------------- */
+
+/* 원작 6세대 연출을 따른다: 키스톤과 메가스톤에서 빛줄기가 이어지고 → 무지갯빛 구체가 포켓몬을 감싸고
+   → 구체가 갈라지며 새 모습이 드러난다. 그림은 PokeRogue(포켓몬 리본 애니메이션) 시트, 소리는 PRSFX. */
+const MEGA_ORB = { url: animSheetUrl('PRAS- MegaEvo'), cell: 96, cols: 5 };
+const MEGA_BURST = { url: animSheetUrl('GEN8- MegaEvolution'), cell: 96, cols: 5 };
+const fxImages = new Map();
+function fxImage(url) {
+  if (!fxImages.has(url)) fxImages.set(url, new Promise((res) => {
+    const img = new Image(); img.crossOrigin = 'anonymous';
+    img.onload = () => res(img); img.onerror = () => res(null); img.src = url;
+  }));
+  return fxImages.get(url);
+}
+function preloadMegaFx() { fxImage(MEGA_ORB.url); fxImage(MEGA_BURST.url); }
+
+/** 시트의 프레임들을 차례로 그린다 */
+async function playFrames(canvas, sheet, frames, ms, token) {
+  const img = await fxImage(sheet.url);
+  if (!img) return;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  for (const i of frames) {
+    if (token !== runToken) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, (i % sheet.cols) * sheet.cell, Math.floor(i / sheet.cols) * sheet.cell, sheet.cell, sheet.cell, 0, 0, canvas.width, canvas.height);
+    await wait(ms);
+  }
+}
+
+async function playMegaEvolution(anim, unit, token) {
+  const el = $(`sp-${anim.side}`);
+  const fx = document.createElement('div');
+  fx.className = 'spr-fx mega-fx';
+  fx.innerHTML = '<i class="mega-streaks"></i><canvas width="96" height="96"></canvas>';
+  el.appendChild(fx);
+  const cv = fx.querySelector('canvas');
+  const step = Math.max(26, unit * 0.2);   // 1배속 68ms/프레임
+  try {
+    /* 1. 빛줄기가 모여들고 포켓몬이 빛난다 */
+    sfx.playAnimSound('PRSFX- Mega Evolution1.wav');
+    el.classList.add('mega-charge');
+    fx.classList.add('streaming');
+    await wait(unit * 1.1);
+    /* 2. 무지갯빛 구체가 커지며 포켓몬을 감싼다 */
+    fx.classList.add('orb');
+    await playFrames(cv, MEGA_ORB, [0, 1, 2, 3, 4, 5, 6], step, token);
+    el.classList.add('mega-hidden');
+    /* 3. 구체 안에서 모습이 바뀐다 — 새 그림은 미리 받아 둬서 빈 칸이 생기지 않는다 */
+    if (anim.species) await Promise.race([drawSprite(anim.side, anim.species, { keepOld: true }), wait(1500)]);
+    await playFrames(cv, MEGA_ORB, [7, 8, 9, 10, 11, 12], step, token);
+    /* 4. 구체가 갈라지며 드러난다 */
+    sfx.playAnimSound('PRSFX- Mega Evolution2.wav');
+    fx.classList.remove('streaming');
+    el.classList.remove('mega-hidden', 'mega-charge');
+    el.classList.add('mega-reveal');
+    screenFlash('rgba(255,255,255,.7)', unit * 0.9);
+    await playFrames(cv, MEGA_BURST, [1, 2, 3, 4], step * 1.2, token);
+    const sp = anim.species && Dex.species.get(anim.species);
+    if (sp?.exists) sfx.playFormCry(dashStemOf(sp), sp.num);
+    await wait(unit * 0.8);
+  } finally {
+    fx.remove();
+    el.classList.remove('mega-charge', 'mega-hidden', 'mega-reveal');
+  }
 }
 
 /* ---------------- 특성 팝업 ---------------- */
@@ -651,7 +741,7 @@ async function playAnim(anim, token, onImpact) {
           sfx.play(sfx.impactSoundFor(anim.eff, anim.crit));
           hpDone = onImpact?.();      // 맞는 순간부터 바가 깎이기 시작한다
           t.classList.add('hit', 'hurt');
-          await wait(Math.max(80, unit * 0.3));
+          await wait(Math.max(160, unit * 0.6));
           t.classList.remove('hurt');
           await wait(Math.max(70, unit * 0.24));
           t.classList.remove('hit');
@@ -713,7 +803,7 @@ async function playAnim(anim, token, onImpact) {
           if (tr.shake === 'screen') shakeScreen(unit * 0.5);
           if (tr.ground) groundWave(fx, unit * 0.6);
           t.classList.add('hit', 'hurt');
-          await wait(Math.max(80, unit * 0.3));
+          await wait(Math.max(160, unit * 0.6));
           t.classList.remove('hurt');
           await wait(Math.max(70, unit * 0.24));
           t.classList.remove('hit');
@@ -742,15 +832,9 @@ async function playAnim(anim, token, onImpact) {
       break;
     }
 
-    case 'mega': {
-      /* 메가진화 — 빛에 싸였다가 새 모습으로 (그림 교체는 다음 줄의 화면 갱신) */
-      const el = $(`sp-${anim.side}`);
-      el.classList.add('glow', 'mega-glow');
-      screenFlash('rgba(255,255,255,.55)', unit * 1.2);
-      await wait(unit * 1.6);
-      el.classList.remove('glow', 'mega-glow');
+    case 'mega':
+      await playMegaEvolution(anim, unit, token);
       break;
-    }
 
     case 'weather':
       screenFlash('rgba(200,180,120,.35)', unit * 0.6);
@@ -827,9 +911,10 @@ export async function playBattleLog(protocolLog, names, think = []) {
   /* 프로토콜 앞머리의 |poke| 줄로 양 팀 전원을 미리 받아둔다.
      안 그러면 첫 교체 때마다 그림이 늦게 붙어 빈 칸이 보인다 */
   preloadSheets([...new Set(protocolLog
-    .filter((l) => typeof l === 'string' && l.startsWith('|poke|'))
-    .map((l) => (l.split('|')[3] || '').split(',')[0].trim())
+    .filter((l) => typeof l === 'string' && /^\|(poke|switch|drag|replace|detailschange)\|/.test(l))
+    .map((l) => (l.split('|')[l.startsWith('|poke|') ? 3 : 3] || '').split(',')[0].trim())
     .filter(Boolean))]);
+  preloadMegaFx();
 
   const lines = toKoreanLog(protocolLog, names, think);
 

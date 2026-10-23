@@ -38,7 +38,7 @@ function stemOf(sp) {
   return `${sp.num}${forme}`;
 }
 /** PokeRogue 실제 파일명 — 폼 이름의 대시를 남긴다 (예: 6-mega-x, 128-paldea-combat) */
-function dashStemOf(sp) {
+export function dashStemOf(sp) {
   const forme = sp.forme ? `-${sp.forme.toLowerCase().replace(/[^a-z0-9-]/g, '')}` : '';
   return `${sp.num}${forme}`;
 }
@@ -135,12 +135,16 @@ export async function loadPokemonSheet(species, side) {
     const sp = species && Dex.species.get(species);
     if (!sp || !sp.exists) return null;
 
+    /* 메가진화(원시회귀 포함)는 BW 그림체 애니메이션이 91종 중 몇 종에만 있어서,
+       전부 정지 한 장 + 같은 대기 모션으로 통일한다 (사용자 확정 2026-10-24) */
+    const formStill = /^(Mega|Primal)/.test(sp.forme || '');
     let still = null;   // 정지 한 장짜리는 애니메이션을 다 뒤진 뒤에 쓴다
     for (const [path, ms, isBase] of sheetPaths(species, side)) {
       /* 메가진화 등 폼 전용 그림이 정지 한 장뿐이어도 기본 종 애니메이션보다 우선한다 */
       if (isBase && still) return still;
       const sheet = await fetchSheet(path, ms);
       if (!sheet) continue;
+      if (formStill && !isBase) return { ...sheet, frames: [sheet.frames[0]] };
       if (sheet.frames.length > 1) return sheet;
       still ??= sheet;
     }
@@ -163,11 +167,19 @@ export function preloadSheets(speciesList) {
  * 시트를 돌리는 캔버스를 만든다.
  * @returns {{ canvas: HTMLCanvasElement, stop: () => void, setPaused: (v: boolean) => void }}
  */
+/**
+ * 정지 한 장짜리(메가진화 등) 대기 모션 — 부드럽게 늘었다 줄었다(숨쉬기)가 아니라
+ * 도트 1~2칸씩 끊어서 들썩인다. 원작 도트의 대기 동작 리듬에 맞춘 [오프셋 px, 유지 ms]. [임시값]
+ */
+export const STILL_IDLE = [[0, 420], [1, 110], [2, 300], [1, 110]];
+
 export function createSheetSprite(sheet) {
+  const still = sheet.frames.length < 2;
+  const lift = still ? 2 : 0;   // 들썩일 여유 (위로 2칸)
   const canvas = document.createElement('canvas');
   canvas.className = 'sprite';
   canvas.width = sheet.w;
-  canvas.height = sheet.h;
+  canvas.height = sheet.h + lift;
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
 
@@ -177,16 +189,19 @@ export function createSheetSprite(sheet) {
   let alive = true;
 
   const draw = () => {
-    const f = sheet.frames[i];
-    ctx.clearRect(0, 0, sheet.w, sheet.h);
-    ctx.drawImage(sheet.img, f.sx, f.sy, f.sw, f.sh, f.dx, f.dy, f.sw, f.sh);
+    const f = sheet.frames[still ? 0 : i];
+    const up = still ? STILL_IDLE[i % STILL_IDLE.length][0] : 0;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(sheet.img, f.sx, f.sy, f.sw, f.sh, f.dx, f.dy + lift - up, f.sw, f.sh);
   };
 
   const tick = () => {
     if (!alive) return;
     draw();
-    if (paused || sheet.frames.length < 2) return;
-    timer = setTimeout(() => { i = (i + 1) % sheet.frames.length; tick(); }, sheet.frames[i].ms);
+    if (paused) return;
+    const n = still ? STILL_IDLE.length : sheet.frames.length;
+    const ms = still ? STILL_IDLE[i % n][1] : sheet.frames[i].ms;
+    timer = setTimeout(() => { i = (i + 1) % n; tick(); }, ms);
   };
   tick();
 
