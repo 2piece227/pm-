@@ -32,7 +32,7 @@ export async function challengeGym(game, trainer, gymId) {
   healParty(trainer); // A dedicated gym day includes preparation at the center.
   const stats={judge:15,ops:15,focus:15,know:15,mental:16};
   const analysisContext={policy:trainer.battlePolicy,mentalDebuff:trainer.mentalDebuff,lossStreak:trainer.lossStreak};
-  const result=runBattle({trainerA:createTrainerAI({...trainer,stats:effectiveStats(trainer)},trainer.nature?.style,makeRng(seed+1)),
+  const result=runBattle({trainerA:createTrainerAI({...trainer,stats:effectiveStats(trainer),partyTactics:trainer.party.map(m=>m.tactics)},trainer.nature?.style,makeRng(seed+1)),
     trainerB:createTrainerAI({name:gym.name,stats},'균형형',makeRng(seed+2)),
     teamA:partyToTeam(trainer.party),teamB:partyToTeam(party),seed,collectThink:true});
   const analysis=analyseBattle(result,analysisContext);

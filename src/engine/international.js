@@ -75,8 +75,8 @@ function snapshotEntry(game,t){
 function shuffle(a,rng){for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 async function match(game,s,a,b,stage,region,onProgress,keepLog=true){
   const seed=Math.floor(game.rng()*0x7fffffff);
-  const r=runBattle({trainerA:createTrainerAI(a.definition,a.definition.nature?.style,makeRng(seed+1)),
-    trainerB:createTrainerAI(b.definition,b.definition.nature?.style,makeRng(seed+2)),teamA:partyToTeam(a.party),teamB:partyToTeam(b.party),seed});
+  const r=runBattle({trainerA:createTrainerAI({...a.definition,partyTactics:a.party.map(m=>m.tactics)},a.definition.nature?.style,makeRng(seed+1)),
+    trainerB:createTrainerAI({...b.definition,partyTactics:b.party.map(m=>m.tactics)},b.definition.nature?.style,makeRng(seed+2)),teamA:partyToTeam(a.party),teamB:partyToTeam(b.party),seed});
   const draw=r.winner==null,winner=draw?(game.rng()<0.5?a:b):r.winner==='p1'?a:b;
   const m={id:`${s.id}-${s.matches.length+1}`,day:game.day,stage,region,aId:a.id,bId:b.id,winnerId:winner.id,draw,seed,
     log:keepLog?r.log:null,turns:r.turns,trainerName:a.name,gymName:b.name,agencyName:a.agencyName,opponentAgency:b.agencyName,

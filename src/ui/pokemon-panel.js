@@ -16,7 +16,7 @@ import { bindLiveSearch } from './live-search.js';
 
 export const TYPE_KO={Normal:'노말',Fire:'불꽃',Water:'물',Grass:'풀',Electric:'전기',Ice:'얼음',Fighting:'격투',Poison:'독',Ground:'땅',Flying:'비행',Psychic:'에스퍼',Bug:'벌레',Rock:'바위',Ghost:'고스트',Dragon:'드래곤',Dark:'악',Steel:'강철',Fairy:'페어리'};
 const TYPE_COLOR={Normal:'#8a8f98',Fire:'#e0703e',Water:'#4a8fd6',Grass:'#5aa255',Electric:'#e0c03a',Ice:'#6ec8d0',Fighting:'#c2454a',Poison:'#a05cc0',Ground:'#c79a52',Flying:'#7f9be6',Psychic:'#e46a8c',Bug:'#93ae2e',Rock:'#b4a46a',Ghost:'#6b62b0',Dragon:'#5d6ee0',Dark:'#5d5466',Steel:'#6c9cb0',Fairy:'#e48fe0'};
-const NATURE_KO={Hardy:'노력',Lonely:'외로움',Brave:'용감',Adamant:'고집',Naughty:'개구쟁이',Bold:'대담',Docile:'온순',Relaxed:'무사태평',Impish:'장난꾸러기',Lax:'촐랑',Timid:'겁쟁이',Hasty:'성급',Serious:'성실',Jolly:'명랑',Naive:'천진난만',Modest:'조심',Mild:'의젓',Quiet:'냉정',Bashful:'수줍음',Rash:'덜렁',Calm:'차분',Gentle:'얌전',Sassy:'건방',Careful:'신중',Quirky:'변덕'};
+export const NATURE_KO={Hardy:'노력',Lonely:'외로움',Brave:'용감',Adamant:'고집',Naughty:'개구쟁이',Bold:'대담',Docile:'온순',Relaxed:'무사태평',Impish:'장난꾸러기',Lax:'촐랑',Timid:'겁쟁이',Hasty:'성급',Serious:'성실',Jolly:'명랑',Naive:'천진난만',Modest:'조심',Mild:'의젓',Quiet:'냉정',Bashful:'수줍음',Rash:'덜렁',Calm:'차분',Gentle:'얌전',Sassy:'건방',Careful:'신중',Quirky:'변덕'};
 const STAT_KO={hp:'HP',atk:'공격',def:'방어',spa:'특공',spd:'특방',spe:'스피드'};
 const CAT={Physical:'물리',Special:'특수',Status:'변화'};
 const EVO_METHOD={level:'레벨',useItem:'도구 사용',trade:'통신진화',levelFriendship:'친밀도',levelHold:'지닌 도구',levelMove:'기술',levelExtra:'특수 조건',other:'특별한 진화'};

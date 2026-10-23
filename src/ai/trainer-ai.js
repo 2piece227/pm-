@@ -24,6 +24,7 @@ import { policyId, policyWeight, policyAdjustment } from '../data/battle-policy.
 import {TACTICS,entryDamagePct,executionChance,recoveryScore,residualPct} from './tactics.js';
 import {OpponentModel,ownView} from './opponent-model.js';
 import {predictSwitch,preservationValue,followupValue,strategyWeight} from './strategy.js';
+import {tacticAdjustment,isBanned,obedience} from './mon-tactics.js';
 
 /** 재현 가능한 시뮬을 위한 소형 PRNG (mulberry32) */
 export function makeRng(seed = 1) {
@@ -62,7 +63,7 @@ const MAX_STAT = 20;
 const MAX_TEMPERATURE = 14;
 
 export class TrainerAI {
-  constructor({ gen, name, stats, style, styleVec, policy = 'balanced', compliance = null, rng = Math.random }) {
+  constructor({ gen, name, stats, style, styleVec, policy = 'balanced', compliance = null, rng = Math.random, partyTactics = null }) {
     this.gen = gen;
     this.name = name;
     this.stats = stats;
@@ -71,7 +72,22 @@ export class TrainerAI {
     this.rng = rng;
     this.policy = policyId(policy);
     this.policyWeight = policyWeight(stats, compliance);
+    /* 포켓몬별 전술 지시 — 팀 순서대로 받아 두고, 배틀이 시작되면 엔진의 포켓몬과 짝짓는다 */
+    this.partyTactics = partyTactics || [];
+    this.obey = obedience(stats, compliance);
+    this.tacticsByMon = new Map();
     this.reset();
+  }
+
+  /** 배틀 시작 시 원래 팀 순서의 엔진 포켓몬과 지시를 짝짓는다 */
+  bindParty(pokemon) {
+    this.tacticsByMon = new Map(pokemon.map((p, i) => [p, this.partyTactics[i] || {}]));
+  }
+  tacticFor(p) { return this.tacticsByMon.get(p) || {}; }
+  /** 메가진화 담당: 파티에 담당이 있으면 그 포켓몬만 */
+  megaAllowedFor(p) {
+    const anyDesignated = this.partyTactics.some(t => t?.mega);
+    return !anyDesignated || !!this.tacticFor(p).mega;
   }
 
   reset() {
@@ -221,6 +237,7 @@ export class TrainerAI {
         role: move.heal || move.id === 'rest' ? 'heal' : selfBoostsOf(move) ? 'setup' : move.status ? 'status' : 'attack',
         typeEffect: move.category !== 'Status' ? typeEff(gen, move.type, foe.getTypes()) : null,
         label: move.name, // 영문 id 그대로. 한글 변환은 표시 레이어의 몫이다.
+        moveId: move.id, basePower: move.basePower || 0,
         choice: `move ${i + 1}`,
         score: this.scoreMove(move, me, foe, { myBest, R, turnsSurvive, turnsToKO }),
       });
@@ -251,6 +268,7 @@ export class TrainerAI {
         opts.push({
           kind: 'switch',
           label: bench.name,
+          slot: opt.slot,
           choice: `switch ${opt.slot}`,
           safer: (bestDamagePct(gen, foe, bench)+entryDamagePct(gen,bench))/Math.max(1,hpPct(bench)) < foeBest/Math.max(1,hpPct(me)),
           score: this.scoreSwitch(me, foe, bench),
@@ -266,9 +284,19 @@ export class TrainerAI {
 
     if (!opts.length) return { choice: 'default', think: null };
 
+    /* 포켓몬별 전술 지시: 금지 기술은 빼고, 나머지는 이행도만큼 점수를 보정한다 */
+    const mine = this.tacticFor(side.active[0]);
+    const allowed = opts.filter(o => !isBanned(o, mine));
+    if (allowed.length && allowed.length < opts.length) opts.splice(0, opts.length, ...allowed);
+    const hpRatio = me.hp / Math.max(1, me.maxhp);
+    for (const option of opts) {
+      const bench = option.kind === 'switch' ? this.tacticFor(side.pokemon[option.slot - 1]) : {};
+      option.tacticAdjustment = this.obey * tacticAdjustment(option, mine, bench, { hpRatio, aliveBench: allies.length });
+    }
+
     for (const option of opts) {
       option.baseScore = option.score;
-      option.score += policyAdjustment(this.policy, option, this.policyWeight);
+      option.score += policyAdjustment(this.policy, option, this.policyWeight) + (option.tacticAdjustment || 0);
     }
     const T = this.temperature(battle.turn);
     const { index, probs } = this.softmaxPick(opts.map((o) => o.score), T);
@@ -357,6 +385,8 @@ export class TrainerAI {
         const health = Math.max(1,hpPct(bench)-entry);
         score = this.perceive(out / 100) * 100 - this.perceive(inc / 100) * 100 * 0.8;
         score -= entry;
+        /* 전술: 적극 투입 / 에이스는 마지막까지 */
+        score += this.obey * tacticAdjustment({kind:'switch'}, {}, this.tacticFor(side.pokemon[opt.slot - 1]), { aliveBench: this.switchOptions(battle, sideId).length });
         if(entry>=hpPct(bench))score-=TACTICS.unsafeSwitch*2;
         else if(inc>=health)score-=TACTICS.unsafeSwitch*.5;
       }

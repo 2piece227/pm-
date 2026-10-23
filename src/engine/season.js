@@ -75,7 +75,7 @@ export async function runCup(game,e,onProgress=async()=>{}){
       let a=slots[i],b=slots[i+1];if(!a||!b){next.push(a||b);continue;}
       if(b.agencyId===game.playerAgencyId&&a.agencyId!==game.playerAgencyId)[a,b]=[b,a];
       const seed=Math.floor(game.rng()*0x7fffffff);
-      const r=runBattle({trainerA:createTrainerAI(a.definition,a.definition.nature?.style,makeRng(seed+1)),trainerB:createTrainerAI(b.definition,b.definition.nature?.style,makeRng(seed+2)),teamA:partyToTeam(a.party),teamB:partyToTeam(b.party),seed,collectThink:true});
+      const r=runBattle({trainerA:createTrainerAI({...a.definition,partyTactics:a.party.map(m=>m.tactics)},a.definition.nature?.style,makeRng(seed+1)),trainerB:createTrainerAI({...b.definition,partyTactics:b.party.map(m=>m.tactics)},b.definition.nature?.style,makeRng(seed+2)),teamA:partyToTeam(a.party),teamB:partyToTeam(b.party),seed,collectThink:true});
       // A drawn engine battle is recorded as drawn; a seeded draw decides advancement explicitly.
       const tie=r.winner==null,winner=tie?(game.rng()<0.5?a:b):(r.winner==='p1'?a:b);
       const m={id:`${e.id}-${round}-${i/2}`,round,aId:a.id,bId:b.id,winnerId:winner.id,draw:tie,seed,log:r.log,turns:r.turns,

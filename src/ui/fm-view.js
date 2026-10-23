@@ -3,6 +3,8 @@ import { renderShop, wireShop, itemIcon as heldIcon } from './shop.js';
 import { openItemPicker } from './item-picker.js';
 import { holdInfo, megaReadiness, buyKeyStone, KEY_STONE } from '../engine/shop.js';
 import { bindLiveSearch } from './live-search.js';
+import { renderTacticsBoard, wireTacticsBoard } from './tactics-board.js';
+import { NATURE_KO } from './pokemon-panel.js';
 import { trainerPortrait, trainerFull } from './trainer-sprite.js';
 import { HELD_ITEMS } from '../data/items.gen.js';
 import { SUPPLIES, ballCount } from '../data/supplies.js';
@@ -75,6 +77,7 @@ let mapQuery = '';
 let mapFilter = 'all';
 let lastView = '';
 let detailId = null;       // 트레이너 프로필
+let trainerTab = 'info';   // 트레이너 상세: 정보 / 전술
 
 /* 맵 화면 상태 */
 const map = { region: 'kanto', locId: null, trainerId: null, activities: 6 };
@@ -350,7 +353,9 @@ function renderTrainer(id) {
   const d = displayStats(t), c = t.contract || {}, b = badgesOf(t), cond = conditionOf(t);
   const swap = t.proSeat === 'reserve' && seats.race.length ? `<label class="seat-swap">레귤러와 교체<select id="seat-target">${seats.race.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('')}</select><button data-seat-swap="${t.id}">교체</button></label>`
     : t.proSeat === 'race' && seats.reserve.length ? `<label class="seat-swap">리저브와 교체<select id="seat-target">${seats.reserve.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('')}</select><button data-seat-swap-race="${t.id}">교체</button></label>` : '';
-  return `<button class="ghost back-link" id="back-squad">← 트레이너 명단</button>
+  const tabs = `<nav class="seg tp-tabs" role="tablist">${[['info','선수 정보'],['tactics','전술']].map(([id,n])=>`<button class="${trainerTab===id?'on':''}" data-tp-tab="${id}" role="tab" aria-selected="${trainerTab===id}">${n}</button>`).join('')}</nav>`;
+  if (trainerTab === 'tactics') return `<button class="ghost back-link" id="back-squad">← 트레이너 명단</button>${tabs}<h2 class="tp-tac-title">${esc(t.name)}의 전술</h2>${renderTacticsBoard(t)}`;
+  return `<button class="ghost back-link" id="back-squad">← 트레이너 명단</button>${tabs}
     <section class="tp-hero">
       <div class="tp-sprite">${trainerFull(t)}</div>
       <div class="tp-id"><span class="seat ${t.isYouth ? 'youth' : t.proSeat || 'race'}">${seatLabel(t)}</span><h2>${esc(t.name)}</h2><p>${esc(t.nature?.style || '균형형')} · 레이팅 ${trainerRating(t).toFixed(1)} · ${t.record?.wins || 0}승 ${t.record?.losses || 0}패 · 관동 ${b.kanto}/8 · 성도 ${b.johto}/8</p><p class="muted">오늘: ${esc(scheduledAction(t))}</p></div>
@@ -370,6 +375,15 @@ const heldIconSupply = (slug) => `<img class="item-ico" src="${(import.meta.env?
 
 /* ---------------- 박스 ---------------- */
 
+/** 박스 상세: 성격·특성·지닌 도구·친밀도·실수치·개체값 */
+function boxInfo(m) {
+  const nat = Dex.natures.get(m.nature), st = realStats(m), SK = { hp: 'HP', atk: '공격', def: '방어', spa: '특공', spd: '특방', spe: '스피드' };
+  const item = m.item && holdInfo(m.item);
+  return `<dl class="box-info"><dt>성격</dt><dd>${esc(NATURE_KO[m.nature] || m.nature)}${nat.plus ? ` <small>${SK[nat.plus]}↑ ${SK[nat.minus]}↓</small>` : ' <small>보정 없음</small>'}</dd>
+    <dt>특성</dt><dd>${esc(ko(ABILITY_KO, m.ability))}</dd><dt>지닌 도구</dt><dd>${item ? esc(item.ko) : '없음'}</dd><dt>친밀도</dt><dd>${m.friendship ?? 70}</dd></dl>
+    <table class="box-stats"><thead><tr><th></th><th>능력치</th><th>개체값</th></tr></thead><tbody>${Object.keys(SK).map(k => `<tr class="${nat.plus === k ? 'plus' : nat.minus === k ? 'minus' : ''}"><th>${SK[k]}</th><td>${st[k]}</td><td><span class="iv-bar"><i style="width:${(m.ivs?.[k] ?? 0) / 31 * 100}%"></i></span>${m.ivs?.[k] ?? 0}</td></tr>`).join('')}</tbody></table>`;
+}
+
 function renderBox() {
   const a = playerAgency(game), roster = playerRoster(game);
   const target = roster.find(t=>t.id === map.trainerId) || roster[0];
@@ -377,7 +391,7 @@ function renderBox() {
   const selected = a.box[boxSelection];
   return `<div class="page-h"><div><div class="eyebrow">POKÉMON STORAGE</div><h2>소속사 포켓몬 박스</h2></div><span class="muted">보관 ${a.box.length}마리</span></div>
     <div class="storage-layout"><section class="card"><div class="section-heading"><h3>보관 중인 포켓몬</h3><span class="muted">포획한 포켓몬은 여기에 도착합니다</span></div><div class="storage-grid">${Array.from({length:Math.max(30,Math.ceil(a.box.length/30)*30)},(_,i)=>a.box[i] ? `<button class="storage-slot ${boxSelection === i?'selected':''}" data-box-select="${i}">${monImage(a.box[i].species)}<b>${K(a.box[i].species)}</b><small>Lv. ${a.box[i].level}</small></button>`:'<div class="storage-slot empty"><span>＋</span></div>').join('')}</div></section>
-    <aside><section class="card storage-detail">${selected ? `<div class="eyebrow">선택한 포켓몬</div>${monImage(selected.species)}<h2>${K(selected.species)} <small>Lv. ${selected.level}</small></h2><p class="muted">${selected.caughtOnDay || 1}일차에 만난 동료</p><div class="move-pills">${selected.moves.map(m=>`<span>${esc(M(m))}</span>`).join('')}</div><button class="item-slot ${selected.item?'has':''}" data-give-item data-b="${boxSelection}">${selected.item&&holdInfo(selected.item)?`${heldIcon(selected.item)}<span><b>${esc(holdInfo(selected.item).ko)}</b><small>지닌 도구 · 바꾸기</small></span>`:'<span class="plus">＋</span><span><b>도구 지니게 하기</b><small>창고에서 고르기</small></span>'}</button><div class="pokemon-actions"><button class="ghost manage-mon" data-b="${boxSelection}">기술·특성·진화 관리</button><button data-nav="training">트레이닝 센터</button></div><label>함께할 트레이너<select id="box-target">${roster.map(t=>`<option value="${t.id}" ${t.id===target?.id?'selected':''}>${esc(t.name)} · ${t.party.length}/6</option>`).join('')}</select></label><button class="to-party" data-b="${boxSelection}" ${!target || target.party.length>=6 || selected.training?'disabled':''}>${selected.training?'장기 훈련 중':'파티에 합류시키기'}</button>${target?.party.length>=6?'<p class="muted">파티가 가득 찼습니다. 한 마리를 박스로 옮겨주세요.</p>':''}` : '<h3>첫 만남을 기다리는 중</h3><p class="muted">지도에서 포켓몬 포획을 배정하세요.</p><button data-nav="map">탐험 지도 열기</button>'}</section>
+    <aside><section class="card storage-detail">${selected ? `<div class="eyebrow">선택한 포켓몬</div>${monImage(selected.species)}<h2>${K(selected.species)} <small>Lv. ${selected.level}</small></h2><p class="muted">${selected.caughtOnDay || 1}일차에 만난 동료</p>${boxInfo(selected)}<div class="move-pills">${selected.moves.map(m=>`<span>${esc(M(m))}</span>`).join('')}</div><button class="item-slot ${selected.item?'has':''}" data-give-item data-b="${boxSelection}">${selected.item&&holdInfo(selected.item)?`${heldIcon(selected.item)}<span><b>${esc(holdInfo(selected.item).ko)}</b><small>지닌 도구 · 바꾸기</small></span>`:'<span class="plus">＋</span><span><b>도구 지니게 하기</b><small>창고에서 고르기</small></span>'}</button><div class="pokemon-actions"><button class="ghost manage-mon" data-b="${boxSelection}">기술·특성·진화 관리</button><button data-nav="training">트레이닝 센터</button></div><label>함께할 트레이너<select id="box-target">${roster.map(t=>`<option value="${t.id}" ${t.id===target?.id?'selected':''}>${esc(t.name)} · ${t.party.length}/6</option>`).join('')}</select></label><button class="to-party" data-b="${boxSelection}" ${!target || target.party.length>=6 || selected.training?'disabled':''}>${selected.training?'장기 훈련 중':'파티에 합류시키기'}</button>${target?.party.length>=6?'<p class="muted">파티가 가득 찼습니다. 한 마리를 박스로 옮겨주세요.</p>':''}` : '<h3>첫 만남을 기다리는 중</h3><p class="muted">지도에서 포켓몬 포획을 배정하세요.</p><button data-nav="map">탐험 지도 열기</button>'}</section>
     <section class="card party-preview"><h3>${esc(target?.name || '트레이너')}의 파티</h3>${(target?.party||[]).map((m,i)=>`<div class="party-slot">${monImage(m.species)}<div><b>${K(m.species)}</b><small>Lv. ${m.level}</small></div><button class="ghost to-box" data-t="${target.id}" data-i="${i}" ${target.party.length===1?'disabled':''}>박스로</button></div>`).join('')}<p class="muted">${target?.party.length||0} / 6 · 마지막 동료는 파티에 남습니다.</p></section></aside></div>`;
 }
 
@@ -483,6 +497,8 @@ function wire() {
   main.querySelectorAll('.grid tbody tr[data-id]').forEach((tr) => {
     tr.onclick = () => { detailId = tr.dataset.id; render(); };
   });
+  main.querySelectorAll('[data-tp-tab]').forEach(b=>b.onclick=()=>{trainerTab=b.dataset.tpTab;render();});
+  if(detailId&&trainerTab==='tactics'){const tr=findTrainer(game.league,detailId);if(tr)wireTacticsBoard(main,tr,()=>{persist();render();});}
   const back = $('back-squad');
   if (back) back.onclick = () => { detailId = null; render(); };
 
