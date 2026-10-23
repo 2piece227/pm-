@@ -12,6 +12,7 @@ import { analyseBattle } from './battle-analysis.js';
 import { markGraduation } from './career.js';
 import { consumeBerries } from './shop.js';
 import { recordBattle } from './evolution.js';
+import { outfitNpcTrainer } from './npc-loadout.js';
 
 export async function challengeGym(game, trainer, gymId) {
   if(pwtBreak(game))throw new Error('PWT 기간에는 공식 체육관 도전이 중단됩니다.');
@@ -79,6 +80,7 @@ export async function challengeGym(game, trainer, gymId) {
 export async function challengeGymNpc(game, trainer, gymId) {
   const gym=gymById(gymId);
   if(!gym||!trainer.party?.length||(trainer.badges||[]).includes(gym.id))return null;
+  outfitNpcTrainer(trainer);
   const seed=Math.floor(game.rng()*0x7fffffff), rng=makeRng(seed), party=[];
   const gen=Dex.forGen(gym.region==='kanto'?3:4);
   for(const def of gym.party){const mon=await createPokemon({...def,rng});mon.moves=[...def.moves];mon.item=def.item;mon.ability=gen.species.get(mon.species).abilities[0];mon.nature='Serious';party.push(mon);}

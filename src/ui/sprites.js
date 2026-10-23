@@ -23,6 +23,7 @@
  * 이미지 출처는 이 파일 한 곳에 가둬 뒀다. 오리지널 IP로 갈아끼울 땐 여기만 고치면 된다.
  */
 import { Dex } from '@pkmn/dex';
+import { POKEAPI_FORM_ID } from '../data/pokeapi-forms.gen.js';
 
 const PA = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white';
 const PS = 'https://play.pokemonshowdown.com/sprites';
@@ -34,6 +35,29 @@ const PS = 'https://play.pokemonshowdown.com/sprites';
 function paStem(sp) {
   const forme = sp.forme ? `-${sp.forme.toLowerCase().replace(/[^a-z0-9]/g, '')}` : '';
   return `${sp.num}${forme}`;
+}
+
+/** 쇼다운 스프라이트 파일명 — 폼은 대시로 잇는다 (charizard-megax) */
+function psId(sp) {
+  const id = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+  return sp.forme ? `${id(sp.baseSpecies)}-${id(sp.forme)}` : sp.id;
+}
+
+/**
+ * 그 폼 **자신의** 움직이는 BW 도트만 (기본 종 그림으로 떨어지지 않는다).
+ * 메가진화처럼 PokeRogue에 정지 한 장뿐인 폼을 움직이게 하려고 시트보다 먼저 찾아본다.
+ * PokeAPI는 폼 그림을 번호로 저장한다 (메가리자몽X = 10034.gif).
+ */
+export function animatedFormCandidates(species, side) {
+  const sp = species && Dex.species.get(species);
+  if (!sp?.exists || !sp.forme) return [];
+  const back = side === 'p1' ? 'back/' : '';
+  const out = [];
+  const num = POKEAPI_FORM_ID[sp.id];
+  if (num) out.push({ url: `${PA}/animated/${back}${num}.gif`, kind: 'ani' });
+  out.push({ url: `${PA}/animated/${back}${paStem(sp)}.gif`, kind: 'ani' });
+  out.push({ url: `${PS}/gen5ani${side === 'p1' ? '-back' : ''}/${psId(sp)}.gif`, kind: 'ani' });
+  return out;
 }
 
 /** 종족명 → 도감번호 (울음소리 등에 쓴다) */
@@ -65,14 +89,16 @@ export function spriteCandidates(species, side) {
   const forms = base ? [sp, base] : [sp];
 
   for (const f of forms) {
-    const stem = paStem(f);
+    const stem = paStem(f), num = f.forme && POKEAPI_FORM_ID[f.id];
+    if (num) add(`${PA}/animated/${back ? 'back/' : ''}${num}.gif`, 'ani');
     add(`${PA}/animated/${back ? 'back/' : ''}${stem}.gif`, 'ani');
-    add(`${PS}/gen5ani${back ? '-back' : ''}/${f.id}.gif`, 'ani');
+    add(`${PS}/gen5ani${back ? '-back' : ''}/${psId(f)}.gif`, 'ani');
   }
   for (const f of forms) {
-    const stem = paStem(f);
+    const stem = paStem(f), num = f.forme && POKEAPI_FORM_ID[f.id];
+    if (num) add(`${PA}/${back ? 'back/' : ''}${num}.png`, 'static');
     add(`${PA}/${back ? 'back/' : ''}${stem}.png`, 'static');
-    add(`${PS}/gen5${back ? '-back' : ''}/${f.id}.png`, 'static');
+    add(`${PS}/gen5${back ? '-back' : ''}/${psId(f)}.png`, 'static');
   }
   return out;
 }
@@ -104,6 +130,35 @@ export const PADDED_SHIFT = { p1: '14%', p2: '-11%' };
  * 재는 폭을 넘기므로 애니메이션 GIF와 같은 잣대로 맞춰진다.
  */
 export const REFERENCE_WIDTH = 88;
+
+/** 그림이 실제로 그려진 범위 {x0, y0, w, h}. 픽셀을 못 읽으면(CORS) null */
+export function contentBox(img) {
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  if (!w || !h) return null;
+  try {
+    const src = document.createElement('canvas');
+    src.width = w;
+    src.height = h;
+    const sx = src.getContext('2d', { willReadFrequently: true });
+    sx.drawImage(img, 0, 0);
+    const d = sx.getImageData(0, 0, w, h).data;
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (d[(y * w + x) * 4 + 3] > 8) {
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+      }
+    }
+    return x1 < x0 ? null : { x0, y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  } catch {
+    return null;
+  }
+}
 
 /** 96x96 정지 스프라이트의 투명 여백을 잘라낸 캔버스. 못 자르면 null */
 export function cropToContent(img) {

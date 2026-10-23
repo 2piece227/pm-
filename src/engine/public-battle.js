@@ -20,15 +20,17 @@ export class PublicBattle {
     if(type==='poke'){const key=`${side}:${p[3]?.split(',')[0]}`;this.preview.set(key,(this.preview.get(key)||0)+1);return;}
     if(!['p1','p2'].includes(side))return;
     if(['switch','drag','replace'].includes(type)){
-      const details=p[3].split(',').map(s=>s.trim()),species=details[0];
-      const key=`${p[2]}|${p[3]}`;
+      const details=p[3].split(',').map(s=>s.trim()),shown=details[0];
+      // A Mega switches back in as "Charizard-Mega-X": same Pokemon, so the identity uses the base forme.
+      const species=shown.replace(/-Mega(-[XYZ])?$/,''),forme=shown===species?null:shown;
+      const key=`${p[2]}|${[species,...details.slice(1)].join(', ')}`;
       const ambiguous=(this.preview.get(`${side}:${species}`)||0)>1;
       if(type==='replace')this.records.delete(this.active[side]); // Illusion attribution was provisional.
       let record=this.records.get(key);
       if(!record||ambiguous||type==='replace')record={key,species,name:p[2].split(': ').slice(1).join(': '),
         level:Number(details.find(v=>/^L\d+$/.test(v))?.slice(1)||100),moves:[],ability:'',item:'',boosts:{},volatiles:{},toxicStage:0};
       if(record.transformed)record.moves=[];
-      record.boosts={};record.volatiles={};record.toxicStage=0;record.transformed=false;record.forme=null;record.types=null;record.abilitySuppressed=false;
+      record.boosts={};record.volatiles={};record.toxicStage=0;record.transformed=false;record.forme=forme;record.types=null;record.abilitySuppressed=false;
       this.active[side]=key;this.records.set(key,record);
       record.enteredTurn=this.turn;
       this.condition(record,p[4]);return;
@@ -66,7 +68,7 @@ export class PublicBattle {
     if(type==='-item')r.item=publicId(p[3]);
     if(type==='-enditem')r.item='';
     if(type==='-transform'){r.transformed=true;r.moves=[];r.forme=this.current(p[3]?.slice(0,2))?.species||null;}
-    if(type==='detailschange')r.forme=p[3].split(',')[0];
+    if(type==='detailschange'&&/^p[12][a-c]: /.test(p[2]))r.forme=p[3].split(',')[0]; // no slot letter: a benched/fainted Pokemon
     if(type==='-formechange')r.forme=p[3];
     if(type==='-terastallize')r.teraType=p[3];
     if(type==='-start'){

@@ -16,6 +16,7 @@ import { createTrainerAI, runBattle } from './run-battle.js';
 import { curve } from '../ai/estimate.js';
 import { fieldState, healParty, partyCondition } from './field-state.js';
 import { bagOf, MANAGEMENT, evolvePokemon, evolutionOptions } from './pokemon-management.js';
+import { outfitNpcTrainer } from './npc-loadout.js';
 import { consumeBerries } from './shop.js';
 import { recordBattle, addSteps } from './evolution.js';
 import { SUPPLIES, BALL_KEYS, ballCount } from '../data/supplies.js';
@@ -327,6 +328,8 @@ async function encounter(game, trainer, locationId, mode, slot) {
     const npcLevel = Math.max(...npc.party.map(([, lv]) => lv));
     const foeParty = [];
     for (const [sp, lv] of npc.party) foeParty.push(await createPokemon({ species: sp, level: lv, rng }));
+    /* 현지 트레이너는 원작처럼 도구 없이, 기술만 배운 것 중 쓸 만한 4개로 */
+    outfitNpcTrainer({ party: foeParty }, { items: false });
 
     lines.push(`${cls.name} ${iGa(npc.name)} 승부를 걸어왔다! (${npc.party.map(([sp, lv]) => `${K(sp)} Lv${lv}`).join(', ')})`);
     const foe = { name: `${cls.name} ${npc.name}`, stats: npcStats(npcLevel) };

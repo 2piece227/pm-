@@ -11,7 +11,7 @@
  */
 import { toKoreanLog } from './protocol-ko.js';
 import {
-  canReadPixels, cropToContent, fallbackSvg, PADDED_SHIFT, spriteCandidates, TYPE_FX, REFERENCE_WIDTH,
+  animatedFormCandidates, canReadPixels, contentBox, cropToContent, fallbackSvg, PADDED_SHIFT, spriteCandidates, TYPE_FX, REFERENCE_WIDTH,
 } from './sprites.js';
 import { ANIM_ALIAS, ARCHETYPE_TRAITS } from '../data/move-anim.js';
 import * as sfx from './sfx.js';
@@ -83,25 +83,31 @@ export function drawSprite(side, speciesName) {
      실제 덩치 차이가 살아난다 (sprites.js의 REFERENCE_WIDTH 주석 참고) */
   const basePct = side === 'p1' ? 30 : 24;
 
+  const useSheet = (sheet) => {
+    const player = createSheetSprite(sheet);
+    sheetSprite[side] = player;
+    el.innerHTML = '';
+    el.appendChild(player.canvas);
+    el.style.width = `${(basePct * sheet.w) / REFERENCE_WIDTH}%`;
+    el.classList.toggle('still', sheet.frames.length < 2);
+  };
   loadPokemonSheet(speciesName, side).then((sheet) => {
     if (myToken !== spriteToken[side]) return;
-    if (sheet) {
-      const player = createSheetSprite(sheet);
-      sheetSprite[side] = player;
-      el.innerHTML = '';
-      el.appendChild(player.canvas);
-      el.style.width = `${(basePct * sheet.w) / REFERENCE_WIDTH}%`;
-      return;
-    }
+    if (sheet && sheet.frames.length > 1) { useSheet(sheet); return; }
+    /* 정지 한 장뿐인 폼(메가진화 대부분)은 그 폼의 움직이는 BW GIF를 먼저 찾는다 */
+    const ani = sheet ? animatedFormCandidates(speciesName, side) : [];
+    if (ani.length) { tryCandidates(el, side, myToken, speciesName, ani, 0, basePct, () => useSheet(sheet)); return; }
+    if (sheet) { useSheet(sheet); return; }
     /* 시트가 없는 종만 예전 GIF/PNG 경로로 떨어진다 */
     tryCandidates(el, side, myToken, speciesName, spriteCandidates(speciesName, side), 0, basePct);
   });
 }
 
-/** 후보를 위에서부터 하나씩 시도한다. 다 실패하면 실루엣 */
-function tryCandidates(el, side, token, speciesName, cands, i, basePct) {
+/** 후보를 위에서부터 하나씩 시도한다. 다 실패하면 onExhausted, 없으면 실루엣 */
+function tryCandidates(el, side, token, speciesName, cands, i, basePct, onExhausted = null) {
   if (token !== spriteToken[side]) return;
   if (i >= cands.length) {
+    if (onExhausted) { onExhausted(); return; }
     el.innerHTML = fallbackSvg();
     el.style.width = `${basePct}%`;
     return;
@@ -113,13 +119,30 @@ function tryCandidates(el, side, token, speciesName, cands, i, basePct) {
   /* 여백 자르기와 얼음 상태 캡처에 캔버스를 쓰므로 CORS가 필요한데, 쇼다운 서버는
      허용 헤더를 안 보낸다. 거기에 crossOrigin을 붙이면 로드 자체가 실패한다. */
   if (canReadPixels(url)) img.crossOrigin = 'anonymous';
-  img.onerror = () => tryCandidates(el, side, token, speciesName, cands, i + 1, basePct);
+  img.onerror = () => tryCandidates(el, side, token, speciesName, cands, i + 1, basePct, onExhausted);
   img.onload = () => {
     if (token !== spriteToken[side]) return;
-    if (!img.naturalWidth) { tryCandidates(el, side, token, speciesName, cands, i + 1, basePct); return; }
+    if (!img.naturalWidth) { tryCandidates(el, side, token, speciesName, cands, i + 1, basePct, onExhausted); return; }
 
     /* 정지 PNG는 96x96 고정 캔버스라 여백이 붙어 있다. 잘라내야 잘린 GIF와 같은 잣대가 된다 */
     const cropped = kind === 'static' ? cropToContent(img) : null;
+    /* 메가진화 GIF 일부도 96x96 캔버스째 온다 — 움직임이 잘리지 않게 첫 장면 범위 + 여유 4px로 창을 낸다 */
+    if (kind === 'ani' && img.naturalWidth === 96 && img.naturalHeight === 96 && canReadPixels(url)) {
+      const b = contentBox(img);
+      if (b) {
+        const x0 = Math.max(0, b.x0 - 4), y0 = Math.max(0, b.y0 - 4);
+        const bw = Math.min(96, b.x0 + b.w + 4) - x0, bh = Math.min(96, b.y0 + b.h + 4) - y0;
+        const win = document.createElement('div');
+        win.className = 'sprite-win';
+        win.style.cssText = `position:relative;overflow:hidden;aspect-ratio:${bw}/${bh}`;
+        img.style.cssText = `position:absolute;width:${(96 / bw) * 100}%;max-width:none;left:${(-x0 / bw) * 100}%;top:${(-y0 / bh) * 100}%`;
+        win.appendChild(img);
+        el.innerHTML = '';
+        el.appendChild(win);
+        el.style.width = `${(basePct * bw) / REFERENCE_WIDTH}%`;
+        return;
+      }
+    }
     const node = cropped || img;
     const padded = kind === 'static' && !cropped;   // 못 자른 경우 (쇼다운 소스)
     node.style.transform = padded ? `translateY(${PADDED_SHIFT[side]})` : '';
@@ -127,6 +150,7 @@ function tryCandidates(el, side, token, speciesName, cands, i, basePct) {
     el.innerHTML = '';
     el.appendChild(node);
     el.style.width = `${(basePct * (cropped ? cropped.width : img.naturalWidth)) / REFERENCE_WIDTH}%`;
+    el.classList.toggle('still', kind === 'static');
   };
   img.src = url;
 }

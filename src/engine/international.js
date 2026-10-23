@@ -1,6 +1,7 @@
 import { PWT, INTERNATIONAL_REGIONS, dayInSeason } from '../data/international.js';
 import { GYMS } from '../data/gyms.js';
 import { createPokemon, partyToTeam, expForLevel } from '../data/pokemon.js';
+import { outfitNpcTrainer } from './npc-loadout.js';
 import { buildParty } from './team-builder.js';
 import { createTrainerAI, runBattle, makeRng } from './run-battle.js';
 import { seedOrder } from './league.js';
@@ -68,10 +69,11 @@ export function payCompetitionPrize(game,x,prize,reputation){
   else {const t=competitionTrainer(game,x.id);if(t){t.prizeMoney=(t.prizeMoney||0)+prize;t.reputation=(t.reputation||0)+reputation;}}
 }
 function snapshotEntry(game,t){
+  if(t.generated)outfitNpcTrainer(t);
   const party=structuredClone(t.party.slice(0,PWT.rosterSize));
   for(const m of party){m.level=PWT.level;m.exp=expForLevel(PWT.level);delete m.fieldState;delete m.training;}
   return {id:t.id,name:t.name,region:t.region||'kanto-johto',agencyId:t.agencyId,agencyName:competitionAgency(game,t),party,
-    definition:structuredClone({name:t.name,stats:t.stats,nature:t.nature,battlePolicy:t.battlePolicy,isYouth:false,legacyPro:true,regionalRole:t.regionalRole,badges:t.badges})};
+    definition:structuredClone({name:t.name,stats:t.stats,nature:t.nature,battlePolicy:t.battlePolicy,isYouth:false,legacyPro:true,regionalRole:t.regionalRole,badges:t.badges,keyStone:!!t.keyStone})};
 }
 function shuffle(a,rng){for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 async function match(game,s,a,b,stage,region,onProgress,keepLog=true){

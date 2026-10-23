@@ -6,6 +6,7 @@ import { findTrainer, seedOrder, makeTrainerFor } from './league.js';
 import { effectiveStats, STAT_KEYS } from '../data/agencies.js';
 import { partyToTeam, gainExp, expForLevel } from '../data/pokemon.js';
 import { recordBattle } from './evolution.js';
+import { outfitNpcTrainer } from './npc-loadout.js';
 import { createTrainerAI, runBattle, makeRng } from './run-battle.js';
 import { analyseBattle } from './battle-analysis.js';
 import { ko, SPECIES_KO } from '../data/ko.js';
@@ -135,6 +136,8 @@ export async function runCup(game,e,onProgress=async()=>{}){
   await prepareCupEntrants(game,e);
   const trainers=cupEntrants(game,e);
   e.decisions=game.league.agencies.filter(a=>a.id!==game.playerAgencyId).flatMap(a=>a.roster.filter(t=>cupEligible(t,e)).map(t=>({trainerId:t.id,score:npcEntryScore(a,t),entered:trainers.includes(t)})));
+  /* 상대 트레이너는 배운 기술 중 좋은 4개·지닌 도구·키스톤을 챙겨 나온다 (원작 데이터를 쓰는 관장 파티는 그대로) */
+  for(const t of trainers)if(t.agencyId!==game.playerAgencyId&&t.generated!==false)outfitNpcTrainer(t);
   e.entrants=trainers.map(t=>({id:t.id,name:t.name,agencyId:t.agencyId,agencyName:competitionAgency(game,t),party:officialParty(t.party.slice(0,e.rosterSize),e),definition:structuredClone({name:t.name,isYouth:t.isYouth,badges:t.badges,legacyPro:t.legacyPro,regionalRole:t.regionalRole,stats:effectiveStats(t),nature:t.nature,battlePolicy:t.battlePolicy,mentalDebuff:t.mentalDebuff,lossStreak:t.lossStreak,keyStone:!!t.keyStone})}));
   if(trainers.length<2){e.status='cancelled';game.league.newsFeed.unshift({day:game.day,kind:'cup',text:`${e.name} · 참가자 부족으로 취소. 상금 지급 없음.`});return;}
   for(let i=e.entrants.length-1;i>0;i--){const j=Math.floor(game.rng()*(i+1));[e.entrants[i],e.entrants[j]]=[e.entrants[j],e.entrants[i]];}

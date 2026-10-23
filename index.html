@@ -62,6 +62,9 @@ h1{font-size:17px;margin:0 0 3px}
 .spr.cast{animation:cast .3s ease-out}
 .spr.lunge-r{transform:translateX(15%) translateY(-7%)}
 .spr.lunge-l{transform:translateX(-15%) translateY(7%)}
+/* 움직이는 도트가 없는 폼(메가진화 대부분)은 숨 쉬듯 들썩이게 — scale 속성이라 transform 연출과 겹치지 않는다 */
+.spr.still>canvas,.spr.still>img{transform-origin:50% 100%;animation:idle 1.7s ease-in-out infinite}
+@keyframes idle{0%,100%{scale:1 1}50%{scale:1.025 1.045}}
 @keyframes shk{0%,100%{transform:translateX(0)}20%{transform:translateX(-8%)}
   45%{transform:translateX(7%)}70%{transform:translateX(-4%)}}
 @keyframes enter{0%{opacity:0;transform:translateY(16px) scale(.85)}100%{opacity:1;transform:none}}

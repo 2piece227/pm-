@@ -12,6 +12,7 @@
  */
 import { createTrainerAI, runBattle, makeRng, GEN } from './run-battle.js';
 import { buildParty, teamTextOf } from './team-builder.js';
+import { outfitNpcTrainer } from './npc-loadout.js';
 import {
   KANTO_JOHTO_AGENCIES, createAgency, createTrainer, makeName, playerAgencyDef, effectiveStats, STAT_KEYS,
 } from '../data/agencies.js';
@@ -300,17 +301,19 @@ export function runMatch(league, aId, bId, seed, { collectLog = false, snapshot 
   if (!snap) {
     const a = findTrainer(league, aId);
     const b = findTrainer(league, bId);
+    for (const t of [a, b]) if (!findAgency(league, t.agencyId)?.isPlayer) outfitNpcTrainer(t);
     snap = {
       aName: a.name, bName: b.name,
       /* 컨디션이 깎인 트레이너는 실제로 약해진다 (§4.5) — 그 시점 값을 그대로 굳힌다 */
       aStats: { ...effectiveStats(a) }, bStats: { ...effectiveStats(b) },
       aStyle: a.nature.style, bStyle: b.nature.style,
       aTeam: teamTextOf(a.party), bTeam: teamTextOf(b.party),
+      aKeyStone: !!a.keyStone, bKeyStone: !!b.keyStone,
     };
   }
 
-  const aiA = createTrainerAI({ name: snap.aName, stats: snap.aStats }, snap.aStyle, makeRng(seed));
-  const aiB = createTrainerAI({ name: snap.bName, stats: snap.bStats }, snap.bStyle, makeRng(seed + 1));
+  const aiA = createTrainerAI({ name: snap.aName, stats: snap.aStats, keyStone: snap.aKeyStone }, snap.aStyle, makeRng(seed));
+  const aiB = createTrainerAI({ name: snap.bName, stats: snap.bStats, keyStone: snap.bKeyStone }, snap.bStyle, makeRng(seed + 1));
 
   const r = runBattle({
     trainerA: aiA,

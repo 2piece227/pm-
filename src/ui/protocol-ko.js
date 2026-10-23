@@ -485,7 +485,10 @@ ${ko(STATUS_KO, st)} 상태가 되었다!`,
       }
 
       case 'detailschange': {
-        /* 메가진화 등으로 모습이 바뀐다 — 이름(닉네임)은 그대로, 그림·타입만 바뀐다 */
+        /* 메가진화 등으로 모습이 바뀐다 — 이름(닉네임)은 그대로, 그림·타입만 바뀐다.
+           자리 글자가 없는 줄(`p2: 리자몽`)은 필드에 없는 포켓몬 얘기다 — 메가 포켓몬이 쓰러진 뒤
+           원래 모습으로 되돌리는 [silent] 줄이라, 받아들이면 쓰러진 자리에 일반 모습이 다시 나타난다 */
+        if (!/^p[12][a-c]: /.test(parts[1] || '')) break;
         const id = parseIdent(parts[1]);
         if (id && mon[id.slot]) mon[id.slot] = { ...mon[id.slot], ...parseDetails(parts[2]) };
         break;
