@@ -9,7 +9,6 @@ import { ko, MOVE_KO } from '../data/ko.js';
 export const MANAGEMENT = {
   movePrice: 100, abilityPrice: 1000,
   supplies: SUPPLIES,   // 탐험 물품 45종 — data/supplies.js
-  ivDays: 1, highIvDays: 2,   // [임시값] 개체값 1포인트당 일수 (26 이상은 더 오래) — 2026-10-23 절반으로 단축
   /* 컨디션 [임시값] — 패배가 주 원인. 활동·휴식은 곁가지다 (사용자 확정 2026-10-22)
      lossHit: 한 번 질 때 (멘탈이 높을수록 덜), winRecover: 이길 때 회복,
      activityFatigue: 활동 1회, restRecovery: 휴식한 날 추가 회복, dailyRecovery: 매일 자연 회복 */
@@ -76,27 +75,71 @@ export async function evolvePokemon(mon, target, game = null) {
   return {ok:true,before,after:mon.species,msg:'진화했습니다!'};
 }
 
-export function trainingQuote(mon, targets) {
-  if(!targets||IV_KEYS.some(k=>!Number.isInteger(targets[k])||targets[k]<mon.ivs[k]||targets[k]>31)) return fail('현재 개체값 이상, 최대 31까지 목표를 설정하세요.');
-  const steps=[];
-  for(const k of IV_KEYS) for(let value=mon.ivs[k]+1;value<=targets[k];value++) steps.push({stat:k,value,days:value>=26?MANAGEMENT.highIvDays:MANAGEMENT.ivDays});
-  if(!steps.length) return fail('올릴 개체값을 하나 이상 선택하세요.');
-  return {ok:true,steps,days:steps.reduce((n,s)=>n+s.days,0),points:steps.length};
+/* ---------------- 트레이닝 센터 (2026-10-23 개편) ----------------
+ * 개체값: 한 마리를 0에서 6V로 만드는 데 최대 10일, 보통 개체(평균 15.5)는 7일 안팎 — 오를수록 덜 걸린다(제곱근).
+ * 노력치: 510을 통째로 다시 짜도 최대 3일. 개체값 → 노력치 순서로 한 번에 배정한다.
+ * 성격: 민트로 바로 바꾼다(원작 SV 델리버드 상점 가격 ₽20,000). [임시값] 일수 곡선 */
+export const TRAINING = { ivMaxDays: 10, ivFullPoints: 186, evMaxDays: 3, evTotal: 510, evStat: 252, mintPrice: 20000 };
+export const ivDaysFor = points => points > 0 ? Math.max(1, Math.round(TRAINING.ivMaxDays * Math.sqrt(points / TRAINING.ivFullPoints))) : 0;
+export const evDaysFor = change => change > 0 ? Math.min(TRAINING.evMaxDays, Math.max(1, Math.ceil(TRAINING.evMaxDays * change / TRAINING.evTotal))) : 0;
+const evSum = evs => IV_KEYS.reduce((n, k) => n + (evs[k] || 0), 0);
+
+/** @param plan {ivs, evs} — 예전 호출처럼 개체값 목표만 넘겨도 된다 */
+export function trainingQuote(mon, plan) {
+  if (plan && !plan.ivs && !plan.evs) plan = { ivs: plan };
+  const ivs = { ...mon.ivs, ...(plan?.ivs || {}) }, evs = { ...mon.evs, ...(plan?.evs || {}) };
+  if (IV_KEYS.some(k => !Number.isInteger(ivs[k]) || ivs[k] < mon.ivs[k] || ivs[k] > 31)) return fail('개체값은 현재 값 이상, 최대 31까지 정하세요.');
+  if (IV_KEYS.some(k => !Number.isInteger(evs[k]) || evs[k] < 0 || evs[k] > TRAINING.evStat)) return fail(`노력치는 능력치마다 0~${TRAINING.evStat}입니다.`);
+  if (evSum(evs) > TRAINING.evTotal) return fail(`노력치 합계는 ${TRAINING.evTotal}까지입니다.`);
+  const points = IV_KEYS.reduce((n, k) => n + ivs[k] - mon.ivs[k], 0);
+  const evChange = IV_KEYS.reduce((n, k) => n + Math.abs(evs[k] - (mon.evs[k] || 0)), 0);
+  if (!points && !evChange) return fail('올릴 개체값이나 바꿀 노력치를 정하세요.');
+  const ivDays = ivDaysFor(points), evDays = evDaysFor(evChange);
+  return { ok: true, ivs, evs, points, evChange, ivDays, evDays, days: ivDays + evDays };
 }
-export function startTraining(game, mon, targets) {
-  if(!agencyOf(game).box.includes(mon)||mon.training) return fail('박스에 있고 훈련 중이 아닌 포켓몬을 선택하세요.');
-  const quote=trainingQuote(mon,targets);if(!quote.ok)return quote;
-  mon.training={targets:{...targets},steps:quote.steps,index:0,elapsed:0,totalDays:quote.days,startedDay:game.day};
-  return {ok:true,msg:`${quote.days}일 훈련을 배정했습니다.`};
+export function startTraining(game, mon, plan) {
+  if (!agencyOf(game).box.includes(mon) || mon.training) return fail('박스에 있고 훈련 중이 아닌 포켓몬을 선택하세요.');
+  const q = trainingQuote(mon, plan); if (!q.ok) return q;
+  mon.training = { v: 2, from: { ivs: { ...mon.ivs }, evs: { ...mon.evs } }, targets: q.ivs, evTargets: q.evs, ivDays: q.ivDays, evDays: q.evDays, elapsed: 0, totalDays: q.days, startedDay: game.day };
+  return { ok: true, msg: `${q.days}일 훈련을 배정했습니다. (개체값 ${q.ivDays}일 · 노력치 ${q.evDays}일)` };
 }
 export function tickTraining(game) {
-  const lines=[];
-  for(const mon of agencyOf(game).box) {
-    const job=mon.training;if(!job)continue;
+  const lines = [];
+  for (const mon of agencyOf(game).box) {
+    const job = mon.training; if (!job) continue;
     job.elapsed++;
-    const step=job.steps[job.index];step.remaining=(step.remaining??step.days)-1;
-    if(step.remaining<=0) {mon.ivs[step.stat]=step.value;job.index++;lines.push({species:mon.species,text:`${IV_LABELS[step.stat]} 개체값 ${step.value} 달성`});}
-    if(job.index>=job.steps.length){delete mon.training;lines.push({species:mon.species,text:'트레이닝 센터 훈련 완료 · 파티 합류 가능'});}
+    if (job.v === 2) {
+      /* 개체값 구간 — 날마다 목표 쪽으로 비례해서 오른다 (취소해도 오른 만큼은 남는다) */
+      if (job.elapsed <= job.ivDays) {
+        const f = job.elapsed / job.ivDays;
+        for (const k of IV_KEYS) mon.ivs[k] = job.from.ivs[k] + Math.round((job.targets[k] - job.from.ivs[k]) * f);
+        if (job.elapsed === job.ivDays) lines.push({ species: mon.species, text: `개체값 훈련 완료 · ${IV_KEYS.map(k => `${IV_LABELS[k]} ${mon.ivs[k]}`).join(' / ')}` });
+      } else {
+        const f = (job.elapsed - job.ivDays) / job.evDays;
+        for (const k of IV_KEYS) mon.evs[k] = Math.round((job.from.evs[k] || 0) + (job.evTargets[k] - (job.from.evs[k] || 0)) * f);
+        if (job.elapsed === job.totalDays) lines.push({ species: mon.species, text: `노력치 훈련 완료 · ${IV_KEYS.filter(k => mon.evs[k]).map(k => `${IV_LABELS[k]} ${mon.evs[k]}`).join(' / ') || '노력치 없음'}` });
+      }
+    } else {
+      /* 개편 전 저장의 훈련 — 1포인트씩 */
+      const step = job.steps[job.index]; step.remaining = (step.remaining ?? step.days) - 1;
+      if (step.remaining <= 0) { mon.ivs[step.stat] = step.value; job.index++; lines.push({ species: mon.species, text: `${IV_LABELS[step.stat]} 개체값 ${step.value} 달성` }); }
+      if (job.index < job.steps.length) continue;
+    }
+    if (job.elapsed >= job.totalDays || (job.v !== 2)) { delete mon.training; lines.push({ species: mon.species, text: '트레이닝 센터 훈련 완료 · 파티 합류 가능' }); }
   }
   return lines;
+}
+
+/** 민트 — 능력 보정만 바뀌는 원작과 달리 여기서는 성격 자체를 바꾸고, 원래 성격은 기록해둔다. 즉시 적용 */
+export function applyMint(game, mon, nature) {
+  const agency = agencyOf(game);
+  if (!ownedMon(game, mon)) return fail('우리 포켓몬이 아닙니다.');
+  if (!Dex.natures.get(nature).exists) return fail('없는 성격입니다.');
+  if (mon.nature === nature) return fail('이미 그 성격입니다.');
+  if (agency.funds < TRAINING.mintPrice) return fail(`자금이 부족합니다. 민트는 ₽${TRAINING.mintPrice.toLocaleString()}입니다.`);
+  agency.funds -= TRAINING.mintPrice;
+  mon.natureOrig ??= mon.nature;
+  mon.nature = nature;
+  if (mon.natureOrig === nature) delete mon.natureOrig;
+  return { ok: true, msg: `민트를 먹였습니다. 성격 보정이 바로 바뀌었습니다. (−₽${TRAINING.mintPrice.toLocaleString()})` };
 }

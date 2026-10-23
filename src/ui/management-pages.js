@@ -1,5 +1,5 @@
 import { pwtBreak } from '../data/international.js';
-import { agencyOf, bagOf, fatigueOf, MANAGEMENT, IV_KEYS, IV_LABELS, buySupplies, trainingQuote, startTraining } from '../engine/pokemon-management.js';
+import { agencyOf, bagOf, fatigueOf, MANAGEMENT, IV_KEYS, IV_LABELS, buySupplies } from '../engine/pokemon-management.js';
 import { badgeProgress } from '../engine/gym-progress.js';
 import { GYMS } from '../data/gyms.js';
 import { SPECIES_KO, ko } from '../data/ko.js';
@@ -12,6 +12,7 @@ import { gameDate } from './management-widgets.js';
 import { fixturesOf, gymStatus, bookingDays, bookGym, cancelFixture, GYM_BOOKING } from '../engine/gym-fixtures.js';
 import { gymById } from '../data/gyms.js';
 import { trainerPortrait, trainerFull, gymLeaderFull } from './trainer-sprite.js';
+import { wireTraining } from './training-center.js';
 
 /* 체육관 화면 상태 — 지방 탭, 신청 중인 체육관/날짜 */
 const gymUi = { region: 'kanto', gymId: null, day: null };
@@ -35,12 +36,7 @@ export function renderSupport(game){
 }
 const supplyIcon=key=>`<img class="item-ico" src="${(import.meta.env?.BASE_URL??'/')}assets/items/${SUPPLIES[key].icon}.png" alt="" aria-hidden="true" width="30" height="30" loading="lazy">`;
 
-export function renderTraining(game){
-  const box=agencyOf(game).box;
-  return `<div class="page-h"><h2>포켓몬 트레이닝 센터</h2><span class="muted">박스에 있는 포켓몬의 개체값을 장기 훈련합니다</span></div><p class="muted">개체값 1포인트에 2일, 목표 값이 26 이상인 포인트는 3일이 걸립니다. 능력치를 하나씩 순서대로 훈련합니다. 훈련 중에는 파티에 합류할 수 없습니다.</p><div id="management-notice" role="status"></div>
-  <div class="training-grid">${box.map((m,i)=>`<section class="card training-card"><header>${monImage(m.species)}<div><h3>${esc(K(m.species))}</h3><small>Lv.${m.level}</small></div></header>${m.training?`<p>진행 ${m.training.elapsed} / ${m.training.totalDays}일</p><progress value="${m.training.elapsed}" max="${m.training.totalDays}"></progress><p>남은 기간 ${m.training.totalDays-m.training.elapsed}일</p><div class="iv-values">${IV_KEYS.map(k=>`<span>${IV_LABELS[k]} <b>${m.ivs[k]} → ${m.training.targets[k]}</b></span>`).join('')}</div><button class="ghost" data-cancel-training="${i}">훈련 취소 · 달성한 값 유지</button>`:
-  `<form class="training-form" data-box="${i}"><div class="iv-targets">${IV_KEYS.map(k=>`<label>${IV_LABELS[k]} <small>현재 ${m.ivs[k]}</small><input type="number" name="${k}" value="${m.ivs[k]}" min="${m.ivs[k]}" max="31" step="1" aria-label="${K(m.species)} ${IV_LABELS[k]} 목표"></label>`).join('')}</div><p class="training-quote">목표 개체값을 정해주세요.</p><button type="submit" disabled>훈련 배정</button></form>`}</section>`).join('')||'<section class="card"><p>박스에 포켓몬이 없습니다. 트레이너의 파티에서 박스로 보내거나 포획해 주세요.</p><button data-nav="box">박스 열기</button></section>'}</div>`;
-}
+export { renderTraining } from './training-center.js';
 
 export function renderGyms(game,selectedId=null){
   const roster=agencyOf(game).roster;
@@ -95,12 +91,6 @@ export function wireManagementPages(root,game,refresh,watch,selectTrainer=()=>{}
   root.querySelectorAll('[data-supply-owner]').forEach(b=>b.onclick=()=>{supplyUi.owner=b.dataset.supplyOwner;refresh();});
   root.querySelectorAll('[data-supply-kind]').forEach(b=>b.onclick=()=>{supplyUi.kind=b.dataset.supplyKind;refresh();});
   root.querySelectorAll('[data-buy]').forEach(b=>b.onclick=()=>{const qty=Number(b.closest('.support-item').querySelector('input').value);const r=buySupplies(game,b.dataset.owner,b.dataset.buy,qty);if(r.ok)refresh();notice(r.msg);});
-  root.querySelectorAll('.training-form').forEach(form=>{
-    const mon=agencyOf(game).box[Number(form.dataset.box)];
-    const targets=()=>Object.fromEntries(IV_KEYS.map(k=>[k,Number(form.elements[k].value)]));
-    form.oninput=()=>{const q=trainingQuote(mon,targets());form.querySelector('.training-quote').textContent=q.ok?`${q.points}포인트 향상 · 총 ${q.days}일`:q.msg;form.querySelector('button').disabled=!q.ok;};
-    form.onsubmit=e=>{e.preventDefault();const r=startTraining(game,mon,targets());if(r.ok)refresh();notice(r.msg);};
-  });
-  root.querySelectorAll('[data-cancel-training]').forEach(b=>b.onclick=()=>{delete agencyOf(game).box[Number(b.dataset.cancelTraining)].training;refresh();});
+  if(root.querySelector('.tc-layout'))wireTraining(root,game,refresh);
   root.querySelectorAll('[data-watch-gym]').forEach(b=>b.onclick=()=>watch(b.dataset.watchGym));
 }

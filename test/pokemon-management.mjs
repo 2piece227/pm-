@@ -10,7 +10,7 @@ import { snapshotGame, restoreGame } from '../src/engine/checkpoint.js';
 import { GYMS } from '../src/data/gyms.js';
 import { challengeGym } from '../src/engine/gyms.js';
 import { explore } from '../src/engine/explore.js';
-import { MANAGEMENT, changeMove, changeAbility, buySupplies, evolutionOptions, evolvePokemon, startTraining, trainingQuote, tickTraining, IV_KEYS, fatigueOf } from '../src/engine/pokemon-management.js';
+import { MANAGEMENT, changeMove, changeAbility, buySupplies, evolutionOptions, evolvePokemon, startTraining, trainingQuote, tickTraining, IV_KEYS, ivDaysFor, evDaysFor, applyMint, TRAINING, fatigueOf } from '../src/engine/pokemon-management.js';
 
 const game=await createGame({seed:123,startEmpty:true});
 const mon=await createPokemon({species:'Charmander',level:16,rng:makeRng(2)});
@@ -49,13 +49,22 @@ assert.equal(fatigueOf({fatigue:0}).color,'fresh');assert.equal(fatigueOf({fatig
 
 // IV training really consumes days, survives saves, cannot take the Pokémon out early.
 const trainee=await createPokemon({species:'Pidgey',level:8,rng:makeRng(8)});trainee.ivs.atk=24;agency.box.push(trainee);
-const targets={...trainee.ivs,atk:26};assert.equal(trainingQuote(trainee,targets).days,3);  // 24→25 1일 + 25→26 2일 (2026-10-23 단축)
-assert(startTraining(game,trainee,targets).ok);assert(!boxToParty(game,trainer.id,0).ok);
+const targets={...trainee.ivs,atk:26};assert.equal(trainingQuote(trainee,targets).days,1);  // 2포인트 = 1일 (2026-10-23 개편)
+/* 개편 기준: 0→6V 최대 10일, 평균 개체(합계 93포인트)는 7일, 노력치는 510을 다 바꿔도 3일 */
+assert.equal(ivDaysFor(186),10);assert.equal(ivDaysFor(93),7);assert.equal(evDaysFor(510),3);assert.equal(evDaysFor(1020),3);assert.equal(evDaysFor(4),1);
+assert(!trainingQuote(trainee,{evs:{hp:252,atk:252,def:8}}).ok,'EV total 510');
+const plan={ivs:{...trainee.ivs,atk:31,spe:31},evs:{hp:0,atk:252,def:0,spa:0,spd:0,spe:252}};
+const pq=trainingQuote(trainee,plan);assert(pq.ok&&pq.evDays===3&&pq.days===pq.ivDays+3);
+assert(startTraining(game,trainee,plan).ok);assert(!boxToParty(game,trainer.id,0).ok);
 assert(!changeMove(game,trainee,0,trainee.learned[0]).ok);
-tickTraining(game);assert.equal(trainee.ivs.atk,25);
+tickTraining(game);assert(trainee.ivs.atk>24&&trainee.ivs.atk<=31);
 const restored=restoreGame(snapshotGame(game));
-for(let i=0;i<2;i++){tickTraining(game);tickTraining(restored);}
-assert.deepEqual(snapshotGame(game),snapshotGame(restored));assert.equal(trainee.ivs.atk,26);assert(!trainee.training);
+for(let i=1;i<pq.days;i++){tickTraining(game);tickTraining(restored);}
+assert.deepEqual(snapshotGame(game),snapshotGame(restored));assert.equal(trainee.ivs.atk,31);assert.equal(trainee.evs.spe,252);assert(!trainee.training);
+/* 민트: 돈만 빠지고 바로 */
+const fundsBeforeMint=agency.funds=50000;trainee.nature='Hardy';
+assert(applyMint(game,trainee,'Jolly').ok);assert.equal(trainee.nature,'Jolly');assert.equal(trainee.natureOrig,'Hardy');assert.equal(agency.funds,fundsBeforeMint-TRAINING.mintPrice);
+assert(!applyMint(game,trainee,'Jolly').ok);agency.funds=0;assert(!applyMint(game,trainee,'Adamant').ok);agency.funds=fundsBeforeMint;
 assert(boxToParty(game,trainer.id,0).ok);
 assert(!startTraining(game,mon,Object.fromEntries(IV_KEYS.map(k=>[k,31]))).ok,'party mons cannot enter training');
 assert.equal(realStats(await createPokemon({species:'Shedinja',level:50,rng:makeRng(8)})).hp,1);

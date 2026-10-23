@@ -1,3 +1,8 @@
+# 작업48 — 트레이닝 센터 개편 (검증 완료, 2026-10-23)
+- engine/pokemon-management.js: TRAINING, ivDaysFor/evDaysFor, 개체값+노력치 한 번에 배정(v2 작업, 옛 저장의 훈련도 계속 진행), applyMint.
+- ui/training-center.js: 챔피언스식 화면 — 포켓몬 목록, 육각형 그래프, 능력치 막대·개체값 스테퍼·노력치 슬라이더, 성격 5×5 표와 민트.
+- 검증: pokemon-management 테스트 갱신(10일/7일/3일 기준, 510 상한, 저장 복원, 민트 결제), 전체 40개 통과, 1280px·모바일 375px 가로 넘침 없음.
+
 # 작업47 — 로즈 협회장의 리그 대개혁 (검증 완료, 2026-10-23)
 - data/league-reform.js(규칙·일정·지원금·NPC 곡선·로즈 대사), engine/league-reform.js(유스 전용 판정·시리즈 포인트·NPC 유스 성장 틱).
 - season.js: 개혁 일정(유스컵 8·시범경기 2·파이널), 로컬컵 유스부/오픈부, 공식전 파티 규정(officialParty), 시범경기 무소속 프로 생성.
