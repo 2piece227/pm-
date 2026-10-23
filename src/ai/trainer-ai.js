@@ -25,6 +25,8 @@ import {TACTICS,entryDamagePct,executionChance,recoveryScore,residualPct} from '
 import {OpponentModel,ownView} from './opponent-model.js';
 import {predictSwitch,preservationValue,followupValue,strategyWeight} from './strategy.js';
 import {tacticAdjustment,isBanned,obedience} from './mon-tactics.js';
+import {statusMoveScore,defensiveSetupScore,POINTLESS} from './status-moves.js';
+import {effectiveSpeed} from './speed.js';
 
 /** 재현 가능한 시뮬을 위한 소형 PRNG (mulberry32) */
 export function makeRng(seed = 1) {
@@ -80,8 +82,16 @@ export class TrainerAI {
   }
 
   /** 배틀 시작 시 원래 팀 순서의 엔진 포켓몬과 지시를 짝짓는다 */
-  bindParty(pokemon) {
+  bindParty(pokemon, foeTeamSize = null) {
     this.tacticsByMon = new Map(pokemon.map((p, i) => [p, this.partyTactics[i] || {}]));
+    /* 상대 파티 수는 원작처럼 볼 표시로 공개된다 — 숨은 명단은 읽지 않는다 */
+    this.foeTeamSize = foeTeamSize;
+  }
+  /** 상대에게 지금 나와 있는 포켓몬 말고 몇 마리가 남았나 (공개 정보: 파티 수 − 기절 메시지) */
+  foeRemaining(battle, foeId) {
+    const fainted = battle.log.filter(l => l.startsWith(`|faint|${foeId}`)).length;
+    const size = this.foeTeamSize ?? (1 + (this.opponent.benches?.(battle, foeId, this.gen, this.stats, () => 1)?.length || 0) + fainted);
+    return Math.max(0, size - fainted - 1);
   }
   tacticFor(p) { return this.tacticsByMon.get(p) || {}; }
   /** 메가진화 담당: 파티에 담당이 있으면 그 포켓몬만 */
@@ -96,6 +106,8 @@ export class TrainerAI {
     this.justSwitched = false;
     this.failureStreak=0;
     this.mentalReasons=[];
+    /* 이번 배틀에서 직접 본 상성 — '효과가 없다'를 본 뒤에는 지식 스탯과 상관없이 안다 */
+    this.learned=new Map();
   }
 
   /** 아군이 쓰러졌다 — 멘탈 스탯이 작동할 구간을 연다 */
@@ -105,9 +117,18 @@ export class TrainerAI {
   }
 
   observeOutcome(lines,side){
-    let failed=false,acted=false,critical=false;
+    let failed=false,acted=false,critical=false,last=null;
     for(const raw of lines){
       const p=raw.split('|'),actor=p[2]?.slice(0,2);
+      /* 내 기술이 상대에게 어떻게 들어갔는지 기억한다 (공개 메시지만) */
+      if(p[1]==='move'){
+        const move=actor===side&&p[4]&&!p[4].startsWith(side)?this.gen.moves.get(p[3]):null;
+        last=move?.exists?{move,target:p[4].split(': ').slice(1).join(': ')}:null;
+        if(last&&last.move.category!=='Status')this.learned.set(`${last.target}|${last.move.type}`,'seen');
+      }else if(last&&['-immune','-fail'].includes(p[1])&&p[2]?.slice(0,2)!==side){
+        if(last.move.category!=='Status')this.learned.set(`${last.target}|${last.move.type}`,'immune');
+        else this.learned.set(`${last.target}|move:${last.move.id}`,'fail');
+      }
       if(actor!==side)continue;
       if(p[1]==='move')acted=true;
       if(['-miss','-fail','cant'].includes(p[1]))failed=true;
@@ -224,6 +245,11 @@ export class TrainerAI {
     const pressure = foeBest + residualPct(me);
     const turnsSurvive = pressure > 0 ? Math.ceil(hpPct(me) / pressure) : 9;
     const R = Math.max(0, Math.min(turnsToKO, turnsSurvive, 6));
+    /* 변화기 평가용 — 남은 상대 수(팀 인원은 공개), 상대가 물리형인지, 내가 빠른지 */
+    const foeOthers=this.foeRemaining(battle,foeSide.id);
+    const foePhysical=foe.getStat('atk')>=foe.getStat('spa');
+    const faster=effectiveSpeed(me)>effectiveSpeed(foe);
+    const statusCtx={foeOthers,foePhysical,faster,foeBest,allies:allies.length};
 
     active.moves.forEach((rm, i) => {
       if (rm.disabled) return;
@@ -234,12 +260,13 @@ export class TrainerAI {
         kind: 'move',
         category: move.category,
         accuracy: move.accuracy === true ? 100 : move.accuracy,
-        role: move.heal || move.id === 'rest' ? 'heal' : selfBoostsOf(move) ? 'setup' : move.status ? 'status' : 'attack',
+        /* move.status는 '거는 상태이상'이라 스텔스록·저주 같은 변화기는 비어 있다 — 분류는 기술 종류로 한다 */
+        role: move.heal || move.id === 'rest' ? 'heal' : move.category !== 'Status' ? 'attack' : selfBoostsOf(move) ? 'setup' : 'status',
         typeEffect: move.category !== 'Status' ? typeEff(gen, move.type, foe.getTypes()) : null,
         label: move.name, // 영문 id 그대로. 한글 변환은 표시 레이어의 몫이다.
         moveId: move.id, basePower: move.basePower || 0,
         choice: `move ${i + 1}`,
-        score: this.scoreMove(move, me, foe, { myBest, R, turnsSurvive, turnsToKO }),
+        score: this.scoreMove(move, me, foe, { myBest, R, turnsSurvive, turnsToKO, ...statusCtx }),
       });
       opts.at(-1).perception = this.lastPerception;
       const option=opts.at(-1);
@@ -249,7 +276,7 @@ export class TrainerAI {
           // A switching opponent does not attack this turn. Its incoming position is public estimate only.
           const arriving={...target.mon,moveSlots:[]};
           const output=bestDamagePct(gen,me,arriving);
-          switchedScore+=target.weight*this.scoreMove(move,me,arriving,{myBest:output,R:3,turnsSurvive:9,turnsToKO:output?Math.ceil(hpPct(arriving)/output):9});
+          switchedScore+=target.weight*this.scoreMove(move,me,arriving,{...statusCtx,myBest:output,R:3,turnsSurvive:9,turnsToKO:output?Math.ceil(hpPct(arriving)/output):9});
         }
         const adjustment=weight*prediction.probability*(switchedScore-option.score);
         option.score+=adjustment;option.predictionAdjustment=adjustment;
@@ -317,7 +344,10 @@ export class TrainerAI {
     if (move.category !== 'Status') {
       /* 상성을 뺀 맨몸 데미지에 "체감" 상성을 곱한다 — 이 순서를 뒤집으면 지식 스탯이 죽는다 */
       const trueEff = combatEffect(gen, me, foe, move);
-      const felt = this.perceive(trueEff);
+      const seen = this.learned.get(`${foe.name}|${move.type}`);
+      /* 효과가 없다는 걸 직접 봤으면 한 턴을 버리는 수다 — 다른 약한 수보다도 아래 */
+      if (seen === 'immune' && trueEff === 0) { this.lastPerception = { trueEff, felt: 0, learned: true }; return POINTLESS; }
+      const felt = seen ? trueEff : this.perceive(trueEff);
       this.lastPerception = { trueEff, felt };
       const adj = neutralDamagePct(me, foe, move) * felt;
       // Damage beyond remaining HP has no extra payoff, especially in stay/switch comparisons.
@@ -338,10 +368,21 @@ export class TrainerAI {
     }
 
     /* 능력치 상승기: (배율−1) × 최대타 × 남은턴 − 이번 턴 손해 */
+    /* 흩뿌리기·상태이상·상대 능력 하락 (status-moves.js) */
+    if (this.learned.get(`${foe.name}|move:${move.id}`) === 'fail') return POINTLESS;
+    /* 독 기술이 안 통하는 걸 봤으면 독독도 안 통한다 (전기 무효를 봤으면 전기자석파도) */
+    if ((move.status || move.type === 'Electric') && this.learned.get(`${foe.name}|${move.type}`) === 'immune') return POINTLESS;
+    const status = statusMoveScore(gen, move, me, foe, ctx);
+    if (status !== null) return status * sty.status * executionChance(gen,me,move,foe);
+
     const boosts = selfBoostsOf(move);
     const key = boosts
       ? Object.keys(boosts).find((k) => (k === 'atk' || k === 'spa') && boosts[k] > 0)
       : null;
+    if (!key && boosts && ctx.turnsSurvive > 1) {
+      const guard = defensiveSetupScore(move, boosts, me, ctx);
+      if (guard !== null) return guard * sty.status * executionChance(gen,me,move,foe);
+    }
     if (!key || ctx.R <= 1) return -25;
     if (ctx.turnsSurvive <= 1) return -40; // 이번 턴에 죽을 것 같으면 세팅 금지
 
@@ -363,12 +404,30 @@ export class TrainerAI {
     const threshold = 0.85 + (MAX_STAT - curve(this.stats.ops)) * 0.06;
 
     let score = (risk - threshold) * 30 + (feltMe - feltBench) * 0.42;
+    /* 랭크가 크게 깎였으면 빠져서 초기화한다 (원작에서 위협·연막·울음소리를 맞은 뒤 교체하는 것처럼) */
+    score += this.dropPressure(me, foe);
     score *= this.sty.sw;
     // Switching consumes the turn: the incoming Pokemon must take entry damage and a hit.
     if (entry >= hpPct(bench)) score = Math.min(-TACTICS.unsafeSwitch*2,score);
     else if (feltBench >= hpPct(bench)) score = Math.min(-TACTICS.unsafeSwitch,score);
     if (this.justSwitched) score -= 26;
     return score;
+  }
+
+  /**
+   * 깎인 랭크가 교체를 부르는 정도 — 주력 공격 능력치·받는 쪽 방어·스피드·명중.
+   * 한두 단계는 참고, 두 단계를 넘으면 빠질 이유가 커진다. [임시값]
+   */
+  dropPressure(me, foe) {
+    const b = me.boosts || {};
+    let phys = 0, spec = 0;
+    for (const slot of me.moveSlots || []) { const m = this.gen.moves.get(slot.id); if (m?.category === 'Physical') phys++; else if (m?.category === 'Special') spec++; }
+    const main = phys >= spec ? 'atk' : 'spa', off = main === 'atk' ? 'spa' : 'atk';
+    const guard = foe.getStat('atk') >= foe.getStat('spa') ? 'def' : 'spd';
+    const down = k => Math.max(0, -(b[k] || 0));
+    const weighted = down(main) * 10 + down(off) * 2 + down(guard) * 6 + down(guard === 'def' ? 'spd' : 'def') * 2 + down('spe') * 4 + down('accuracy') * 7;
+    /* 한 단계짜리(위협 1번 등)는 거의 무시, 깊어질수록 가파르게 */
+    return weighted <= 10 ? 0 : Math.min(60, (weighted - 10) * 1.4);
   }
 
   /** 쓰러져서 강제로 내보내야 할 때 — 누구를 내보낼지도 판단력이 관여한다 */

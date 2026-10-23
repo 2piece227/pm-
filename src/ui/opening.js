@@ -17,11 +17,10 @@ import { ROSE_BRIEFING } from '../data/league-reform.js';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-/** 개발자 모드 암호 — 기존 시뮬 프로토타입으로 직행 */
-const DEV_NAME = '비통한비버통';
-const DEV_TARGET = 'trainer_sim_v2.html';
+/** 디버그 모드 암호 — 자금 무한·실험 도구 (예전 배틀 시뮬은 디버그 화면에서 연다) */
+import { DEBUG_NAME } from '../engine/debug.js';
 
-const state = { seed: null, playerName: '', agencyId: null, game: null };
+const state = { seed: null, playerName: '', agencyId: null, game: null, debug: false };
 
 /* ---------------- 화면 전환 ---------------- */
 
@@ -98,11 +97,8 @@ function initName() {
     const raw = $('in-name').value.trim();
     if (!raw) { $('name-msg').textContent = '이름을 입력해주세요.'; return; }
 
-    if (raw === DEV_NAME) {
-      $('name-msg').textContent = '개발자 모드 — 배틀 시뮬로 이동합니다.';
-      window.location.href = DEV_TARGET;
-      return;
-    }
+    state.debug = raw === DEBUG_NAME;
+    if (state.debug) $('name-msg').textContent = '디버그 모드 — 자금 무한, 왼쪽 메뉴의 "디버그"에서 실험할 수 있습니다.';
 
     state.playerName = raw;
     writeSave({ seed: state.seed, playerName: raw });
@@ -160,6 +156,7 @@ async function buildGame() {
     startEmpty: true,   // §3.10 — 트레이너 0명으로 시작해 첫 계약으로 1명을 채운다
     careerStart: true,
     reform: true,       // 로즈 협회장의 리그 개혁 — 2026 시즌은 유스 전용
+    debug: state.debug,
   });
 }
 

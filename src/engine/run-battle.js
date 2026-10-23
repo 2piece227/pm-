@@ -9,6 +9,7 @@
  */
 import { Battle, Dex, Teams } from '@pkmn/sim';
 import { TrainerAI, makeRng } from '../ai/trainer-ai.js';
+import { selfBoostsOf } from '../ai/estimate.js';
 import { STYLES } from '../data/styles.js';
 
 const GEN = Dex.forGen(9);
@@ -64,7 +65,7 @@ export function runBattle({ trainerA, trainerB, teamA, teamB, seed, collectThink
   const hpBefore = Object.fromEntries(SIDES.map(side => [side, originalParty[side].map(stateOf)]));
 
   const ai = { p1: trainerA, p2: trainerB };
-  for (const side of SIDES) ai[side].bindParty?.(originalParty[side]);
+  for (const side of SIDES) ai[side].bindParty?.(originalParty[side], originalParty[side === 'p1' ? 'p2' : 'p1'].length);
   trainerA.reset();
   trainerB.reset();
 
@@ -111,7 +112,7 @@ export function runBattle({ trainerA, trainerB, teamA, teamB, seed, collectThink
         const idx = Number(d.choice.split(' ')[1]) - 1;
         const rm = req.active[0].moves[idx];
         const mv = rm && GEN.moves.get(rm.id);
-        if (mv && mv.category === 'Status' && mv.boosts && mv.target === 'self') {
+        if (mv && mv.category === 'Status' && selfBoostsOf(mv)) {
           setupUsed[side]++;
         }
       }

@@ -47,7 +47,7 @@ export function gymStatus(game, trainer, gymId) {
 export function bookingDays(game, trainer, gymId) {
   const out = [];
   /* 리그 개혁: 배지를 딴 뒤 다음 관장전은 일정 기간 뒤부터 (관장에게도 도전자가 줄을 선다) */
-  const wait = Math.max(rematchFrom(game, trainer, gymId), game.reform && trainer.lastBadgeDay ? trainer.lastBadgeDay + REFORM.gymInterval : 0);
+  const wait = game.debug?.noGymWait ? 0 : Math.max(rematchFrom(game, trainer, gymId), game.reform && trainer.lastBadgeDay ? trainer.lastBadgeDay + REFORM.gymInterval : 0);
   const cups = (game.competitions?.events || []).filter(e => e.status === 'scheduled' && e.registrations?.includes(trainer.id));
   for (let d = game.day + GYM_BOOKING.minLead; d <= game.day + GYM_BOOKING.maxLead; d++) {
     let reason = '';

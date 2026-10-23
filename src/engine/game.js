@@ -22,6 +22,7 @@ import { healParty } from './field-state.js';
 import { tickTraining, MANAGEMENT } from './pokemon-management.js';
 import { challengeGym, challengeGymNpc } from './gyms.js';
 import { npcYouthTick, weeklySupport, youthOnly } from './league-reform.js';
+import { enableDebug, refillFunds } from './debug.js';
 import { todaysFixture, cancelFixture, pruneFixtures } from './gym-fixtures.js';
 import { gymById } from '../data/gyms.js';
 import { badgeProgress } from './gym-progress.js';
@@ -79,6 +80,7 @@ export async function createGame({
   startEmpty = false,   // 오프닝을 거치면 로스터를 비운 채 시작한다 (§3.10)
   careerStart = false,
   reform = false,       // 로즈 협회장의 리그 개혁 (새 게임) — data/league-reform.js
+  debug = false,        // 대표 이름 '비통한비버통' — 자금 무한·실험 도구 (engine/debug.js)
 } = {}) {
   const league = await createLeague({ seed, playerAgencyId: agencyChoiceId });
   const player = league.agencies.find((a) => a.isPlayer);
@@ -111,6 +113,7 @@ export async function createGame({
   };
 
   if(reform) game.reform = { version: 1, startDay: game.day };
+  if(debug) enableDebug(game);
   if(careerStart) await setupCareerStart(game);
   await refreshMarket(game);
   ensureInternational(game);internationalSeason(game);
@@ -495,6 +498,7 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
   report.news = league.newsFeed.filter((n) => !newsAtStart.has(n));
   for (const n of report.news) if (n.day === undefined) n.day = game.day;
 
+  refillFunds(game);   // 디버그 모드만
   /* --- 7. 파산 판정 (§3.3 자체 소속사는 경질이 아니라 파산) --- */
   if (player.funds < 0) {
     game.gameOver = { reason: '자금 고갈 — 소속사 해체', day: game.day };

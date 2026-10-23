@@ -1,3 +1,10 @@
+# 작업49 — 변화기·필드 판단, 상성 학습, 랭크 하락 교체, 디버그 모드 (검증 완료, 2026-10-23)
+- 제보: 강철톤에 스텔스록·변화기 적극을 줘도 번개엄니만 쓰고, 독수의 또가스가 효과 없는 오물공격을 반복.
+- 원인 1: trainer-ai 역할 분류가 move.status(거는 상태이상) 기준이라 스텔스록·저주가 '공격'으로 분류 → 변화기 지시 무효. 원인 2: 공격·특공 랭크업 외 변화기 전부 −25. 원인 3: 지식 노이즈가 0배를 매 턴 다시 굴려 평균 0.7배로 오판, 본 것을 기억하지 않음.
+- ai/status-moves.js 추가, trainer-ai 학습(learned)·dropPressure·foeRemaining(공개 정보), 저주 랭크 변화 인식.
+- engine/debug.js, ui/debug.js — 디버그 모드.
+- 검증: test/ai-status-moves.mjs(30전: 첫 턴 스텔스록 1→23회, 효과 없음 확인 뒤 반복 192→1회, 리플렉터·비바라기 중복 0회), test/debug-mode.mjs, 전체 42개 통과.
+
 # 작업48 — 트레이닝 센터 개편 (검증 완료, 2026-10-23)
 - engine/pokemon-management.js: TRAINING, ivDaysFor/evDaysFor, 개체값+노력치 한 번에 배정(v2 작업, 옛 저장의 훈련도 계속 진행), applyMint.
 - ui/training-center.js: 챔피언스식 화면 — 포켓몬 목록, 육각형 그래프, 능력치 막대·개체값 스테퍼·노력치 슬라이더, 성격 5×5 표와 민트.

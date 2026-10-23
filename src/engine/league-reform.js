@@ -11,7 +11,7 @@ export const isReform = game => !!game?.reform;
 export const seasonYear = day => Math.floor(((day || 1) - 1) / 365) + 1;
 export const calendarYear = day => REFORM.firstYear + seasonYear(day) - 1;
 /** 유스만 뛰는 시즌인가 (2026) */
-export const youthOnly = (game, day = game?.day) => isReform(game) && REFORM.youthOnlySeasons.includes(seasonYear(day));
+export const youthOnly = (game, day = game?.day) => isReform(game) && !game.debug?.unlockReform && REFORM.youthOnlySeasons.includes(seasonYear(day));
 /** 이 시즌에 PWT가 열리나 */
 export const pwtHeld = (game, day = game?.day) => !isReform(game) || seasonYear(day) >= REFORM.pwtFirstSeason;
 export const weeklySupport = agency => PARENT_SUPPORT[agency?.tier]?.weekly || 0;

@@ -49,6 +49,8 @@ import { openPokemonPanel, moveTile, TYPE_KO } from './pokemon-panel.js';
 import { Dex } from '@pkmn/dex';
 import { evolutionOptions, bagOf } from '../engine/pokemon-management.js';
 import { renderSupport, renderTraining, renderGyms, wireManagementPages, fatigueIcon } from './management-pages.js';
+import { renderDebug, wireDebug } from './debug.js';
+import { refillFunds } from '../engine/debug.js';
 import { watchGymMatch } from './gym-watch.js';
 import { GYMS } from '../data/gyms.js';
 import { badgeProgress } from '../engine/gym-progress.js';
@@ -106,13 +108,15 @@ const MENU = [
   { id: 'scouting', label: '스카우팅', icon: 'dowsing-machine' },
   { id: 'personnel', label: '계약 · 스태프', icon: 'amulet-coin' },
 ];
+/* 디버그 모드에서만 보이는 메뉴 */
+const DEBUG_MENU = [{ grp: '디버그' }, { id: 'debug', label: '디버그 · 실험실', icon: 'scope-lens' }];
 
 function renderSide() {
   const unread = inboxItems().filter((m) => !read.has(m.key)).length;
   const lock = rosterLock(game);
   const boxN = playerAgency(game).box.length;
 
-  $('side').innerHTML = `<div class="brand">${itemIcon('master-ball')}<div class="brand-word"><span>POKÉMON</span><b>TRAINER</b><i>MANAGER</i></div></div>` + MENU.map((m) => {
+  $('side').innerHTML = `<div class="brand">${itemIcon('master-ball')}<div class="brand-word"><span>POKÉMON</span><b>TRAINER</b><i>MANAGER</i></div></div>` + [...MENU, ...(game.debug ? DEBUG_MENU : [])].map((m) => {
     if (m.grp) return `<div class="grp">${m.grp}</div>`;
     const locked = m.id === 'scouting' && lock;
     let badge = '';
@@ -453,6 +457,7 @@ function renderScouting() {
 /* ---------------- 렌더 ---------------- */
 
 function render() {
+  refillFunds(game);   // 디버그 모드만
   renderTop();
   renderSide();
 
@@ -469,6 +474,7 @@ function render() {
   else if (screen === 'schedule') main.innerHTML = renderSeason(game)+renderSchedule();
   else if (screen === 'scouting') main.innerHTML = renderScouting();
   else if (screen === 'personnel') main.innerHTML = renderPersonnel(game);
+  else if (screen === 'debug' && game.debug) main.innerHTML = renderDebug(game);
 
   wire();
   wireMonImages(main);
@@ -504,6 +510,7 @@ function wire() {
 
   wireManagementPages(main,game,()=>{persist();render();},id=>openGymWatch(id),id=>{map.trainerId=id;render();});
   wireShop(main,game,()=>{persist();render();});
+  wireDebug(main,game,()=>{persist();render();});
   main.querySelectorAll('[data-give-item]').forEach(b=>b.onclick=()=>{
     const mon=b.dataset.t ? findTrainer(game.league,b.dataset.t)?.party[Number(b.dataset.i)] : playerAgency(game).box[Number(b.dataset.b)];
     if(mon)openItemPicker(game,mon,()=>{persist();render();},()=>{screen='shop';detailId=null;render();});

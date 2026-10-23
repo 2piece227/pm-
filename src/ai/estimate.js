@@ -35,6 +35,8 @@ export function typeEff(gen, moveType, targetTypes) {
 
 /** 기술이 자신에게 거는 랭크 변화를 꺼낸다 (상태변화기 / 공격기 부가효과 양쪽 대응) */
 export function selfBoostsOf(move) {
+  /* 고스트가 아닌 포켓몬의 저주 — 랭크 변화가 onHit 안에만 있어 데이터로는 안 보인다 (고스트 저주는 호출하는 쪽이 먼저 거른다) */
+  if (move.id === 'curse') return { spe: -1, atk: 1, def: 1 };
   if (move.target === 'self' && move.boosts) return move.boosts;
   if (move.self && move.self.boosts) return move.self.boosts;
   if (move.selfBoost && move.selfBoost.boosts) return move.selfBoost.boosts;

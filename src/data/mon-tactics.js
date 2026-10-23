@@ -46,4 +46,4 @@ export function applyRole(mon, role) {
 }
 
 /* [임시값] 지시 1칸당 점수 보정 */
-export const TACTIC_SCALE = { switchOut: 14, switchIn: 10, setup: 24, status: 14, aimPower: 0.08, aimAccuracy: 0.45, lowHpPreserve: 22, lowHpFight: 26, prefer: 16, avoid: 16, lowHp: 0.35, aceHold: 14 };
+export const TACTIC_SCALE = { switchOut: 22, switchIn: 10, setup: 24, status: 14, aimPower: 0.08, aimAccuracy: 0.45, lowHpPreserve: 22, lowHpFight: 26, prefer: 16, avoid: 16, lowHp: 0.35, aceHold: 14 };
