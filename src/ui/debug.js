@@ -26,8 +26,7 @@ export function renderDebug(game) {
       <div class="dbg-row"><input id="dbg-party-level" type="number" min="1" max="100" value="50"><button data-dbg="level" ${sel ? '' : 'disabled'}>파티 레벨 맞추기</button></div>
       <div class="dbg-row"><button class="ghost" data-dbg-badges="kanto">관동 배지 8개</button><button class="ghost" data-dbg-badges="johto">성도 배지 8개</button><button class="ghost" data-dbg-badges="all">16개 전부</button><button class="ghost" data-dbg-badges="none">배지 초기화</button></div></section>
     <section class="card"><h3>규칙 풀기</h3>
-      ${flag('unlockReform', '리그 개혁 잠금 해제', '2026 시즌에도 프로 콜업·영입 가능')}
-      ${flag('noGymWait', '관장전 대기 없음', '배지 후 21일·패배 후 재도전 대기 무시')}</section>
+      ${flag('unlockReform', '리그 개혁 잠금 해제', '2026 시즌에도 프로 콜업·영입 가능')}</section>
     <section class="card"><h3>바로 하기</h3>
       <div class="dbg-row"><button data-dbg="give">모든 도구·기술머신·키스톤 지급</button><button class="ghost" data-dbg="train">훈련 즉시 완료</button></div>
       <div class="dbg-row"><input id="dbg-days" type="number" min="1" max="120" value="7"><button data-dbg="skip" ${ui.busy ? 'disabled' : ''}>${ui.busy ? '진행 중…' : '일 빠르게 진행'}</button></div>

@@ -3,17 +3,16 @@
  *
  *   - 배지가 이미 있는 체육관은 신청할 수 없다.
  *   - 트레이너마다 잡혀 있는 관장전은 한 번에 하나.
- *   - 진 체육관은 진 날로부터 rematchWait일 뒤부터 다시 신청할 수 있다.
+ *   - 배지 획득·패배 뒤 대기 없이 바로 다음 관장전을 신청할 수 있다.
  *   - 대회 출전일·PWT 휴회 기간에는 잡을 수 없다.
  * 경기 당일에는 탐험 배정 대신 관장전을 치르고, 다음 날부터 탐험 배정이 다시 이어진다.
  */
 import { gymById } from '../data/gyms.js';
 import { PWT, dayInSeason } from '../data/international.js';
 import { agencyOf } from './pokemon-management.js';
-import { REFORM } from '../data/league-reform.js';
 
 /* [임시값] 접수 규칙 — 원작에는 없는 매니지먼트 규칙이라 체감 보고 조정 */
-export const GYM_BOOKING = { minLead: 1, maxLead: 14, rematchWait: 3 };
+export const GYM_BOOKING = { minLead: 1, maxLead: 14 };
 
 export const fixturesOf = game => (game.gymFixtures ??= []);
 const isPwtDay = (day, game) => !(game?.reform && Math.floor((day - 1) / 365) === 0) && dayInSeason(day) >= PWT.breakStart && dayInSeason(day) <= PWT.breakEnd;
@@ -25,12 +24,6 @@ export function todaysFixture(game, trainerId) {
   return fixturesOf(game).find(f => f.trainerId === trainerId && f.status === 'booked' && f.day === game.day) || null;
 }
 export const hasBadge = (trainer, gymId) => (trainer?.badges || []).includes(gymId);
-
-/** 이 트레이너가 이 체육관에 다시 신청할 수 있는 첫날 (진 경우만 대기) */
-export function rematchFrom(game, trainer, gymId) {
-  const lastLoss = (game.gymHistory || []).find(m => m.trainerId === trainer.id && m.gymId === gymId && !m.won);
-  return lastLoss ? lastLoss.day + GYM_BOOKING.rematchWait : 0;
-}
 
 /** 체육관 카드에 보여줄 상태 */
 export function gymStatus(game, trainer, gymId) {
@@ -46,13 +39,10 @@ export function gymStatus(game, trainer, gymId) {
 /** 신청 가능한 날짜 목록 — 막힌 날은 이유와 함께 돌려준다 */
 export function bookingDays(game, trainer, gymId) {
   const out = [];
-  /* 리그 개혁: 배지를 딴 뒤 다음 관장전은 일정 기간 뒤부터 (관장에게도 도전자가 줄을 선다) */
-  const wait = game.debug?.noGymWait ? 0 : Math.max(rematchFrom(game, trainer, gymId), game.reform && trainer.lastBadgeDay ? trainer.lastBadgeDay + REFORM.gymInterval : 0);
   const cups = (game.competitions?.events || []).filter(e => e.status === 'scheduled' && e.registrations?.includes(trainer.id));
   for (let d = game.day + GYM_BOOKING.minLead; d <= game.day + GYM_BOOKING.maxLead; d++) {
     let reason = '';
     if (isPwtDay(d, game)) reason = 'PWT 휴회';
-    else if (d < wait) reason = d < rematchFrom(game, trainer, gymId) ? '재도전 대기' : '관장 일정 대기';
     else if (cups.some(e => e.date === d)) reason = '대회 출전';
     out.push({ day: d, ok: !reason, reason });
   }

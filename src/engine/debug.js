@@ -18,7 +18,7 @@ const fail = msg => ({ ok: false, msg });
 const roster = game => agencyOf(game).roster;
 
 export function enableDebug(game) {
-  game.debug = { version: 1, unlockReform: false, noGymWait: false };
+  game.debug = { version: 1, unlockReform: false };
   refillFunds(game);
 }
 /** 자금은 줄어도 바로 다시 찬다 — 화면을 그릴 때와 하루가 끝날 때 */

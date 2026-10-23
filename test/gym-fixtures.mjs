@@ -1,4 +1,4 @@
-// 관장전 일정 신청: 배지 보유 차단, 트레이너당 1경기, 패배 후 재도전 대기, 당일 경기 후 탐험 재개.
+// 관장전 일정 신청: 배지 보유 차단, 트레이너당 1경기, 패배 후에도 대기 없이 재도전, 당일 경기 후 탐험 재개.
 import assert from 'node:assert/strict';
 import { createGame, playerAgency, advanceDay, assignAction } from '../src/engine/game.js';
 import { createTrainer } from '../src/data/agencies.js';
@@ -44,18 +44,21 @@ assert.equal(fixturesOf(g).find(f => f.gymId === 'misty' && f.status === 'played
 assert.equal(g.actions.strong, explore, '다음 날 탐험 배정이 그대로 이어진다');
 assert.equal(gymStatus(g, strong, 'misty').code, 'badge');
 
-/* 지면 재도전 대기 */
+/* 져도 바로 다음 날 재도전 가능 (쿨타임 없음) */
 assert(bookGym(g, 'weak', 'giovanni', g.day + 1).ok);
 const lossRep = await advanceDay(g); await advanceDay(g);
 const lost = (g.gymHistory || []).find(m => m.trainerId === 'weak' && m.gymId === 'giovanni');
 assert(lost && !lost.won, `약자는 져야 한다 ${JSON.stringify(lossRep.gyms?.map(m=>m.won))}`);
 const days = bookingDays(g, weak, 'giovanni');
-assert(days.filter(d => d.day < lost.day + GYM_BOOKING.rematchWait).every(d => !d.ok && d.reason === '재도전 대기'));
-assert(days.some(d => d.ok));
+assert(days[0].day === g.day + GYM_BOOKING.minLead && days.every(d => d.ok || d.reason === 'PWT 휴회' || d.reason === '대회 출전'), '재도전 대기 없음');
 
 /* 예전 저장의 'gym:' 배정이 배지 보유 체육관을 가리키면 휴식으로 */
 g.actions.strong = 'gym:misty';
 const legacy = await advanceDay(g);
 assert(!(legacy.gyms || []).some(m => m.trainerId === 'strong'));
 
-console.log('PASS: badge lock, booking window, one fixture per trainer, cancel, fixture day keeps exploration, rematch wait, legacy duplicate guard');
+/* 배지를 딴 뒤에도 (리그 개혁 시즌이라도) 다음 관장전 대기 없음 */
+strong.lastBadgeDay = g.day; g.reform ??= {};
+assert(bookingDays(g, strong, 'ltsurge').every(d => d.ok || d.reason === 'PWT 휴회' || d.reason === '대회 출전'), '배지 후 대기 없음');
+
+console.log('PASS: badge lock, booking window, one fixture per trainer, cancel, fixture day keeps exploration, no rematch/badge wait, legacy duplicate guard');
