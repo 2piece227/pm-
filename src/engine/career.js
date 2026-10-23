@@ -2,6 +2,8 @@ import { CAREER } from '../data/career.js';
 import { badgeProgress } from './gym-progress.js';
 import { GYMS } from '../data/gyms.js';
 import { buildParty, makeStarterParty } from './team-builder.js';
+import { PARENT_SUPPORT } from '../data/league-reform.js';
+import { youthOnly } from './league-reform.js';
 
 export const youthCount = agency => agency.roster.filter(t=>t.isYouth).length;
 export const youthCapacity = agency => agency.youthCapacity ?? CAREER.youthCapacity;
@@ -44,6 +46,7 @@ export function careerLabel(trainer) {
 /** New games only. Saves never have existing trainers replaced with presets. */
 export async function setupCareerStart(game) {
   if(game.careerStartApplied)return;
+  if(game.reform)return setupReformStart(game);
   for(const agency of game.league.agencies){
     const preset=CAREER.starting[agency.tier]||CAREER.starting.indie;
     agency.youthCapacity=CAREER.youthCapacity;
@@ -65,6 +68,31 @@ export async function setupCareerStart(game) {
   game.careerStartApplied=true;
 }
 
+/** 리그 개혁 시작 — 프로 0명, 모든 소속사가 유스로만 (모기업 규모만큼) */
+async function setupReformStart(game){
+  for(const agency of game.league.agencies){
+    const support=PARENT_SUPPORT[agency.tier]||PARENT_SUPPORT.indie;
+    const n=agency.id===game.playerAgencyId?support.youths:support.npcYouths;
+    agency.youthCapacity=CAREER.youthCapacity;
+    agency.region=agency.id.includes('doraji')||agency.name.includes('도라지')?'johto':'kanto';
+    agency.roster=agency.roster.slice(0,n);
+    for(const t of agency.roster){
+      t.isYouth=true;
+      t.party=await makeStarterParty(game.rng);
+      t.badges=[];
+      t.careerOrigin='generated';
+      t.contract={...t.contract,wage:Math.round(t.salary*CAREER.weeklySalaryFactor*0.6),years:3,startDay:1,proRaise:100,badgeBonus:0};
+      t.salary=t.contract.wage;
+      t.promotionApplied=false;
+    }
+    ensureSeats(agency);
+  }
+  game.opening.done=true;
+  game.opening.tutorialContractNeeded=true;
+  game.opening.roseBriefing=true;
+  game.careerStartApplied=true;
+}
+
 /** Qualification does not change registration or wages until the manager calls up. */
 export function markGraduation(game,trainer) {
   if(!trainer.isYouth||!proEligible(trainer)||trainer.graduation)return;
@@ -75,6 +103,7 @@ function owned(game,id){return game.league.agencies.find(a=>a.id===game.playerAg
 export function callUp(game,id){
   const t=owned(game,id);
   if(!t||!t.isYouth||!proEligible(t))return {ok:false,msg:'한 지방 배지 8개를 갖춘 소속 유스만 콜업할 수 있습니다.'};
+  if(youthOnly(game))return {ok:false,msg:'2026 시즌은 유스 전용 시즌입니다. 프로 콜업은 2027 시즌부터 할 수 있습니다.'};
   const agency=game.league.agencies.find(a=>a.id===game.playerAgencyId);
   if(proCount(agency)>=proCapacity())return {ok:false,msg:`프로 자리가 가득 찼습니다 (레귤러 ${CAREER.proSeats.race} + 리저브 ${CAREER.proSeats.reserve}). 프로를 방출·이적한 뒤 콜업하세요.`};
   t.contract??={};

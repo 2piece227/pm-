@@ -5,9 +5,26 @@ import { SEASON, SEASON_PHASES, RANKING, CUP_SCHEDULE } from '../data/season.js'
 import { escapeHtml as esc, gameDate } from './management-widgets.js';
 import { renderBattleAnalysis } from './battle-analysis.js';
 import { ko, SPECIES_KO } from '../data/ko.js';
+import { seriesPoints, youthOnly, calendarYear } from '../engine/league-reform.js';
 
-const CUP_ICON={youth:'poke-ball',city:'tm-fighting',local:'amulet-coin',pwt:'master-ball'};
-const CUP_KIND={youth:'YOUTH CUP',city:'CITY CUP',local:'LOCAL CUP',pwt:'PWT'};
+const CUP_ICON={youth:'poke-ball',city:'tm-fighting',local:'amulet-coin',pwt:'master-ball',demo:'great-ball','youth-final':'ultra-ball'};
+const CUP_KIND={youth:'YOUTH CUP',city:'CITY CUP',local:'LOCAL CUP',pwt:'PWT',demo:'CITY CUP 시범',  'youth-final':'YOUTH GRAND PRIX'};
+/** 대회 카드의 참가 자격 한 줄 */
+function cupRuleText(e){
+  const cap=e.levelCap?` · Lv${e.levelCap} 초과는 Lv${e.levelCap}으로 조정 · 같은 포켓몬·같은 도구 1개씩`:'';
+  if(e.kind==='youth')return e.eligibility==='youth-any'?'모든 유스 · 시리즈 포인트 (우승 10 · 준우승 6 · 4강 3 · 8강 1)':'8배지 미만 유스';
+  if(e.kind==='youth-final')return '시리즈 포인트 상위 8명 자동 출전';
+  if(e.kind==='demo')return `배지 8개 유스 + 무소속 프로${cap} · 순위 미반영`;
+  if(e.kind==='city')return `등록 프로 · 챔피언·사천왕 제외${cap}`;
+  if(e.kind==='local')return e.division==='youth'?'유스부 · 모든 유스, 레벨 그대로':e.division==='open'?'오픈부 · 유스·프로 모두, 레벨 무제한 — 프로와 맞붙습니다':'오픈 · 우승해도 프로 승격/리그 진출권 없음';
+  return '';
+}
+/** 2026 유스 시리즈 포인트 표 */
+function renderSeriesTable(game){
+  if(!youthOnly(game))return '';
+  const rows=seriesPoints(game);
+  return `<section class="card series-table"><div class="section-heading"><div><div class="eyebrow">YOUTH SERIES ${calendarYear(game.day)}</div><h3>유스 시리즈 포인트</h3></div><small class="muted">상위 8명이 유스 그랑프리 파이널에 나갑니다</small></div>${rows.length?rows.slice(0,12).map((r,i)=>`<div class="rank-row ${game.league.agencies.find(a=>a.id===game.playerAgencyId)?.name===r.agencyName?'mine':''} ${i===7?'cut':''}"><span class="pos">${i+1}</span><span class="who">${esc(r.name||'')} <small>${esc(r.agencyName||'')}</small></span><span class="score">${r.points}</span></div>`).join(''):'<p class="muted">첫 유스컵이 끝나면 포인트가 쌓입니다.</p>'}</section>`;
+}
 
 /** 대진표 — 우리 소속이 없어도 모든 경기를 라운드별로 본다 */
 export function renderCupBracket(game,e){
@@ -29,10 +46,10 @@ export function renderCupReport(game,id){
 export function renderSeason(game){
   const {year,phase}=seasonDate(game.day),events=[...ensureSeason(game).events].sort((a,b)=>a.date-b.date);
   const roster=game.league.agencies.find(a=>a.id===game.playerAgencyId).roster;
-  return `<section class="card"><div class="season-head"><div><div class="eyebrow">SEASON ${year} · COMPETITIONS</div><h2>제${year}시즌 · ${phase.name}</h2></div><span class="muted">${gameDate(game.day)} · ${game.day}일차</span></div><details class="cup-rules"><summary>대회 규칙 보기</summary><p>유스컵은 8배지 미만 유스, 시티컵은 등록 프로, 로컬컵은 유스·프로가 출전합니다. 현재 파티는 최대 6마리입니다. 개최일에는 탐험·체육관 대신 대회에 참가하며, 경기마다 HP·PP·상태가 초기화됩니다. 파티는 개최일에 확정됩니다.</p><p class="muted">등록 마감은 전날입니다. 관전하지 않아도 하루 진행 시 결과가 계산됩니다. 대회별 상금과 참가 자격을 확인하세요. 2명 미만이면 취소합니다.</p>
+  return `<section class="card"><div class="season-head"><div><div class="eyebrow">SEASON ${year} · COMPETITIONS</div><h2>${game.reform?`${calendarYear(game.day)} 시즌`:`제${year}시즌`} · ${phase.name}</h2></div><span class="muted">${gameDate(game.day)} · ${game.day}일차</span></div><details class="cup-rules"><summary>대회 규칙 보기</summary>${youthOnly(game)?'<p><b>2026 리그 개혁 시즌</b> · 모든 소속사가 유스로만 뜁니다. 유스컵 8회의 시리즈 포인트 상위 8명이 유스 그랑프리 파이널에 나가고, 시티컵 시범경기는 배지 8개 유스와 무소속 프로가 레벨 50 기준으로 겨룹니다. 프로 콜업·영입과 PWT는 2027 시즌부터입니다.</p>':''}<p>유스컵은 8배지 미만 유스, 시티컵은 등록 프로, 로컬컵은 유스·프로가 출전합니다. 현재 파티는 최대 6마리입니다. 개최일에는 탐험·체육관 대신 대회에 참가하며, 경기마다 HP·PP·상태가 초기화됩니다. 파티는 개최일에 확정됩니다.</p><p class="muted">등록 마감은 전날입니다. 관전하지 않아도 하루 진행 시 결과가 계산됩니다. 대회별 상금과 참가 자격을 확인하세요. 2명 미만이면 취소합니다.</p>
   </details><details><summary>연간 계획 보기 · 날짜는 임시 편성</summary>${SEASON_PHASES.map(p=>`<p>${gameDate((year-1)*SEASON.days+p.start)} · ${p.name}${p.implemented?' · 운영 중':' · 계획만 표시, 아직 미개최'}</p>`).join('')}</details>
   
-  <div class="cup-cards">${events.filter(e=>e.season<=year&&e.status==='scheduled').map(e=>`<article class="cup-card kind-${e.kind}"><img class="cup-ico" src="${(import.meta.env?.BASE_URL??'/')}assets/items/${CUP_ICON[e.kind]||'vs-seeker'}.png" alt="" aria-hidden="true"><div class="cup-kind">${CUP_KIND[e.kind]||'COMPETITION'} · D-${Math.max(0,e.date-game.day)}</div><h3>${e.name}</h3><p>${e.kind==='youth'?'8배지 미만 유스':e.kind==='city'?'등록 프로 · 챔피언·사천왕 제외':'오픈 · 우승해도 프로 승격/리그 진출권 없음'} · 우승 ${SEASON.prize*(e.prizeMultiplier??1)} / 준우승 ${SEASON.runnerPrize*(e.prizeMultiplier??1)}${e.ranking?' · 지역 순위 반영':''}</p><p>개최 ${gameDate(e.date)} (${e.date}일차) · 접수 ${gameDate(e.openDay)}–${gameDate(e.deadline)} · 최대 ${e.capacity}명</p><label>우리 경기 진행<select data-cup-mode="${e.id}"><option value="results" ${e.watchMode!=='watch'?'selected':''}>결과만 보기</option><option value="watch" ${e.watchMode==='watch'?'selected':''}>우리 경기 관전</option></select></label>${roster.map(t=>`<div class="assignment"><span>${esc(t.name)} · ${cupEligible(t,e)?`${t.party.length}마리`:'참가 자격 없음'}</span><button data-cup-register="${e.id}" data-trainer="${t.id}" data-remove="${e.registrations.includes(t.id)}" ${game.day<e.openDay||game.day>e.deadline||(!e.registrations.includes(t.id)&&!cupEligible(t,e))?'disabled':''}>${e.registrations.includes(t.id)?'등록 취소':'참가 등록'}</button></div>`).join('')||'<p>참가할 트레이너가 없어도 결과와 스카우팅 보고서를 볼 수 있습니다.</p>'}</article>`).join('')}</div><p role="status" id="cup-message"></p><h3 class="rec-head">지난 대회 기록 <small>우리 선수가 없던 대회도 대진과 경기를 볼 수 있습니다</small></h3>
+  ${renderSeriesTable(game)}<div class="cup-cards">${events.filter(e=>e.season<=year&&e.status==='scheduled').map(e=>`<article class="cup-card kind-${e.kind}"><img class="cup-ico" src="${(import.meta.env?.BASE_URL??'/')}assets/items/${CUP_ICON[e.kind]||'vs-seeker'}.png" alt="" aria-hidden="true"><div class="cup-kind">${CUP_KIND[e.kind]||'COMPETITION'} · D-${Math.max(0,e.date-game.day)}</div><h3>${e.name}</h3><p>${cupRuleText(e)} · 우승 ${SEASON.prize*(e.prizeMultiplier??1)} / 준우승 ${SEASON.runnerPrize*(e.prizeMultiplier??1)}${e.ranking?' · 지역 순위 반영':''}</p><p>개최 ${gameDate(e.date)} (${e.date}일차) · 접수 ${gameDate(e.openDay)}–${gameDate(e.deadline)} · 최대 ${e.capacity}명</p><label>우리 경기 진행<select data-cup-mode="${e.id}"><option value="results" ${e.watchMode!=='watch'?'selected':''}>결과만 보기</option><option value="watch" ${e.watchMode==='watch'?'selected':''}>우리 경기 관전</option></select></label>${e.kind==='youth-final'?'<p class="muted">등록할 필요가 없습니다. 개최일에 포인트 상위 8명이 자동으로 출전합니다.</p>':(roster.map(t=>`<div class="assignment"><span>${esc(t.name)} · ${cupEligible(t,e)?`${t.party.length}마리`:'참가 자격 없음'}</span><button data-cup-register="${e.id}" data-trainer="${t.id}" data-remove="${e.registrations.includes(t.id)}" ${game.day<e.openDay||game.day>e.deadline||(!e.registrations.includes(t.id)&&!cupEligible(t,e))?'disabled':''}>${e.registrations.includes(t.id)?'등록 취소':'참가 등록'}</button></div>`).join('')||'<p>참가할 트레이너가 없어도 결과와 스카우팅 보고서를 볼 수 있습니다.</p>')}</article>`).join('')}</div><p role="status" id="cup-message"></p><h3 class="rec-head">지난 대회 기록 <small>우리 선수가 없던 대회도 대진과 경기를 볼 수 있습니다</small></h3>
   ${events.filter(e=>e.status!=='scheduled').reverse().map((e,k)=>`<details class="card cup-record kind-${e.kind}" ${k===0?'open':''}><summary><span class="cup-kind">${CUP_KIND[e.kind]||''}</span> ${e.name} · ${gameDate(e.date)} · ${e.status==='cancelled'?'참가자 부족 취소':`${esc(e.entrants.find(x=>x.id===e.result?.championId)?.name)} 우승`}</summary>
   ${renderCupBracket(game,e)}
   ${(e.scouting||[]).length?`<h4>스카우팅 관찰 보고서</h4>${e.scouting.map(s=>`<p><b>${esc(s.name)} · ${esc(s.agencyName)}</b><br>${esc(s.text)}</p>`).join('')}`:''}</details>`).join('')||'<p class="muted">아직 완료된 대회가 없습니다.</p>'}${renderInternational(game)}${renderRegionalRanking(game)}</section>`;

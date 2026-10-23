@@ -17,7 +17,7 @@ export function internationalSeason(game){
   if(!s){
     const start=(year-1)*365+PWT.gymDay;
     s={id:`pwt-${year}`,name:`제${year}시즌 PWT`,season:year,start,lockUntil:(year-1)*365+PWT.lockEnd,
-      status:game.day>start?'missed':'scheduled',stage:'예선 대기',entrants:[],qualifiers:[],matches:[],viewed:[],
+      status:game.reform&&year===1?'not-held':game.day>start?'missed':'scheduled',stage:'예선 대기',entrants:[],qualifiers:[],matches:[],viewed:[],
       processed:[],swiss:{},qualified:[],bracket:[],result:null,watchMode:'results'};
     state.seasons.push(s);
   }
@@ -56,9 +56,10 @@ export async function ensureOfficials(game){
   state.officials=officials;state.regions=regions;return state;
 }
 export function competitionTrainer(game,id){
-  return game.league.agencies.flatMap(a=>a.roster).find(t=>t.id===id)||game.international?.officials.find(t=>t.id===id);
+  return game.league.agencies.flatMap(a=>a.roster).find(t=>t.id===id)||game.international?.officials.find(t=>t.id===id)||game.personnel?.freeAgents?.find(t=>t.id===id);
 }
 export function competitionAgency(game,t){
+  if(!t.agencyId&&t.freeAgent)return '무소속';
   return game.league.agencies.find(a=>a.id===t.agencyId)?.name||`${INTERNATIONAL_REGIONS.find(r=>r.id===t.region)?.name||'지역'} 리그`;
 }
 export function payCompetitionPrize(game,x,prize,reputation){
@@ -155,7 +156,7 @@ async function knockout(game,s,onProgress){
 }
 export async function tickInternational(game,onProgress=async()=>{}){
   const s=internationalSeason(game),d=dayInSeason(game.day);
-  if(s.status==='missed'||s.processed.includes(d))return null;
+  if(s.status==='missed'||s.status==='not-held'||s.processed.includes(d))return null;
   if(d===PWT.gymDay&&s.status==='scheduled')await gymQualifiers(game,s,onProgress);
   else if(d===PWT.finalQualifierDay&&s.status==='qualifying')await finalQualifiers(game,s,onProgress);
   else if(PWT.swissDays.includes(d)&&s.status==='swiss')await swissRound(game,s,PWT.swissDays.indexOf(d)+1,onProgress);

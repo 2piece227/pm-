@@ -20,7 +20,8 @@ import { gainExp } from '../data/pokemon.js';
 import { explore } from './explore.js';
 import { healParty } from './field-state.js';
 import { tickTraining, MANAGEMENT } from './pokemon-management.js';
-import { challengeGym } from './gyms.js';
+import { challengeGym, challengeGymNpc } from './gyms.js';
+import { npcYouthTick, weeklySupport, youthOnly } from './league-reform.js';
 import { todaysFixture, cancelFixture, pruneFixtures } from './gym-fixtures.js';
 import { gymById } from '../data/gyms.js';
 import { badgeProgress } from './gym-progress.js';
@@ -77,6 +78,7 @@ export async function createGame({
   agencyChoiceId = null,
   startEmpty = false,   // 오프닝을 거치면 로스터를 비운 채 시작한다 (§3.10)
   careerStart = false,
+  reform = false,       // 로즈 협회장의 리그 개혁 (새 게임) — data/league-reform.js
 } = {}) {
   const league = await createLeague({ seed, playerAgencyId: agencyChoiceId });
   const player = league.agencies.find((a) => a.isPlayer);
@@ -108,6 +110,7 @@ export async function createGame({
     },
   };
 
+  if(reform) game.reform = { version: 1, startDay: game.day };
   if(careerStart) await setupCareerStart(game);
   await refreshMarket(game);
   ensureInternational(game);internationalSeason(game);
@@ -393,6 +396,8 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
       if (r.won !== null) for (const k of STAT_KEYS) growStat(t, k, GAME_CONFIG.growth.battleRate * (r.wins + r.losses));
       report.explored.push({ trainerId: t.id, name: t.name, location: r.location?.name, lines: r.lines, won: r.won, events: r.events, budget: r.budget, wins: r.wins, losses: r.losses, caught: r.catches.length, centers: r.centers, money: r.money });
       league.newsFeed.unshift({ day: game.day, text: r.lines.join(' / '), kind: 'explore', trainerId: t.id });
+      /* 연패 경고 — 지면 컨디션이 떨어지고, 떨어지면 또 진다 */
+      if (r.losses >= 3) league.newsFeed.unshift({ day: game.day, kind: 'warning', trainerId: t.id, text: `${t.name} 오늘 ${r.losses}패 · 컨디션 ${Math.round(t.condition ?? 0)} — 레벨이 맞는 지역으로 옮기거나 하루 쉬게 해주세요.` });
       await onProgress({ id: `trainer-${t.id}`, state: 'done', label: `${t.name} · 활동 완료`, detail: r.lines.at(-1) });
       continue;
     }
@@ -462,6 +467,9 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
     }
   }
 
+  /* --- 3-1. 리그 개혁: NPC 유스는 기준 곡선대로 자라고 실제 관장전을 치른다 --- */
+  if (game.reform) await npcYouthTick(game, challengeGymNpc);
+
   /* --- 4. 정산: 상금·참가비는 runTournament가 이미 반영했고, 여기선 일일 경비 --- */
   await onProgress({ id: 'league', state: 'done', label: '소속사 활동 정리 완료', detail: '활동 기록을 반영했습니다' });
   await onProgress({ id: 'finance', state: 'running', label: '재무 정산' });
@@ -470,9 +478,13 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
     ? (game.day % 7 === 0 ? t.contract.wage : 0) : (t.salary || 0)), 0);
   const coachUpkeep=game.day%7===0?(player.coaches||[]).reduce((sum,c)=>sum+c.wage,0):0;
   player.funds -= upkeep+coachUpkeep;
+  /* 모기업 지원금 — 매주 (소속사 등급 = 모기업 규모) */
+  const support = game.reform && game.day % 7 === 0 ? weeklySupport(player) : 0;
+  player.funds += support;
+  report.support = support;
   report.upkeep = upkeep+coachUpkeep;
   report.net = player.funds - fundsAtStart;      // 그날 자금 순증감
-  report.prize = report.net + upkeep+coachUpkeep;            // 경비를 빼기 전 = 대회에서 번 돈(참가비 차감 후)
+  report.prize = report.net + upkeep+coachUpkeep - support;            // 경비를 빼기 전 = 대회에서 번 돈(참가비 차감 후)
   await onProgress({ id: 'finance', state: 'done', label: '재무 정산 완료', detail: `급여 지급 ${report.upkeep} · 오늘 수지 ${report.net >= 0 ? '+' : ''}${report.net}` });
 
   /* --- 5. 시장 갱신 --- */
@@ -546,6 +558,7 @@ export function signTrainer(game, marketIndex) {
   const entry = game.market[marketIndex];
   if (!entry) return { ok: false, msg: '없는 매물입니다.' };
   if (player.funds < entry.fee) return { ok: false, msg: '자금이 부족합니다.' };
+  if (youthOnly(game) && !entry.trainer.isYouth) return { ok: false, msg: '2026 시즌에는 유스만 영입할 수 있습니다. 프로 영입은 2027 시즌부터 열립니다.' };
 
   player.funds -= entry.fee;
   const t = entry.trainer;

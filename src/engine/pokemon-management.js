@@ -13,7 +13,7 @@ export const MANAGEMENT = {
   /* 컨디션 [임시값] — 패배가 주 원인. 활동·휴식은 곁가지다 (사용자 확정 2026-10-22)
      lossHit: 한 번 질 때 (멘탈이 높을수록 덜), winRecover: 이길 때 회복,
      activityFatigue: 활동 1회, restRecovery: 휴식한 날 추가 회복, dailyRecovery: 매일 자연 회복 */
-  lossHit: 9, winRecover: 3, activityFatigue: 0.4, restRecovery: 4, dailyRecovery: 2,
+  lossHit: 7, winRecover: 3, activityFatigue: 0.4, restRecovery: 4, dailyRecovery: 2,
 };
 export const IV_KEYS = ['hp','atk','def','spa','spd','spe'];
 export const IV_LABELS = {hp:'HP',atk:'공격',def:'방어',spa:'특수공격',spd:'특수방어',spe:'스피드'};

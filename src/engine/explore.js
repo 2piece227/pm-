@@ -334,7 +334,8 @@ async function encounter(game, trainer, locationId, mode, slot) {
     const iWon = battleResult.winner === 'p1';
 
     if (iWon) {
-      const money = cls.money * npcLevel;
+      /* 이미 이긴 상대와의 재대결은 상금 10% — 같은 길만 돌며 돈을 불리지 못하게 [임시값] */
+      const money = Math.round(cls.money * npcLevel * (fresh.length ? 1 : 0.1));
       out.money = money;
       out.won = true;
       trainer.beaten[`${loc.id}:${npc.name}`] = true;

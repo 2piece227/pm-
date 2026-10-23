@@ -12,7 +12,8 @@ export const PWT = {
   prize:6000,runnerPrize:3000,reputation:20,
 };
 export const dayInSeason=day=>(day-1)%365+1;
-export const pwtBreak=game=>dayInSeason(game.day)>=PWT.breakStart&&dayInSeason(game.day)<=PWT.breakEnd;
+/* 리그 개혁 게임은 첫 시즌(2026)에 PWT가 없다 — 2027년 첫 개최 */
+export const pwtBreak=game=>!(game?.reform&&Math.floor((game.day-1)/365)===0)&&dayInSeason(game.day)>=PWT.breakStart&&dayInSeason(game.day)<=PWT.breakEnd;
 export function internationallyLocked(game,id){
   return (game.international?.seasons||[]).some(s=>game.day>=s.start&&game.day<=s.lockUntil&&s.representatives?.includes(id));
 }

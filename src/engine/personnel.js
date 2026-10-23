@@ -7,6 +7,7 @@ import { YOUTH_CANDIDATES } from '../data/youth-candidates.js';
 import { candidateProposal, evaluateOffer, contractFrom } from './contract.js';
 import { STAT_KEYS } from '../data/agencies.js';
 import { STAT_KO } from '../data/styles.js';
+import { youthOnly } from './league-reform.js';
 
 export const offseason=game=>seasonDate(game.day).phase.id==='offseason';
 const player=game=>game.league.agencies.find(a=>a.id===game.playerAgencyId);
@@ -47,6 +48,7 @@ export function negotiatePersonnel(game,id,offer,{renew=false,quotedFee=0}={}){
   const a=player(game),q=renew?null:transferQuote(game,id),t=renew?owned(game,id):q?.trainer;
   if(!t||t.camp||game.pendingStarter)return {ok:false,msg:'현재 계약을 진행할 수 없습니다.'};
   if(t.lastPersonnelAgreementDay===game.day)return {ok:false,msg:'오늘 이미 계약을 체결했습니다.'};
+  if(!renew&&youthOnly(game)&&!t.isYouth)return {ok:false,msg:'2026 시즌에는 프로급 트레이너를 영입할 수 없습니다. 2027 시즌부터 열립니다.'};
   if(renew&&!offseason(game)&&t.contract.endsOn-game.day>P.renewLead)return {ok:false,msg:'비시즌 또는 만료90일 전부터 재협상합니다.'};
   if(!renew&&((q.from&&!offseason(game))||!room(a,t)||q.fee!==quotedFee))return {ok:false,msg:'비시즌·정원·현재 이적료를 다시 확인하세요.'};
   const fee=q?.fee||0,result=evaluateOffer(personnelCandidate(t),offer,{...a,funds:a.funds-fee});

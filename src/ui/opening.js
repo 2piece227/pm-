@@ -12,6 +12,7 @@ import { loadSave, writeSave, clearSave, hasResumable, saveSummary } from '../en
 import { initFm, gotoScouting } from './fm-view.js';
 import { resetNegotiation, restoreYouth } from './negotiation.js';
 import { restoreGame } from '../engine/checkpoint.js';
+import { ROSE_BRIEFING } from '../data/league-reform.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -146,6 +147,7 @@ function renderAgencies() {
     $('btn-agency-ok').disabled = true;
     $('btn-agency-ok').textContent = '준비 중…';
     await buildGame();
+    if (state.game.reform) await roseBriefing();
     launch({ thenTutorial: true });
   };
 }
@@ -157,6 +159,26 @@ async function buildGame() {
     agencyChoiceId: state.agencyId,
     startEmpty: true,   // §3.10 — 트레이너 0명으로 시작해 첫 계약으로 1명을 채운다
     careerStart: true,
+    reform: true,       // 로즈 협회장의 리그 개혁 — 2026 시즌은 유스 전용
+  });
+}
+
+/** 로즈 협회장 브리핑 — 클릭(또는 Enter·스페이스)으로 한 줄씩 넘긴다 */
+function roseBriefing() {
+  return new Promise((resolve) => {
+    const box = $('rose');
+    let i = 0;
+    $('rose-fig').src = `${import.meta.env?.BASE_URL ?? '/'}assets/trainers/rose.png`;
+    const end = () => { box.hidden = true; window.removeEventListener('keydown', key); resolve(); };
+    const show = () => { $('rose-line').textContent = ROSE_BRIEFING[i]; $('rose-step').textContent = i === ROSE_BRIEFING.length - 1 ? '시작하기 ▶' : `${i + 1} / ${ROSE_BRIEFING.length} ▼`; };
+    const next = () => { i += 1; if (i >= ROSE_BRIEFING.length) end(); else show(); };
+    const key = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); next(); } };
+    box.onclick = (e) => { if (e.target.id !== 'rose-skip') next(); };
+    $('rose-skip').onclick = (e) => { e.stopPropagation(); end(); };
+    window.addEventListener('keydown', key);
+    $('opening').hidden = true;
+    box.hidden = false;
+    show();
   });
 }
 

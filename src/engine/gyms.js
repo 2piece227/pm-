@@ -48,6 +48,7 @@ export async function challengeGym(game, trainer, gymId) {
   let reward=0,bonusPaid=0;
   const growth=[];
   if(firstWin){
+    trainer.lastBadgeDay=game.day;
     trainer.badges.push(gym.id);reward=500+gym.order*150;agency.funds+=reward;
     bonusPaid=Number(trainer.contract?.badgeBonus||0);agency.funds-=bonusPaid;
     for(const m of trainer.party){
@@ -71,4 +72,23 @@ export async function challengeGym(game, trainer, gymId) {
   (game.pendingGymWatches??=[]).push(entry.id);
   game.league.newsFeed.unshift({day:game.day,text:`${trainer.name} vs ${gym.name} — ${won?'승리':'패배'}${firstWin?` · ${gym.badge} 획득 · 상금 ${reward}`:''}`,kind:'gym',gymMatchId:entry.id});
   return entry;
+}
+
+
+/** NPC 유스의 관장전 — 같은 관장 파티·같은 엔진, 우리 쪽 돈·기록·관전에는 손대지 않는다 (리그 개혁 경량 계층) */
+export async function challengeGymNpc(game, trainer, gymId) {
+  const gym=gymById(gymId);
+  if(!gym||!trainer.party?.length||(trainer.badges||[]).includes(gym.id))return null;
+  const seed=Math.floor(game.rng()*0x7fffffff), rng=makeRng(seed), party=[];
+  const gen=Dex.forGen(gym.region==='kanto'?3:4);
+  for(const def of gym.party){const mon=await createPokemon({...def,rng});mon.moves=[...def.moves];mon.item=def.item;mon.ability=gen.species.get(mon.species).abilities[0];mon.nature='Serious';party.push(mon);}
+  healParty(trainer);
+  const result=runBattle({trainerA:createTrainerAI({...trainer,stats:effectiveStats(trainer),partyTactics:trainer.party.map(m=>m.tactics)},trainer.nature?.style||'균형형',makeRng(seed+1)),
+    trainerB:createTrainerAI({name:gym.name,stats:{judge:15,ops:15,focus:15,know:15,mental:16}},'균형형',makeRng(seed+2)),
+    teamA:partyToTeam(trainer.party),teamB:partyToTeam(party),seed});
+  healParty(trainer);
+  const won=result.winner==='p1';
+  if(won){(trainer.badges??=[]).push(gym.id);trainer.lastBadgeDay=game.day;}
+  trainer.record??={wins:0,losses:0};trainer.record[won?'wins':'losses']++;
+  return {won,turns:result.turns};
 }

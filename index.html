@@ -426,6 +426,15 @@ input[type=number]{font-family:inherit;font-size:13px;padding:5px 7px;width:92px
 .verdict b{display:block;margin-bottom:3px}
 
 /* 튜토리얼 말풍선 — 기존 화면 위에 얹기만 한다 */
+.rose{position:fixed;inset:0;z-index:80;display:flex;align-items:flex-end;justify-content:center;padding:24px 16px;background:radial-gradient(ellipse at 50% 30%,#2b3550 0,#0b0f1a 70%);cursor:pointer;user-select:none}
+.rose[hidden]{display:none!important}
+.rose-fig{position:absolute;left:50%;top:14%;transform:translateX(-50%);width:min(240px,46vw);image-rendering:pixelated;filter:drop-shadow(0 10px 18px rgba(0,0,0,.5))}
+.rose-box{position:relative;width:min(760px,100%);background:rgba(13,18,30,.94);border:2px solid var(--accent);border-radius:16px;padding:16px 20px 30px;box-shadow:0 18px 40px rgba(0,0,0,.45)}
+.rose-box b{display:block;font-size:12px;letter-spacing:1px;color:var(--accent);margin-bottom:6px}
+.rose-box p{margin:0;font-size:16px;line-height:1.75;min-height:3.5em;color:var(--ink)}
+.rose-box .rose-next{position:absolute;right:16px;bottom:8px;font-size:11px;color:var(--sub);animation:rose-blink 1s steps(2) infinite}
+.rose-skip{position:absolute;top:16px;right:16px}
+@keyframes rose-blink{50%{opacity:0}}
 .coach{position:fixed;inset:0;z-index:70;background:rgba(6,10,18,.55)}
 .coach[hidden]{display:none!important}
 .coach-hole{position:absolute;border:3px solid var(--accent);border-radius:10px;
@@ -514,6 +523,13 @@ input[type=number]{font-family:inherit;font-size:13px;padding:5px 7px;width:92px
     </div>
   </section>
 
+</div>
+
+<!-- 로즈 협회장 브리핑 (리그 개혁) -->
+<div class="rose" id="rose" hidden>
+  <button class="ghost rose-skip" id="rose-skip">건너뛰기</button>
+  <img class="rose-fig" id="rose-fig" alt="협회장 로즈">
+  <div class="rose-box"><b>포켓몬 글로벌 리그 협회장 · 로즈</b><p id="rose-line"></p><span class="rose-next" id="rose-step">▼</span></div>
 </div>
 
 <!-- 튜토리얼 말풍선 -->
