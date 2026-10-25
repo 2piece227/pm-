@@ -51,6 +51,7 @@ export async function challengeGym(game, trainer, gymId) {
   if(firstWin){
     trainer.lastBadgeDay=game.day;
     trainer.badges.push(gym.id);reward=500+gym.order*150;agency.funds+=reward;
+    markRegionDone(game,trainer,gym.region);
     bonusPaid=Number(trainer.contract?.badgeBonus||0);agency.funds-=bonusPaid;
     for(const m of trainer.party){
       const before=m.level,experience=Math.round(gym.party.reduce((n,p)=>n+p.level*40,0)/trainer.party.length);
@@ -90,7 +91,12 @@ export async function challengeGymNpc(game, trainer, gymId) {
     teamA:partyToTeam(trainer.party),teamB:partyToTeam(party),seed});
   healParty(trainer);
   const won=result.winner==='p1';
-  if(won){(trainer.badges??=[]).push(gym.id);trainer.lastBadgeDay=game.day;}
+  if(won){(trainer.badges??=[]).push(gym.id);trainer.lastBadgeDay=game.day;markRegionDone(game,trainer,gym.region);}
   trainer.record??={wins:0,losses:0};trainer.record[won?'wins':'losses']++;
   return {won,turns:result.turns};
+}
+
+/** 한 지방 배지 8개를 처음 채운 날 — 관동·성도 양쪽 지역 리그 자격자가 어느 리그로 갈지 정한다 */
+export function markRegionDone(game, trainer, region) {
+  if (GYMS.filter(g => g.region === region).every(g => trainer.badges.includes(g.id))) (trainer.regionDone ??= {})[region] ??= game.day;
 }

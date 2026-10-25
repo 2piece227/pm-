@@ -29,8 +29,9 @@ import { badgeProgress } from './gym-progress.js';
 import { locationById } from '../data/routes.js';
 import { SPECIES_KO, ko, iGa } from '../data/ko.js';
 import { setupCareerStart, youthCount, youthCapacity, ensureSeats } from './career.js';
-import { cupToday, cupEntrants, runCup } from './season.js';
-import { ensureInternational, internationalSeason, ensureOfficials, tickInternational } from './international.js';
+import { cupsToday, cupEntrants, runCup } from './season.js';
+import { tickRegionalLeague, leagueSeedsFor, leagueParticipantsToday } from './regional-league.js';
+import { ensureInternational, internationalSeason, ensureOfficials, tickInternational, tickPwc } from './international.js';
 import { pwtBreak } from '../data/international.js';
 import { tickPersonnel, tickCamp } from './personnel.js';
 
@@ -326,9 +327,14 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
   const fundsAtStart = player.funds;
   const newsAtStart = new Set(league.newsFeed);
   tickPersonnel(game);
-  const youthCup=cupToday(game);
-  if(youthCup?.kind==='local')await ensureOfficials(game);
-  const cupIds=new Set(youthCup?cupEntrants(game,youthCup).map(t=>t.id):[]);
+  /* 오늘 열리는 대회 (타입컵은 유스부·오픈부가 같은 날). 참가자가 2명 이상인 대회만 출전으로 친다 */
+  const todayCups=cupsToday(game);
+  if(todayCups.some(e=>e.kind==='local'||e.kind==='type'))await ensureOfficials(game);
+  const cupOf=new Map();
+  for(const e of todayCups){const list=cupEntrants(game,e);if(list.length>=2)for(const t of list)cupOf.set(t.id,e);}
+  const cupIds=new Set(cupOf.keys());
+  /* 지역 리그 경기가 있는 우리 선수도 그날은 다른 활동을 못 한다 */
+  const leagueIds=leagueParticipantsToday(game);
   await onProgress({ id: 'activities', state: 'running', label: '오늘의 활동 진행', detail: `${player.roster.length}명의 일정 확인` });
 
   /* --- 1. 플레이어 트레이너의 배정 행동 실행 (대회 출전은 아래에서 따로) --- */
@@ -336,10 +342,11 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
   for (const t of player.roster) {
     if(t.camp){const text=tickCamp(t);(report.camps??=[]).push(text);league.newsFeed.unshift({day:game.day,kind:'personnel',text});await onProgress({id:`trainer-${t.id}`,state:'done',label:t.name,detail:text});continue;}
     const fixture=todaysFixture(game,t.id);
-    if(cupIds.has(t.id)&&cupIds.size>=2){
+    if(cupIds.has(t.id)||leagueIds.has(t.id)){
+      const name=cupOf.get(t.id)?.name||'지역 리그';
       if(fixture)cancelFixture(game,fixture.id,'대회 출전');
-      t.lastAction=youthCup.name+' 참가';
-      await onProgress({id:`trainer-${t.id}`,state:'done',label:t.name,detail:youthCup.name+' 참가 · 오늘의 다른 활동 대신 출전'});
+      t.lastAction=name+' 참가';
+      await onProgress({id:`trainer-${t.id}`,state:'done',label:t.name,detail:name+' 참가 · 오늘의 다른 활동 대신 출전'});
       continue;
     }
     /* 잡아 둔 관장전이 오늘이면 탐험 대신 치른다 — 탐험 배정은 그대로 두고 내일 이어진다 */
@@ -453,16 +460,21 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
     }));
   }
 
-  if(youthCup){await runCup(game,youthCup,onProgress);report.cupId=youthCup.id;if(youthCup.kind==='youth')report.youthCupId=youthCup.id;}
+  for(const e of todayCups){await runCup(game,e,onProgress);(report.cupIds??=[]).push(e.id);report.cupId??=e.id;if(e.kind==='youth')report.youthCupId=e.id;}
   const internationalReport=await tickInternational(game,onProgress);
   if(internationalReport)report.international=internationalReport;
+  /* 지역 리그(1일차 직위 반영 포함) · PWC */
+  const leagueReport=await tickRegionalLeague(game,onProgress);
+  if(leagueReport)report.league=leagueReport;
+  const pwcReport=await tickPwc(game,leagueSeedsFor,onProgress);
+  if(pwcReport)report.pwc=pwcReport;
   /* NPC 회복 — 오늘 대회에 안 나간 NPC 트레이너 */
   const playedToday = new Set((report.tournament?.entrants || []).map((e) => e.trainerId));
   for (const a of league.agencies) {
     if (a.id === player.id) continue;
     for (const t of a.roster) {
       if (playedToday.has(t.id)) continue;
-      if(youthCup?.status==='completed'&&cupIds.has(t.id))continue;
+      if(cupIds.has(t.id))continue;
       t.condition = Math.min(100, t.condition + GAME_CONFIG.condition.idle);
       t.fatigue=Math.max(0,(t.fatigue||0)-MANAGEMENT.restRecovery);
       /* NPC도 조금씩 자란다 — 세상이 멈춰 있으면 안 된다 (§0.1-4) */

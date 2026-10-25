@@ -5,9 +5,11 @@
  * 지금까지 만든 시뮬 화면 자체는 그대로 살아 있고, 오프닝의 숨겨진 진입점으로도 들어갈 수 있다.
  */
 import { bootOpening } from './ui/opening.js';
+import { initSave } from './engine/save.js';
 import './ui/management.css';
 
-bootOpening();
+/* 압축된 저장을 먼저 풀고 시작한다 (engine/save.js) */
+initSave().finally(bootOpening);
 
 import './ui/pokemon-management.css';
 

@@ -2,7 +2,7 @@ import {encodeSave,decodeSave} from '../src/engine/save-codec.js';
 import {snapshotGame} from '../src/engine/checkpoint.js';
 import assert from 'node:assert/strict';
 import {createGame,advanceDay,playerAgency} from '../src/engine/game.js';
-import {ensureSeason,registerCup,cupEligible} from '../src/engine/season.js';
+import {ensureSeason,registerCup,cupEligible,typePartyOk} from '../src/engine/season.js';
 import {regionalRanking} from '../src/engine/regional-ranking.js';
 const start=performance.now();
 const seeds=process.argv.length>2?process.argv.slice(2).map(Number):[510,511,512];
@@ -11,12 +11,15 @@ for(const seed of seeds){
   let midLeader=null;
   while(g.day<=267){
     for(const e of ensureSeason(g).events.filter(e=>e.season===1&&e.openDay===g.day))
-      for(const t of playerAgency(g).roster.filter(t=>cupEligible(t,e)))assert(registerCup(g,e.id,t.id).ok);
+      for(const t of playerAgency(g).roster.filter(t=>cupEligible(t,e)&&(e.kind!=='type'||typePartyOk(t,e.typeRule))))assert(registerCup(g,e.id,t.id).ok);
     await advanceDay(g);
     if(g.day===130)midLeader=regionalRanking(g)[0]?.id;
   }
-  const events=g.competitions.events.filter(e=>e.season===1&&e.kind!=='youth');
+  const events=g.competitions.events.filter(e=>e.season===1&&!['youth','type'].includes(e.kind));
   assert.equal(events.length,7);assert(events.every(e=>e.status==='completed'));
+  /* 타입컵: 연 5회 × 유스부·오픈부, 시즌 순위 미반영 — 참가자가 모자라면 취소될 수 있다 */
+  const typeCups=g.competitions.events.filter(e=>e.season===1&&e.kind==='type'&&e.date<=267);
+  assert.equal(typeCups.length,10);assert(typeCups.every(e=>['completed','cancelled'].includes(e.status)&&!e.ranking));
   assert.equal(events.filter(e=>e.kind==='local').length,1);
   const snap=snapshotGame(g),packed=encodeSave(snap);assert.deepEqual(decodeSave(packed),snap);assert(packed.length*2<5*1024*1024,'267-day save must fit browser storage');
   const rank=regionalRanking(g),wins={};

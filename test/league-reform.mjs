@@ -38,7 +38,11 @@ assert.equal(ev.filter(e => e.kind === 'youth-final').length, 1);
 assert(!ev.some(e => e.kind === 'city' || e.kind === 'local'));
 assert.equal(ev.find(e => e.kind === 'demo').levelCap, 50);
 const y2 = ensureSeason(g).events.filter(e => e.season === 2);
-assert(y2.some(e => e.kind === 'local' && e.division === 'youth') && y2.some(e => e.kind === 'local' && e.division === 'open'), '2027 로컬컵 두 부문');
+/* 2027부터: 로컬컵은 레벨 무제한 단일(112일, 유스부 삭제), 타입컵 연 5회 × 유스부·오픈부 (docs/competition-v1.md §6) */
+const locals = y2.filter(e => e.kind === 'local');
+assert.equal(locals.length, 1); assert.equal(locals[0].date % 365, 112); assert.equal(locals[0].division, 'open');
+assert.equal(y2.filter(e => e.kind === 'type').length, 10);
+assert.equal(new Set(y2.filter(e => e.kind === 'type').map(e => e.typeRule)).size, 5, '시즌 안 타입 중복 없음');
 assert.equal(internationalSeason(g).status, 'not-held');
 assert.equal(SEASON1_SCHEDULE.length, ev.length);
 

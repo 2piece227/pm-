@@ -49,6 +49,8 @@ export function negotiatePersonnel(game,id,offer,{renew=false,quotedFee=0}={}){
   if(!t||t.camp||game.pendingStarter)return {ok:false,msg:'현재 계약을 진행할 수 없습니다.'};
   if(t.lastPersonnelAgreementDay===game.day)return {ok:false,msg:'오늘 이미 계약을 체결했습니다.'};
   if(!renew&&youthOnly(game)&&!t.isYouth)return {ok:false,msg:'2026 시즌에는 프로급 트레이너를 영입할 수 없습니다. 2027 시즌부터 열립니다.'};
+  /* 사천왕·챔피언에서 내려온 선수는 스토브리그 동안 원 소속사만 계약할 수 있다 (우선 협상권) */
+  if(!renew&&t.rofr&&game.day<=t.rofr.until&&t.rofr.agencyId!==a.id)return {ok:false,msg:`원 소속사의 우선 협상 기간입니다. ${t.rofr.until}일차 이후에 협상할 수 있습니다.`};
   if(renew&&!offseason(game)&&t.contract.endsOn-game.day>P.renewLead)return {ok:false,msg:'비시즌 또는 만료90일 전부터 재협상합니다.'};
   if(!renew&&((q.from&&!offseason(game))||!room(a,t)||q.fee!==quotedFee))return {ok:false,msg:'비시즌·정원·현재 이적료를 다시 확인하세요.'};
   const fee=q?.fee||0,result=evaluateOffer(personnelCandidate(t),offer,{...a,funds:a.funds-fee});

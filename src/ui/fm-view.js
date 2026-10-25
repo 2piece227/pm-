@@ -50,6 +50,7 @@ import { Dex } from '@pkmn/dex';
 import { evolutionOptions, bagOf } from '../engine/pokemon-management.js';
 import { renderSupport, renderTraining, renderGyms, wireManagementPages, fatigueIcon } from './management-pages.js';
 import { renderDebug, wireDebug } from './debug.js';
+import { watchableEvents } from './regional-league.js';
 import { refillFunds } from '../engine/debug.js';
 import { watchGymMatch } from './gym-watch.js';
 import { GYMS } from '../data/gyms.js';
@@ -649,7 +650,7 @@ async function drainGymWatches(){
 
 async function openCupWatch(id){
   if(busy)return;
-  const e=[...(game.competitions?.events||[]),...(game.international?.seasons||[])].find(e=>e.matches.some(m=>m.id===id));
+  const e=watchableEvents(game).find(e=>e.matches?.some(m=>m.id===id));
   const m=e?.matches.find(m=>m.id===id);if(!m)return;
   busy=true;renderTop();
   try{await watchGymMatch(m);if(!e.viewed.includes(id))e.viewed.push(id);game.pendingCupWatches=(game.pendingCupWatches||[]).filter(x=>x!==id);persist();}

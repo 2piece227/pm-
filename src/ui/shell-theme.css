@@ -618,3 +618,17 @@ dialog.pkm:not([open]){display:none}
 .dbg-flag{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line2)}.dbg-flag small{display:block;color:var(--sub);font-size:11px}
 .dbg-notice{color:var(--gold);min-height:20px;margin:6px 0}.dbg-link{display:inline-block;margin-top:6px;color:var(--accent)}
 @media(max-width:820px){.dbg-grid{grid-template-columns:1fr}}
+
+/* ==== 국제 대회 · 지역 리그 ==== */
+.seed-table{display:grid;gap:2px;margin:6px 0 12px;font-size:12px}
+.seed-row{display:grid;grid-template-columns:90px repeat(4,minmax(0,1fr));gap:6px;padding:5px 8px;border-radius:8px;background:rgba(255,255,255,.03)}
+.seed-row.head{background:none;color:var(--sub);font-size:10px;font-weight:700}.seed-row.mine{background:rgba(97,219,194,.08);border:1px solid rgba(97,219,194,.25)}
+.seed-row small,.series-row small,.swiss-row small{color:var(--sub);font-size:10px}
+.playin-group{padding:8px 10px;margin:6px 0;border-radius:10px;background:rgba(255,255,255,.03)}
+.series-row{display:grid;grid-template-columns:minmax(0,1fr) 38px minmax(0,1fr);gap:6px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line2);font-size:12px}.series-row b:last-child{text-align:right}.series-row .score{text-align:center;font-weight:900;white-space:nowrap;font-variant-numeric:tabular-nums}.series-row b.win{color:var(--accent)}.series-row b.lose{color:var(--sub);font-weight:600}
+.swiss-table{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:4px;margin-top:6px}
+.swiss-row{display:grid;grid-template-columns:minmax(0,1fr) 44px 34px 48px;gap:6px;align-items:center;padding:4px 8px;border-radius:8px;background:rgba(255,255,255,.03);font-size:12px}
+.swiss-row.in{background:rgba(97,219,194,.09)}.swiss-row.out{opacity:.55}
+.ko-rounds{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}.ko-rounds h5{margin:6px 0;font-size:12px}.ko-rounds h5 small{color:var(--sub);font-weight:500}
+.league-pos{display:flex;flex-wrap:wrap;gap:6px 14px;padding:8px 10px;margin:6px 0;border-radius:10px;background:rgba(255,255,255,.04);font-size:12px}.league-pos b{width:100%}
+@media(max-width:700px){.seed-table{overflow-x:auto}.seed-row{min-width:520px}.swiss-table{grid-template-columns:1fr}}

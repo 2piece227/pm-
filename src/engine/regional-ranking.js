@@ -1,5 +1,6 @@
 import { RANKING as R, SEASON } from '../data/season.js';
 import { isRegisteredPro } from './career.js';
+import { isDomestic } from '../data/international.js';
 
 // Rebuild from immutable event entries, never from current party strength or ownership.
 export function regionalRanking(game,year=Math.floor((game.day-1)/SEASON.days)+1){
@@ -12,7 +13,7 @@ export function regionalRanking(game,year=Math.floor((game.day-1)/SEASON.days)+1
   const international=(game.international?.seasons||[]).filter(s=>s.season===year).flatMap(s=>s.matches.map((m,index)=>({order:index,id:m.id,season:s.season,status:'completed',ranking:true,kind:'pwt',date:m.day,entrants:s.entrants,matches:[m],rankingPlacement:false,rankingWeight:m.region==='international'?1.5:0.5})));
   const events=[...(game.competitions?.events||[]),...international].filter(e=>e.season===year&&e.status==='completed'&&e.ranking).sort((a,b)=>a.date-b.date||(a.order??0)-(b.order??0)||a.id.localeCompare(b.id));
   for(const e of events){
-    const pros=new Map(e.entrants.filter(x=>isRegisteredPro(x.definition)).map(x=>[x.id,x]));
+    const pros=new Map(e.entrants.filter(x=>x.definition&&isRegisteredPro(x.definition)).map(x=>[x.id,x]));
     for(const m of e.matches){
       if(!pros.has(m.aId)||!pros.has(m.bId))continue;
       const a=row(pros.get(m.aId)),b=row(pros.get(m.bId));
@@ -32,7 +33,7 @@ export function regionalRanking(game,year=Math.floor((game.day-1)/SEASON.days)+1
     }
   }
   const current=new Map([...game.league.agencies.flatMap(a=>a.roster),...(game.personnel?.freeAgents||[]),...(game.international?.officials||[])].map(t=>[t.id,t]));
-  return [...rows.values()].filter(r=>r.region==='kanto-johto').map(r=>{
+  return [...rows.values()].filter(r=>isDomestic(r.region)).map(r=>{
     const form=r.form.length?r.form.reduce((s,v)=>s+v,0)/r.form.length:0.5;
     const inactive=Math.min(R.maxInactivePenalty,Math.max(0,game.day-r.lastDay-R.inactiveAfter)*R.inactivePerDay);
     const t=current.get(r.id);

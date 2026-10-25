@@ -1,5 +1,6 @@
 import { competitionTrainer, competitionAgency, payCompetitionPrize } from './international.js';
-import { SEASON, SEASON_PHASES, CUP_SCHEDULE, RANKING } from '../data/season.js';
+import { isDomestic } from '../data/international.js';
+import { SEASON, SEASON_PHASES, CUP_SCHEDULE, RANKING, TYPE_CUP, TYPES, TYPE_NAME_KO, TYPE_CITY } from '../data/season.js';
 import { citySeedScores } from './regional-ranking.js';
 import { proEligible, isRegisteredPro, isRaceSeat } from './career.js';
 import { findTrainer, seedOrder, makeTrainerFor } from './league.js';
@@ -24,6 +25,7 @@ export function ensureSeason(game) {
   const {year}=seasonDate(game.day||1);
   if(game.reform)for(const y of [year,year+1])addReformSeason(game,y);
   if(!game.reform)for(const y of [year,year+1]) for(const spec of CUP_SCHEDULE) for(const d of spec.days){
+    if(spec.kind==='type'){addTypeCups(game,y,d,`제${y}시즌`);continue;}
     const id=`${spec.kind}-${y}-${d}`,date=(y-1)*SEASON.days+d;
     if(game.competitions.events.some(e=>e.id===id)||date<game.day)continue;
     game.competitions.events.push({id,name:`제${y}시즌 ${spec.label} · ${spec.kind==='city'?(d<100?'전반기':'후반기')+' '+(spec.days.indexOf(d)%3+1)+'차':spec.kind==='youth'?(d===7?'개막':'후반'):'연간 오픈'}`,kind:spec.kind,region:'kanto-johto',
@@ -40,7 +42,7 @@ const baseEvent=(game,{id,name,kind,y,d,capacity=SEASON.capacity,ranking=false,w
   eligibility,capacity,qualification:kind==='youth-final'?'series-points':'none',format:'knockout',prizeMultiplier:prize,reputationMultiplier:prize,ranking,rankingWeight:weight,pointsMultiplier:1,
   rosterSize:6,setFormat:'bo1',musicContext:'kanto',levelCap,clauses,division,reform:true,
   registrations:[],entrants:[],matches:[],decisions:[],result:null,viewed:[],watchMode:'results'});
-/** 리그 개혁 일정 — 2026은 유스 전용, 2027부터 시티컵·로컬컵(유스부/오픈부) */
+/** 리그 개혁 일정 — 2026은 유스 전용, 2027부터 정규 일정(시티컵·로컬컵·타입컵) */
 function addReformSeason(game,y){
   const yearName=REFORM.firstYear+y-1,events=[];
   if(REFORM.youthOnlySeasons.includes(y)){
@@ -54,12 +56,48 @@ function addReformSeason(game,y){
     if(spec.kind==='city')events.push(baseEvent(game,{id:`city-${y}-${d}`,name:`${yearName} 시티컵 · ${d<100?'전반기':'후반기'} ${spec.days.indexOf(d)%3+1}차`,kind:'city',y,d,ranking:true,weight:spec.weight,prize:SEASON.prizeMultipliers.city,levelCap:REFORM.proLevelCap,clauses:REFORM.clauses,eligibility:'registered-pro'}));
     else if(spec.kind==='youth')events.push(baseEvent(game,{id:`youth-${y}-${d}`,name:`${yearName} 유스컵 · ${d===7?'개막':'후반'}`,kind:'youth',y,d,prize:1,eligibility:'youth-under-eight'}));
     else if(spec.kind==='local'){
-      events.push(baseEvent(game,{id:`local-${y}-${d}`,name:`${yearName} 로컬컵 · 유스부`,kind:'local',division:'youth',y,d,capacity:16,ranking:false,prize:SEASON.prizeMultipliers.local/2,eligibility:'youth-any'}));
-      events.push(baseEvent(game,{id:`local-open-${y}-${d+1}`,name:`${yearName} 로컬컵 · 오픈부 (레벨 무제한)`,kind:'local',division:'open',y,d:d+1,capacity:32,ranking:true,weight:spec.weight,prize:SEASON.prizeMultipliers.local,eligibility:'open'}));
+      /* 로컬컵은 레벨 무제한 단일 대회 (유스부 삭제, §6.3). 예전 저장의 113일 오픈부가 있으면 그것을 쓴다 */
+      if(!game.competitions.events.some(e=>e.id===`local-open-${y}-${d+1}`))
+        events.push(baseEvent(game,{id:`local-open-${y}-${d}`,name:`${yearName} 로컬컵 (레벨 무제한)`,kind:'local',division:'open',y,d,capacity:32,ranking:true,weight:spec.weight,prize:SEASON.prizeMultipliers.local,eligibility:'open'}));
     }
+    else if(spec.kind==='type')addTypeCups(game,y,d,`${yearName}`);
   }
+  /* 예전 저장의 로컬컵 유스부: 등록자가 없으면 지운다 (§16.3) */
+  game.competitions.events=game.competitions.events.filter(e=>!(e.season===y&&e.kind==='local'&&e.division==='youth'&&e.status==='scheduled'&&!e.registrations.length&&!REFORM.youthOnlySeasons.includes(y)));
   for(const e of events)if(!game.competitions.events.some(x=>x.id===e.id)&&e.date>=game.day)game.competitions.events.push(e);
 }
+
+/* ---------------- 타입컵 (§6.4) ---------------- */
+
+/** 시즌마다 타입 5개 — 시즌 안 중복 없음, 직전 시즌 것은 가능하면 빼고. 한 번 뽑으면 저장 */
+export function typeRulesFor(game,y){
+  game.competitions.typeRules??={};
+  if(!game.competitions.typeRules[y]){
+    /* 화면이 먼저 일정을 열어도 결과가 같도록 게임 시드·연도로만 정한다 */
+    const rng=makeRng(((game.seed||1)^(y*0x9e3779b1))>>>0);
+    const prev=new Set(y>1?typeRulesFor(game,y-1):[]);
+    const pool=TYPES.filter(t=>!prev.has(t)),picks=[];
+    const source=pool.length>=TYPE_CUP.perSeason?pool:[...TYPES];
+    while(picks.length<TYPE_CUP.perSeason){const t=source[Math.floor(rng()*source.length)];if(!picks.includes(t))picks.push(t);}
+    game.competitions.typeRules[y]=picks;
+  }
+  return game.competitions.typeRules[y];
+}
+function addTypeCups(game,y,d,yearLabel){
+  const spec=CUP_SCHEDULE.find(c=>c.kind==='type');
+  if((y-1)*SEASON.days+d<game.day)return;
+  const type=typeRulesFor(game,y)[spec.days.indexOf(d)],ko=TYPE_NAME_KO[type];
+  for(const [division,capacity,prize,label] of [['youth',TYPE_CUP.youthCapacity,TYPE_CUP.youthPrize,'유스부'],['open',TYPE_CUP.openCapacity,TYPE_CUP.openPrize,'오픈부']]){
+    const id=`type-${y}-${d}-${division}`;
+    if(game.competitions.events.some(e=>e.id===id))continue;
+    game.competitions.events.push({...baseEvent(game,{id,name:`${yearLabel} ${ko}컵 · ${label}`,kind:'type',division,y,d,capacity,prize,clauses:['species','item'],city:TYPE_CITY[type]||null,eligibility:`type-${division}`}),typeRule:type,reform:!!game.reform});
+  }
+}
+const typesOf=m=>Dex.species.get(m.species)?.types||[];
+export const hasType=(m,type)=>typesOf(m).includes(type);
+/** 등록 파티(앞 6마리)가 전원 지정 타입인가 — 플레이어 등록 조건 */
+export function typePartyOk(t,type){const party=(t.party||[]).slice(0,6);return party.length>0&&party.every(m=>hasType(m,type));}
+const POSITION_ROLES=['champion','elite-four'];
 
 export function youthEligible(t){return !!t?.isYouth&&!proEligible(t)&&!!t.party?.length;}
 export function cupEligible(t,e){
@@ -68,7 +106,12 @@ export function cupEligible(t,e){
   if(e.kind==='youth-final')return !!t.isYouth;
   if(e.kind==='demo')return proEligible(t)&&!['champion','elite-four','gym-leader'].includes(t.regionalRole);
   if(e.kind==='local'&&e.division==='youth')return !!t.isYouth;
-  if(e.kind==='city')return isRaceSeat(t)&&!['champion','elite-four'].includes(t.regionalRole);   // 리저브는 시티컵 불가
+  if(e.kind==='city')return isRaceSeat(t)&&!POSITION_ROLES.includes(t.regionalRole);   // 리저브·사천왕·챔피언은 시티컵 불가
+  if(e.kind==='type'){
+    if(!t.party.some(m=>hasType(m,e.typeRule)))return false;
+    /* 유스부: 8배지 미만 유스 / 오픈부: 등록 프로 + 콜업 보류 유스 + 사천왕·챔피언 */
+    return e.division==='youth'?youthEligible(t):(isRegisteredPro(t)||(!!t.isYouth&&proEligible(t))||POSITION_ROLES.includes(t.regionalRole));
+  }
   return e.kind==='local';
 }
 export function registerCup(game,eventId,trainerId,remove=false){
@@ -77,6 +120,7 @@ export function registerCup(game,eventId,trainerId,remove=false){
   if(!t||t.agencyId!==game.playerAgencyId)return {ok:false,msg:'우리 소속 트레이너만 등록할 수 있습니다.'};
   if(remove){e.registrations=e.registrations.filter(id=>id!==trainerId);return {ok:true};}
   if(!cupEligible(t,e)||game.pendingStarter?.trainerId===t.id)return {ok:false,msg:'대회의 참가 신분과 파트너 보유 조건을 확인하세요.'};
+  if(e.kind==='type'&&!typePartyOk(t,e.typeRule))return {ok:false,msg:`이번 타입컵은 ${TYPE_NAME_KO[e.typeRule]} 타입 포켓몬만 등록할 수 있습니다.`};
   if(t.camp&&game.day+t.camp.remaining>e.date)return {ok:false,msg:'캠프 일정과 겹칩니다.'};
   if(!e.registrations.includes(t.id)&&e.registrations.length>=e.capacity)return {ok:false,msg:'등록 정원이 가득 찼습니다.'};
   if(!e.registrations.includes(t.id))e.registrations.push(t.id);
@@ -114,7 +158,8 @@ export function cupEntrants(game,e){
   const own=e.registrations.map(id=>findTrainer(game.league,id)).filter(t=>t?.agencyId===game.playerAgencyId&&cupEligible(t,e)&&!t.camp);
   const npc=game.league.agencies.filter(a=>a.id!==game.playerAgencyId).flatMap(a=>a.roster.filter(t=>cupEligible(t,e)).map(t=>({t,score:npcEntryScore(a,t)})))
     .filter(x=>!x.t.camp&&x.score>=SEASON.npcThreshold).sort((a,b)=>b.score-a.score||a.t.id.localeCompare(b.t.id));
-  const officials=e.kind==='local'&&e.division!=='youth'?(game.international?.officials||[]).filter(t=>t.region==='kanto-johto'):[];
+  /* 국내 사천왕·챔피언은 로컬컵·타입컵 오픈부에 나온다 (§21.2) */
+  const officials=(e.kind==='local'||(e.kind==='type'&&e.division==='open'))&&e.division!=='youth'?(game.international?.officials||[]).filter(t=>isDomestic(t.region)&&POSITION_ROLES.includes(t.regionalRole)&&cupEligible(t,e)):[];
   /* 오픈부(레벨 무제한)에는 NPC 소속사가 유스를 보내지 않는다 */
   const npcList=npc.map(x=>x.t).filter(t=>!(e.kind==='local'&&e.division==='open'&&t.isYouth));
   return [...[...own,...officials,...npcList].slice(0,e.capacity-fillers.length),...fillers].slice(0,e.capacity);
@@ -131,6 +176,8 @@ export function officialParty(party,e){
   return kept;
 }
 export function cupToday(game){return ensureSeason(game).events.find(e=>e.date===game.day&&e.status==='scheduled');}
+/** 오늘 열리는 대회 전부 (타입컵은 유스부·오픈부가 같은 날) */
+export function cupsToday(game){return ensureSeason(game).events.filter(e=>e.date===game.day&&e.status==='scheduled');}
 export async function runCup(game,e,onProgress=async()=>{}){
   if(e.status!=='scheduled'||e.date!==game.day)return;
   await prepareCupEntrants(game,e);
@@ -138,7 +185,7 @@ export async function runCup(game,e,onProgress=async()=>{}){
   e.decisions=game.league.agencies.filter(a=>a.id!==game.playerAgencyId).flatMap(a=>a.roster.filter(t=>cupEligible(t,e)).map(t=>({trainerId:t.id,score:npcEntryScore(a,t),entered:trainers.includes(t)})));
   /* 상대 트레이너는 배운 기술 중 좋은 4개·지닌 도구·키스톤을 챙겨 나온다 (원작 데이터를 쓰는 관장 파티는 그대로) */
   for(const t of trainers)if(t.agencyId!==game.playerAgencyId&&t.generated!==false)outfitNpcTrainer(t);
-  e.entrants=trainers.map(t=>({id:t.id,name:t.name,agencyId:t.agencyId,agencyName:competitionAgency(game,t),party:officialParty(t.party.slice(0,e.rosterSize),e),definition:structuredClone({name:t.name,isYouth:t.isYouth,badges:t.badges,legacyPro:t.legacyPro,regionalRole:t.regionalRole,stats:effectiveStats(t),nature:t.nature,battlePolicy:t.battlePolicy,mentalDebuff:t.mentalDebuff,lossStreak:t.lossStreak,keyStone:!!t.keyStone})}));
+  e.entrants=trainers.map(t=>({id:t.id,name:t.name,agencyId:t.agencyId,agencyName:competitionAgency(game,t),party:officialParty(e.kind==='type'&&t.agencyId!==game.playerAgencyId?[...t.party].filter(m=>hasType(m,e.typeRule)).sort((x,y)=>y.level-x.level).slice(0,e.rosterSize):t.party.slice(0,e.rosterSize),e),definition:structuredClone({name:t.name,isYouth:t.isYouth,badges:t.badges,legacyPro:t.legacyPro,regionalRole:t.regionalRole,stats:effectiveStats(t),nature:t.nature,battlePolicy:t.battlePolicy,mentalDebuff:t.mentalDebuff,lossStreak:t.lossStreak,keyStone:!!t.keyStone})}));
   if(trainers.length<2){e.status='cancelled';game.league.newsFeed.unshift({day:game.day,kind:'cup',text:`${e.name} · 참가자 부족으로 취소. 상금 지급 없음.`});return;}
   for(let i=e.entrants.length-1;i>0;i--){const j=Math.floor(game.rng()*(i+1));[e.entrants[i],e.entrants[j]]=[e.entrants[j],e.entrants[i]];}
   if(e.kind==='city'){const scores=citySeedScores(game,e);e.entrants.sort((a,b)=>(scores.get(b.id)??RANKING.base)-(scores.get(a.id)??RANKING.base));}
