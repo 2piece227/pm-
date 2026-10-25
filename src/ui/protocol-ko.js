@@ -70,7 +70,8 @@ function formatThink(t) {
     const label = o.kind === 'switch' ? `→${ko(SPECIES_KO, o.label)}` : ko(MOVE_KO, o.label);
     return `${label} ${Math.round(o.prob * 100)}%`;
   });
-  return `[${t.trainer} T=${t.temperature.toFixed(2)}] ${opts.join(' / ')}`;
+  const head = t.ai === 'anotherred' ? `${t.trainer}${t.threshold != null ? ` 기준 ${t.threshold}점` : ''}` : `${t.trainer} T=${(t.temperature ?? 0).toFixed(2)}`;
+  return `[${head}] ${opts.join(' / ')}`;
 }
 
 /** [from] Sandstorm / [from] item: Leftovers → 'Sandstorm' / 'Leftovers' */

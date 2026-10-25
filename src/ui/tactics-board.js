@@ -22,6 +22,7 @@ export function renderTacticsBoard(t) {
   const isMegaHolder = HELD_ITEMS[m.item]?.cat === 'mega';
   const slider = s => `<div class="tb-slider"><span class="tb-sl-name">${s.name}</span><small>${s.low}</small><div class="tb-steps" role="radiogroup" aria-label="${s.name}">${[-2, -1, 0, 1, 2].map(v => `<button class="${tac[s.key] === v ? 'on' : ''} v${v}" data-tac="${s.key}" data-val="${v}" aria-pressed="${tac[s.key] === v}" title="${v}"></button>`).join('')}</div><small>${s.high}</small></div>`;
   return `<section class="tactics">
+    <p class="live-hint">배틀 AI를 어나더레드 방식으로 새로 짓는 중입니다. 지금은 출전 순서·<b>금지</b> 기술·메가진화 담당만 반영되고, 팀 운영 방침·역할·세부 지시·우선/자제는 다음 단계에서 다시 연결됩니다.</p>
     <div class="tb-team card"><div><h3>팀 운영 방침</h3><select id="battle-policy-tb">${Object.entries(BATTLE_POLICIES).map(([id, p]) => `<option value="${id}" ${policyId(t.battlePolicy) === id ? 'selected' : ''}>${p.name}</option>`).join('')}</select><p class="muted">${BATTLE_POLICIES[policyId(t.battlePolicy)].hint}</p></div>
       <div class="tb-obey"><small>지시 이행도</small><b>${obey}%</b><span class="cond-bar good"><i style="width:${obey}%"></i></span><small>순응도·판단력이 높을수록 지시를 잘 따릅니다</small></div></div>
     <div class="tb-layout">

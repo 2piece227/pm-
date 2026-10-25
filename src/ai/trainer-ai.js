@@ -1,32 +1,18 @@
 /**
- * 트레이너 AI 레이어 — 직접 만들어야 하는 유일한 부분. (SPEC §5.2)
+ * 트레이너 AI — 어나더레드(Pokémon Essentials v21.1 + Gen9 팩) 배틀 AI를 이 게임에 붙인 자리.
  *
- * 엔진(@pkmn/sim)이 "이 수를 두면 결과가 이렇다"를 계산하고,
- * 이 레이어는 "어떤 수를 둘까"만 담당한다. 두 레이어는 절대 섞지 않는다.
+ * 엔진(@pkmn/sim)이 "이 수를 두면 결과가 이렇다"를 계산하고, 이 레이어는 "어떤 수를 둘까"만 정한다.
+ * 판단 본체는 src/ai/ar/ (원작 코드를 함수 코드 단위로 옮긴 것). 여기서는
+ *   - 엔진 요청 → 원작 AI 입력 (상대는 공개 정보만: OpponentModel)
+ *   - 원작 AI 결정 → 엔진 선택 문자열 ('move N' / 'switch N')
+ *   - 판단 근거 기록 (관전 로그·경기 분석)
+ * 만 한다.
  *
- * 기본 점수식은 프로토타입에서 출발하며 tactics.js가 행동 가능성/회복/진입 위험을 보정한다.
- *   공격기 = 상성뺀_기대데미지% × 체감상성 × 스타일가중치 (+42 KO 보너스)
- *   기점기 = (배율−1) × 최대타 × 남은턴 − 이번턴_손해
- *   교체   = (위험도 − 임계값) × 30 + (현재피해 − 벤치피해) × 0.42
+ * 1단계: 모든 트레이너가 원작 최상 실력(100)으로 둔다. 실력 차이·성격 ±·포켓몬별 전술 지시는
+ * 다음 단계에서 이 위에 얹는다 (지금 지시 중에서는 '금지 기술'만 지킨다).
  */
-import {
-  bestDamagePct,
-  combatEffect,
-  curve,
-  hpPct,
-  neutralDamagePct,
-  selfBoostsOf,
-  shortfallEffect,
-  stageMul,
-  typeEff,
-} from './estimate.js';
-import { policyId, policyWeight, policyAdjustment } from '../data/battle-policy.js';
-import {TACTICS,entryDamagePct,executionChance,recoveryScore,residualPct} from './tactics.js';
-import {OpponentModel,ownView} from './opponent-model.js';
-import {predictSwitch,preservationValue,followupValue,strategyWeight} from './strategy.js';
-import {tacticAdjustment,isBanned,obedience} from './mon-tactics.js';
-import {statusMoveScore,defensiveSetupScore,POINTLESS} from './status-moves.js';
-import {effectiveSpeed} from './speed.js';
+import { ArAI } from './ar/ai.js';
+import { OpponentModel } from './opponent-model.js';
 
 /** 재현 가능한 시뮬을 위한 소형 PRNG (mulberry32) */
 export function makeRng(seed = 1) {
@@ -42,439 +28,132 @@ export function makeRng(seed = 1) {
   return rng;
 }
 
-const KO_BONUS = 42;
-const MAX_STAT = 20;
-
-/**
- * softmax 온도 상한. — "못 두는 것"과 "아무거나 두는 것"을 가르는 선.
- *
- * §4.2 곡선이 20 미만을 강하게 깎다 보니(판단력 14 → 실효 10.5), 그 부족분이
- * 온도식의 1.7제곱으로 증폭돼 T가 26~60까지 치솟았다. T=55면 점수 차 40짜리 수를
- * 겨우 2:1로 선호하는 수준이라 **사실상 동전던지기**가 된다. 실측으로 리그 20명 중
- * 13명이 그 구간에 있었고, 그래서 배틀이 42턴씩 늘어지고 1턴에 이유 없이 교체하는
- * 것처럼 보였다.
- *
- * SPEC §4.2가 검증한 구간(올20 vs 네임드)은 T=1.2~1.9라 이 상한에 닿지 않는다.
- * §4.4가 전제한 "일반 트레이너 상단 구간 17~20"도 T=9.6 이하라 영향 없다.
- * 상한이 무는 건 16 이하 구간뿐이고, 거기서도 T=14면 점수 차 40을 17:1로 선호하므로
- * 실수는 충분히 자주 나온다 — 약한 트레이너는 여전히 약하되, 무작위는 아니다.
- *
- * 실측 효과: 스탯14 대결 평균 42.6턴 → 24.4턴, 1턴 교체의 상성 개선률 30%→38%
- * (악화 9%→3%). 만점 대결 승률은 변화 없음.
- */
-const MAX_TEMPERATURE = 14;
+/** 상대 공개 정보를 읽을 때의 인지 능력 — 1단계는 원작 AI처럼 놓치지 않는다 */
+const FULL_COGNITION = { judge: 20, ops: 20, focus: 20, know: 20, mental: 20 };
 
 export class TrainerAI {
-  constructor({ gen, name, stats, style, styleVec, policy = 'balanced', compliance = null, rng = Math.random, partyTactics = null }) {
+  constructor({ gen, name, stats, style, styleVec, policy = 'balanced', compliance = null, rng = Math.random, partyTactics = null, skill = 100 }) {
     this.gen = gen;
     this.name = name;
     this.stats = stats;
     this.style = style;
     this.sty = styleVec;
+    this.policy = policy;
+    this.compliance = compliance;
     this.rng = rng;
-    this.policy = policyId(policy);
-    this.policyWeight = policyWeight(stats, compliance);
-    /* 포켓몬별 전술 지시 — 팀 순서대로 받아 두고, 배틀이 시작되면 엔진의 포켓몬과 짝짓는다 */
     this.partyTactics = partyTactics || [];
-    this.obey = obedience(stats, compliance);
+    this.core = new ArAI({ gen, rng, skill, name });
     this.tacticsByMon = new Map();
+    this.party = null;
     this.reset();
   }
 
-  /** 배틀 시작 시 원래 팀 순서의 엔진 포켓몬과 지시를 짝짓는다 */
+  /** 배틀 시작 시 원래 팀 순서의 엔진 포켓몬과 지시를 짝짓는다 (마지막 = 원작이 아껴 두는 포켓몬) */
   bindParty(pokemon, foeTeamSize = null) {
+    this.party = pokemon;
     this.tacticsByMon = new Map(pokemon.map((p, i) => [p, this.partyTactics[i] || {}]));
-    /* 상대 파티 수는 원작처럼 볼 표시로 공개된다 — 숨은 명단은 읽지 않는다 */
     this.foeTeamSize = foeTeamSize;
   }
-  /** 상대에게 지금 나와 있는 포켓몬 말고 몇 마리가 남았나 (공개 정보: 파티 수 − 기절 메시지) */
-  foeRemaining(battle, foeId) {
-    const fainted = battle.log.filter(l => l.startsWith(`|faint|${foeId}`)).length;
-    const size = this.foeTeamSize ?? (1 + (this.opponent.benches?.(battle, foeId, this.gen, this.stats, () => 1)?.length || 0) + fainted);
-    return Math.max(0, size - fainted - 1);
-  }
   tacticFor(p) { return this.tacticsByMon.get(p) || {}; }
-  /** 메가진화 담당: 파티에 담당이 있으면 그 포켓몬만 */
+  /** 메가진화 담당: 파티에 담당이 있으면 그 포켓몬만 (원작은 가능하면 바로 메가진화한다) */
   megaAllowedFor(p) {
     const anyDesignated = this.partyTactics.some(t => t?.mega);
     return !anyDesignated || !!this.tacticFor(p).mega;
   }
 
-  reset() {
-    this.opponent = new OpponentModel();
-    this.shock = 0;       // 아군이 쓰러진 직후 남은 동요 턴 수
-    this.justSwitched = false;
-    this.failureStreak=0;
-    this.mentalReasons=[];
-    /* 이번 배틀에서 직접 본 상성 — '효과가 없다'를 본 뒤에는 지식 스탯과 상관없이 안다 */
-    this.learned=new Map();
+  reset() { this.opponent = new OpponentModel(); }
+  onFaint() {}
+  observeOutcome() {}
+  endTurn() {}
+
+  /** 상대 쪽 공개 정보 묶음 */
+  foeInfo(battle, foeSideId) {
+    const pub = this.opponent.public;
+    pub.scan(battle.log);
+    const current = pub.current(foeSideId);
+    const records = [...pub.records.values()].filter(r => r.key.startsWith(foeSideId));
+    const fainted = battle.log.filter(l => l.startsWith(`|faint|${foeSideId}`)).length;
+    const teamSize = this.foeTeamSize ?? (records.length || 1);
+    const remaining = Math.max(0, teamSize - fainted - (current && current.ratio > 0 ? 1 : 0));
+    const benches = records.filter(r => r !== current && r.ratio > 0 && !r.transformed);
+    return { record: current, benches, remaining, teamSize };
   }
 
-  /** 아군이 쓰러졌다 — 멘탈 스탯이 작동할 구간을 연다 */
-  onFaint() {
-    this.shock = Math.min(4,this.shock+2);
-    this.mentalReasons.push('아군 기절');
-  }
-
-  observeOutcome(lines,side){
-    let failed=false,acted=false,critical=false,last=null;
-    for(const raw of lines){
-      const p=raw.split('|'),actor=p[2]?.slice(0,2);
-      /* 내 기술이 상대에게 어떻게 들어갔는지 기억한다 (공개 메시지만) */
-      if(p[1]==='move'){
-        const move=actor===side&&p[4]&&!p[4].startsWith(side)?this.gen.moves.get(p[3]):null;
-        last=move?.exists?{move,target:p[4].split(': ').slice(1).join(': ')}:null;
-        if(last&&last.move.category!=='Status')this.learned.set(`${last.target}|${last.move.type}`,'seen');
-      }else if(last&&['-immune','-fail'].includes(p[1])&&p[2]?.slice(0,2)!==side){
-        if(last.move.category!=='Status')this.learned.set(`${last.target}|${last.move.type}`,'immune');
-        else this.learned.set(`${last.target}|move:${last.move.id}`,'fail');
-      }
-      if(actor!==side)continue;
-      if(p[1]==='move')acted=true;
-      if(['-miss','-fail','cant'].includes(p[1]))failed=true;
-      if(p[1]==='-crit')critical=true;
-    }
-    if(failed)this.failureStreak++;else if(acted)this.failureStreak=0;
-    if(critical){this.shock=Math.min(4,this.shock+1.5);this.mentalReasons.push('급소 피격');}
-    if(failed&&this.failureStreak>=2){this.shock=Math.min(4,this.shock+1);this.mentalReasons.push('연속 행동 실패');}
-  }
-
-  cognitiveStats(){
-    return {...this.stats,focus:Math.max(0,this.stats.focus-this.shock*Math.max(0,20-this.stats.mental)*.15)};
-  }
-
-  /** 턴 종료 정리 */
-  endTurn(switched) {
-    this.shock = Math.max(0, this.shock - 1);
-    this.justSwitched = switched;
-    this.mentalReasons=[];
-  }
-
-  gauss() {
-    let u = 0;
-    let v = 0;
-    while (!u) u = this.rng();
-    while (!v) v = this.rng();
-    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  prepare(battle, sideId) {
+    const foeSideId = sideId === 'p1' ? 'p2' : 'p1';
+    const foe = this.opponent.view(battle, foeSideId, this.gen, FULL_COGNITION, this.rng);
+    const info = this.foeInfo(battle, foeSideId);
+    this.core.request = battle[sideId].activeRequest;
+    this.core.setUp(battle, sideId, foe, info, this.party);
+    return foe;
   }
 
   /**
-   * 판단력·집중력·멘탈이 합쳐진 softmax 온도. 낮을수록 최적수에 가깝다.
-   * 원 스탯이 아니라 curve() 통과값을 쓴다 (SPEC §4.2, v3) — 20을 기준점으로
-   * 상단 구간(17~20) 차이를 벌리고, 20 초과(네임드용)는 계속 이득이 붙는다.
-   */
-  temperature(turn) {
-    const s = this.stats;
-    const j = curve(s.judge);
-    const fo = curve(s.focus);
-    const me = curve(s.mental);
-    let T = 1.2 + shortfallEffect(MAX_STAT - j, 0.62);
-    const settled = fo / 2;
-    /* 두 배율 다 max(0, ...)로 묶는다 — curve()로 20을 크게 넘는 네임드는 원 공식대로면
-       배율이 음수로 뒤집혀 "멘탈이 좋을수록 동요 시 더 나쁜 수를 고른다"는 역설이 생긴다.
-       0에서 멈추면 최악의 경우 "동요를 완전히 무시한다"가 되어 의도와 맞는다. */
-    if (turn > settled) {
-      const fatigue = 1 + (turn - settled) * ((MAX_STAT + 1 - fo) * 0.035 + 0.02);
-      T *= Math.max(0, fatigue);
-    }
-    if (this.shock > 0) {
-      const rattled = 1 + (MAX_STAT - me) * 0.07 * this.shock;
-      T *= Math.max(0, rattled);
-    }
-    return Math.min(MAX_TEMPERATURE, Math.max(0.12, T));
-  }
-
-  /**
-   * 지식 스탯 — 상성 판정에 노이즈를 얹는다. 낮으면 0배/4배를 오판한다.
-   * curve() 초과분(20 넘는 네임드용 수치)은 오판 억제 효과가 완만하게 이어지도록
-   * 기울기를 .075→.03으로 낮춘다 — 계속 좋아지되 체감 한계가 있다는 뜻.
-   */
-  perceive(trueEff) {
-    const k = curve(this.stats.know);
-    const n = (MAX_STAT - k) * (k < MAX_STAT ? 0.075 : 0.03);
-    if (n <= 0) return trueEff;
-    if (trueEff === 0) return Math.min(1.2, Math.abs(this.gauss()) * n * 1.4);
-    return Math.max(0, trueEff * (1 + this.gauss() * n));
-  }
-
-  softmaxPick(scores, T) {
-    const max = Math.max(...scores);
-    const exps = scores.map((v) => Math.exp((v - max) / Math.max(0.05, T)));
-    const sum = exps.reduce((a, b) => a + b, 0);
-    const probs = exps.map((v) => v / sum);
-    let r = this.rng();
-    let acc = 0;
-    for (let i = 0; i < probs.length; i++) {
-      acc += probs[i];
-      if (r <= acc) return { index: i, probs };
-    }
-    return { index: probs.length - 1, probs };
-  }
-
-  /* ---------------- 행동 선택 ---------------- */
-
-  /**
-   * 일반 턴의 행동 결정.
-   * @returns {{choice: string, think: string|null}}
+   * 일반 턴의 행동 결정 (원작 pbDefaultChooseEnemyCommand).
+   * @returns {{choice: string, think: object|null}}
    */
   chooseAction(battle, sideId) {
-    const gen = this.gen;
     const side = battle[sideId];
-    const foeSide = battle[sideId === 'p1' ? 'p2' : 'p1'];
     const request = side.activeRequest;
-    const me = ownView(side.active[0]);
-    const cognition=this.cognitiveStats();
-    const foe = this.opponent.view(battle,foeSide.id,this.gen,cognition,this.rng);
-    if(!foe)return {choice:'default',think:null};
-    const active = request.active[0];
-    const allies=side.pokemon.filter(p=>p!==side.active[0]&&!p.fainted&&p.hp>0).map(ownView);
-    const seenBench=this.opponent.benches?.(battle,foeSide.id,gen,cognition,this.rng)||[];
-    const recentSwitch=this.opponent.public?.current(foeSide.id)?.enteredTurn>=battle.turn-1;
-    const prediction=predictSwitch(gen,me,foe,seenBench,{recentSwitch});
-    const preserve=preservationValue(gen,me,allies,seenBench);
-    const weight=strategyWeight(this.stats,this.shock);
-    const followupEnabled=this.stats.ops>=14&&this.stats.judge>=14;
+    const foe = this.prepare(battle, sideId);
+    if (!foe) return { choice: 'default', think: null };
+    const core = this.core;
+    /* 1) 교체할 이유가 있나 */
+    let decision = core.chooseToSwitchOut(false, request);
+    let choices = [];
+    /* 2) 기술 점수 → 한계선 → 고르기 (다 나쁘면 교체 재시도) */
+    if (!decision) {
+      choices = core.getMoveScores(request);
+      /* 전술 지시 '금지' 기술은 후보에서 뺀다 (다 금지면 그대로) */
+      const mine = this.tacticFor(side.active[0]);
+      const allowed = choices.filter(c => mine.moves?.[c.id] !== 'ban');
+      if (allowed.length && allowed.length < choices.length) choices = allowed;
+      decision = core.chooseMove(choices, request);
+    }
+    return this.finish(decision, choices, side, battle);
+  }
 
-    const opts = [];
-
-    /* 남은 턴 추정 — 기점기의 가치는 "앞으로 몇 턴이나 써먹느냐"로 결정된다.
-       1턴만 보는 탐욕적 점수를 쓰면 기점기가 구조적으로 저평가되어 절대 선택되지 않는다. */
-    const myBest = bestDamagePct(gen, me, foe);
-    const foeBest = bestDamagePct(gen, foe, me);
-    const turnsToKO = myBest > 0 ? Math.ceil(hpPct(foe) / myBest) : 9;
-    const pressure = foeBest + residualPct(me);
-    const turnsSurvive = pressure > 0 ? Math.ceil(hpPct(me) / pressure) : 9;
-    const R = Math.max(0, Math.min(turnsToKO, turnsSurvive, 6));
-    /* 변화기 평가용 — 남은 상대 수(팀 인원은 공개), 상대가 물리형인지, 내가 빠른지 */
-    const foeOthers=this.foeRemaining(battle,foeSide.id);
-    const foePhysical=foe.getStat('atk')>=foe.getStat('spa');
-    const faster=effectiveSpeed(me)>effectiveSpeed(foe);
-    const statusCtx={foeOthers,foePhysical,faster,foeBest,allies:allies.length};
-
-    active.moves.forEach((rm, i) => {
-      if (rm.disabled) return;
-      const move = gen.moves.get(rm.id);
-      if (!move) return;
-      this.lastPerception = null;
-      opts.push({
-        kind: 'move',
-        category: move.category,
-        accuracy: move.accuracy === true ? 100 : move.accuracy,
-        /* move.status는 '거는 상태이상'이라 스텔스록·저주 같은 변화기는 비어 있다 — 분류는 기술 종류로 한다 */
-        role: move.heal || move.id === 'rest' ? 'heal' : move.category !== 'Status' ? 'attack' : selfBoostsOf(move) ? 'setup' : 'status',
-        typeEffect: move.category !== 'Status' ? typeEff(gen, move.type, foe.getTypes()) : null,
-        label: move.name, // 영문 id 그대로. 한글 변환은 표시 레이어의 몫이다.
-        moveId: move.id, basePower: move.basePower || 0,
-        choice: `move ${i + 1}`,
-        score: this.scoreMove(move, me, foe, { myBest, R, turnsSurvive, turnsToKO, ...statusCtx }),
-      });
-      opts.at(-1).perception = this.lastPerception;
-      const option=opts.at(-1);
-      if(prediction.probability){
-        let switchedScore=0;
-        for(const target of prediction.targets){
-          // A switching opponent does not attack this turn. Its incoming position is public estimate only.
-          const arriving={...target.mon,moveSlots:[]};
-          const output=bestDamagePct(gen,me,arriving);
-          switchedScore+=target.weight*this.scoreMove(move,me,arriving,{...statusCtx,myBest:output,R:3,turnsSurvive:9,turnsToKO:output?Math.ceil(hpPct(arriving)/output):9});
-        }
-        const adjustment=weight*prediction.probability*(switchedScore-option.score);
-        option.score+=adjustment;option.predictionAdjustment=adjustment;
-      }
-      if(followupEnabled){
-        const stay=followupValue(gen,me,foe,move);
-        const changed=prediction.targets.reduce((sum,t)=>sum+t.weight*followupValue(gen,me,{...t.mon,moveSlots:[]},move),0);
-        option.followupAdjustment=weight*((1-prediction.probability)*stay+prediction.probability*changed);
-        option.score+=option.followupAdjustment;
-      }
+  finish(decision, choices, side, battle) {
+    const core = this.core;
+    let choice = 'default';
+    if (decision?.kind === 'switch') choice = `switch ${side.pokemon.indexOf(decision.mon) + 1}`;
+    else if (decision?.choice) choice = `move ${decision.choice.index + 1}`;
+    const total = choices.reduce((s, c) => s + (c.weight || 0), 0);
+    const options = choices.map(c => {
+      const m = core.moveData(c.id);
+      return { kind: 'move', label: m.name, moveId: m.id, score: c.score, prob: total ? (c.weight || 0) / total : 0,
+        category: m.category, accuracy: m.accuracy || 100, basePower: m.power, functionCode: m.functionCode,
+        role: m.healingMove() ? 'heal' : m.damagingMove() ? 'attack' : m.statUp.length && m.target === 'User' ? 'setup' : 'status',
+        typeEffect: m.damagingMove() && core.battlers[1] && !core.battlers[1].fainted ? core.battlers[1].effectivenessOfTypeAgainstBattler(m.pbCalcType(core.user), core.user, m) : null };
     });
-
-    if (!active.trapped && !active.maybeTrapped) {
-      for (const opt of this.switchOptions(battle, sideId)) {
-        const bench = ownView(side.pokemon[opt.slot - 1]);
-        opts.push({
-          kind: 'switch',
-          label: bench.name,
-          slot: opt.slot,
-          choice: `switch ${opt.slot}`,
-          safer: (bestDamagePct(gen, foe, bench)+entryDamagePct(gen,bench))/Math.max(1,hpPct(bench)) < foeBest/Math.max(1,hpPct(me)),
-          score: this.scoreSwitch(me, foe, bench),
-        });
-        const option=opts.at(-1),entry=entryDamagePct(gen,bench);
-        if(entry+bestDamagePct(gen,foe,bench)<hpPct(bench)){
-          const abandoned=Object.values(me.boosts).reduce((n,v)=>n+Math.max(0,v),0)*5;
-          option.preservationAdjustment=weight*Math.max(0,preserve-abandoned-entryDamagePct(gen,me)*.3);
-          option.score+=option.preservationAdjustment;
-        }
-      }
+    let selected = decision?.choice ? choices.indexOf(decision.choice) : -1;
+    if (decision?.kind === 'switch') {
+      options.push({ kind: 'switch', label: decision.mon.name, score: Math.round(decision.rating ?? 0), prob: 1, reason: decision.reason, safer: true });
+      selected = options.length - 1;
+      for (const o of options) if (o.kind === 'move') o.prob = 0;
     }
-
-    if (!opts.length) return { choice: 'default', think: null };
-
-    /* 포켓몬별 전술 지시: 금지 기술은 빼고, 나머지는 이행도만큼 점수를 보정한다 */
-    const mine = this.tacticFor(side.active[0]);
-    const allowed = opts.filter(o => !isBanned(o, mine));
-    if (allowed.length && allowed.length < opts.length) opts.splice(0, opts.length, ...allowed);
-    const hpRatio = me.hp / Math.max(1, me.maxhp);
-    for (const option of opts) {
-      const bench = option.kind === 'switch' ? this.tacticFor(side.pokemon[option.slot - 1]) : {};
-      option.tacticAdjustment = this.obey * tacticAdjustment(option, mine, bench, { hpRatio, aliveBench: allies.length });
-    }
-
-    for (const option of opts) {
-      option.baseScore = option.score;
-      option.score += policyAdjustment(this.policy, option, this.policyWeight) + (option.tacticAdjustment || 0);
-    }
-    const T = this.temperature(battle.turn);
-    const { index, probs } = this.softmaxPick(opts.map((o) => o.score), T);
     return {
-      choice: opts[index].choice,
-      think: { ...this.formatThink(T, opts, probs), selected: index, policy: this.policy,
-        focusAffected: T > this.temperature(0), shock: this.shock > 0,
-        vulnerable: turnsSurvive <= 1, pressure: myBest < foeBest, knowledge:foe.knowledge,
-        strategy:{switchProbability:prediction.probability,targets:prediction.targets.map(t=>t.mon.name),preservation:preserve,followupEnabled},
-        mentalReasons:[...this.mentalReasons] },
+      choice,
+      think: {
+        trainer: this.name, ai: 'anotherred', skill: core.trainer.skill,
+        threshold: decision?.threshold ?? null, temperature: 0,
+        options, selected, reason: decision?.reason || null, batonPass: !!decision?.batonPass,
+        stay: core.log.find(l => l.kind === 'stay') || null,
+        knowledge: core.battlers[1]?.knowledge || null,
+      },
     };
   }
 
-  scoreMove(move, me, foe, ctx) {
-    const gen = this.gen;
-    const sty = this.sty;
-
-    if (move.category !== 'Status') {
-      /* 상성을 뺀 맨몸 데미지에 "체감" 상성을 곱한다 — 이 순서를 뒤집으면 지식 스탯이 죽는다 */
-      const trueEff = combatEffect(gen, me, foe, move);
-      const seen = this.learned.get(`${foe.name}|${move.type}`);
-      /* 효과가 없다는 걸 직접 봤으면 한 턴을 버리는 수다 — 다른 약한 수보다도 아래 */
-      if (seen === 'immune' && trueEff === 0) { this.lastPerception = { trueEff, felt: 0, learned: true }; return POINTLESS; }
-      const felt = seen ? trueEff : this.perceive(trueEff);
-      this.lastPerception = { trueEff, felt };
-      const adj = neutralDamagePct(me, foe, move) * felt;
-      // Damage beyond remaining HP has no extra payoff, especially in stay/switch comparisons.
-      let score = Math.min(adj,hpPct(foe)) * (move.category === 'Physical' ? sty.phys : sty.spec);
-      if (adj >= hpPct(foe)) score += KO_BONUS;
-      return score * executionChance(gen,me,move,foe);
-    }
-
-    if (move.heal || move.id === 'rest') return recoveryScore(gen,me,foe,move)*sty.status;
-
-    /* 고스트 저주: 랭크업기가 아니라 자기 HP 절반을 태워 상대에게 턴당 25% 도트 */
-    if (move.id === 'curse' && me.getTypes().includes('Ghost')) {
-      if (foe.volatiles?.curse || me.hp <= me.maxhp / 2) return -40;
-      const foeBest = bestDamagePct(gen, foe, me);
-      const survAfter = foeBest > 0 ? Math.ceil((hpPct(me) - 50) / foeBest) : 9;
-      const ticks = Math.max(0, Math.min(survAfter, ctx.turnsToKO, 5));
-      return (25 * ticks - ctx.myBest) * sty.status * executionChance(gen,me,move,foe);
-    }
-
-    /* 능력치 상승기: (배율−1) × 최대타 × 남은턴 − 이번 턴 손해 */
-    /* 흩뿌리기·상태이상·상대 능력 하락 (status-moves.js) */
-    if (this.learned.get(`${foe.name}|move:${move.id}`) === 'fail') return POINTLESS;
-    /* 독 기술이 안 통하는 걸 봤으면 독독도 안 통한다 (전기 무효를 봤으면 전기자석파도) */
-    if ((move.status || move.type === 'Electric') && this.learned.get(`${foe.name}|${move.type}`) === 'immune') return POINTLESS;
-    const status = statusMoveScore(gen, move, me, foe, ctx);
-    if (status !== null) return status * sty.status * executionChance(gen,me,move,foe);
-
-    const boosts = selfBoostsOf(move);
-    const key = boosts
-      ? Object.keys(boosts).find((k) => (k === 'atk' || k === 'spa') && boosts[k] > 0)
-      : null;
-    if (!key && boosts && ctx.turnsSurvive > 1) {
-      const guard = defensiveSetupScore(move, boosts, me, ctx);
-      if (guard !== null) return guard * sty.status * executionChance(gen,me,move,foe);
-    }
-    if (!key || ctx.R <= 1) return -25;
-    if (ctx.turnsSurvive <= 1) return -40; // 이번 턴에 죽을 것 같으면 세팅 금지
-
-    const cur = me.boosts[key] || 0;
-    const next = Math.min(6, cur + boosts[key]);
-    const mult = stageMul(next) / stageMul(cur);
-    return (ctx.myBest * (mult - 1) * (ctx.R - 1) - ctx.myBest) * sty.status * executionChance(gen,me,move,foe);
-  }
-
-  scoreSwitch(me, foe, bench) {
-    const gen = this.gen;
-    const incMe = bestDamagePct(gen,foe,me)+residualPct(me);
-    const entry = entryDamagePct(gen,bench);
-    const incBench = bestDamagePct(gen,foe,bench)+entry+residualPct(bench);
-    const feltMe = this.perceive(incMe / 100) * 100;
-    const feltBench = this.perceive(incBench / 100) * 100;
-
-    const risk = feltMe / Math.max(1, hpPct(me));
-    const threshold = 0.85 + (MAX_STAT - curve(this.stats.ops)) * 0.06;
-
-    let score = (risk - threshold) * 30 + (feltMe - feltBench) * 0.42;
-    /* 랭크가 크게 깎였으면 빠져서 초기화한다 (원작에서 위협·연막·울음소리를 맞은 뒤 교체하는 것처럼) */
-    score += this.dropPressure(me, foe);
-    score *= this.sty.sw;
-    // Switching consumes the turn: the incoming Pokemon must take entry damage and a hit.
-    if (entry >= hpPct(bench)) score = Math.min(-TACTICS.unsafeSwitch*2,score);
-    else if (feltBench >= hpPct(bench)) score = Math.min(-TACTICS.unsafeSwitch,score);
-    if (this.justSwitched) score -= 26;
-    return score;
-  }
-
-  /**
-   * 깎인 랭크가 교체를 부르는 정도 — 주력 공격 능력치·받는 쪽 방어·스피드·명중.
-   * 한두 단계는 참고, 두 단계를 넘으면 빠질 이유가 커진다. [임시값]
-   */
-  dropPressure(me, foe) {
-    const b = me.boosts || {};
-    let phys = 0, spec = 0;
-    for (const slot of me.moveSlots || []) { const m = this.gen.moves.get(slot.id); if (m?.category === 'Physical') phys++; else if (m?.category === 'Special') spec++; }
-    const main = phys >= spec ? 'atk' : 'spa', off = main === 'atk' ? 'spa' : 'atk';
-    const guard = foe.getStat('atk') >= foe.getStat('spa') ? 'def' : 'spd';
-    const down = k => Math.max(0, -(b[k] || 0));
-    const weighted = down(main) * 10 + down(off) * 2 + down(guard) * 6 + down(guard === 'def' ? 'spd' : 'def') * 2 + down('spe') * 4 + down('accuracy') * 7;
-    /* 한 단계짜리(위협 1번 등)는 거의 무시, 깊어질수록 가파르게 */
-    return weighted <= 10 ? 0 : Math.min(60, (weighted - 10) * 1.4);
-  }
-
-  /** 쓰러져서 강제로 내보내야 할 때 — 누구를 내보낼지도 판단력이 관여한다 */
+  /** 쓰러져서 내보낼 때 — 원작 pbDefaultChooseNewEnemy */
   chooseForcedSwitch(battle, sideId) {
     const side = battle[sideId];
-    const foe = this.opponent.view(battle,sideId === 'p1' ? 'p2' : 'p1',this.gen,this.cognitiveStats(),this.rng);
-    const opts = this.switchOptions(battle, sideId).map((opt) => {
-      const bench = ownView(side.pokemon[opt.slot - 1]);
-      let score = 0;
-      if (foe) {
-        const out = bestDamagePct(this.gen, bench, foe);
-        const inc = bestDamagePct(this.gen, foe, bench);
-        const entry = entryDamagePct(this.gen,bench);
-        const health = Math.max(1,hpPct(bench)-entry);
-        score = this.perceive(out / 100) * 100 - this.perceive(inc / 100) * 100 * 0.8;
-        score -= entry;
-        /* 전술: 적극 투입 / 에이스는 마지막까지 */
-        score += this.obey * tacticAdjustment({kind:'switch'}, {}, this.tacticFor(side.pokemon[opt.slot - 1]), { aliveBench: this.switchOptions(battle, sideId).length });
-        if(entry>=hpPct(bench))score-=TACTICS.unsafeSwitch*2;
-        else if(inc>=health)score-=TACTICS.unsafeSwitch*.5;
-      }
-      return { kind: 'switch', label: `→${bench.name}`, choice: `switch ${opt.slot}`, score };
-    });
-
-    if (!opts.length) return { choice: 'default', think: null };
-    const T = this.temperature(battle.turn);
-    const { index, probs } = this.softmaxPick(opts.map((o) => o.score), T);
-    return { choice: opts[index].choice, think: { ...this.formatThink(T, opts, probs), selected: index, forced: true } };
-  }
-
-  switchOptions(battle, sideId) {
-    const request = battle[sideId].activeRequest;
-    const out = [];
-    request.side.pokemon.forEach((p, i) => {
-      if (p.active) return;
-      if (/ fnt$/.test(p.condition) || p.condition === '0 fnt') return;
-      out.push({ slot: i + 1 });
-    });
-    return out;
-  }
-
-  /** 판단 근거 — 구조화된 데이터만 뱉는다. 문자열 조립/번역은 표시 레이어가 한다. */
-  formatThink(T, opts, probs) {
+    this.prepare(battle, sideId);
+    const r = this.core.chooseForcedReplacement();
+    if (!r) return { choice: 'default', think: null };
     return {
-      trainer: this.name,
-      temperature: T,
-      options: opts.map((o, i) => ({ ...o, prob: probs[i] })),
+      choice: `switch ${side.pokemon.indexOf(r.mon) + 1}`,
+      think: { trainer: this.name, ai: 'anotherred', forced: true, temperature: 0, selected: Math.max(0, r.ratings.findIndex(x => x.name === r.mon.name)),
+        options: r.ratings.map(x => ({ kind: 'switch', label: x.name, score: Math.round(x.rating), prob: x.name === r.mon.name ? 1 : 0 })) },
     };
   }
 }

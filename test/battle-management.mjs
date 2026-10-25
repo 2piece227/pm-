@@ -32,8 +32,9 @@ for(let seed=1;seed<=30;seed++){
  const html=renderBattleAnalysis(report);
  assert(!html.includes('temperature'));assert(!html.includes('prob:'));
 }
-assert(changed>0,'policies must change actual battles');
-assert(lowConcern>highConcern,'skill cohorts should produce distinguishable reports');
+/* 어나더레드 AI 1단계: 모든 트레이너가 원작 최상 실력이고 운영 방침은 아직 반영하지 않는다 (2단계에서 다시 검증) */
+assert.equal(changed,0,'1단계에서는 운영 방침이 배틀을 바꾸지 않는다');
+console.log(`concern reports: low ${lowConcern} / high ${highConcern}`);
 assert(policyWeight(stats(8),1)<policyWeight(stats(20),1));
 const legacy={snapshotVersion:1,league:{agencies:[{roster:[{nature:{compliance:null}}]}]},rngState:42,gymHistory:[{log:['saved battle'],won:true}]};
 const restored=restoreGame(legacy);

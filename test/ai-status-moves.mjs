@@ -9,7 +9,7 @@ import { gymById } from '../src/data/gyms.js';
 
 const koga = gymById('koga');
 const stats = { judge: 13, ops: 12, focus: 12, know: 12, mental: 12 };
-let rocks = 0, firstTurnRocks = 0, immuneRepeats = 0, poisonIntoSteel = 0, battles = 0;
+let rocks = 0, firstTurnRocks = 0, immuneRepeats = 0, poisonIntoSteel = 0, battles = 0, failPicked = 0;
 for (let seed = 1; seed <= 30; seed++) {
   const rng = makeRng(seed);
   const steelix = await createPokemon({ species: 'Steelix', level: 44, rng });
@@ -20,8 +20,13 @@ for (let seed = 1; seed <= 30; seed++) {
   const r = runBattle({
     trainerA: createTrainerAI({ name: '블루', stats, partyTactics: [steelix.tactics] }, '균형형', makeRng(seed + 1)),
     trainerB: createTrainerAI({ name: '독수', stats: { judge: 15, ops: 15, focus: 15, know: 15, mental: 16 } }, '균형형', makeRng(seed + 2)),
-    teamA: partyToTeam([steelix]), teamB: partyToTeam(foes), seed,
+    teamA: partyToTeam([steelix]), teamB: partyToTeam(foes), seed, collectThink: true,
   });
+  /* 원작 기준: 실패가 예상되는 기술(20점)은 다른 쓸 만한 기술이 있으면 고르지 않는다 */
+  for (const { think } of r.think) {
+    const chosen = think.options[think.selected];
+    if (chosen?.kind === 'move' && chosen.score <= 20 && think.options.some(o => o.kind === 'move' && o.score > 60)) failPicked++;
+  }
   battles++;
   let turn = 0;
   const immuneSeen = new Set();
@@ -38,15 +43,12 @@ for (let seed = 1; seed <= 30; seed++) {
     }
   }
 }
-console.log(`${battles}전 · 스텔스록 ${rocks}회(1턴 ${firstTurnRocks}회) · 독 기술 ${poisonIntoSteel}회 · 효과 없음 확인 뒤 반복 ${immuneRepeats}회`);
-assert(firstTurnRocks >= battles * 0.6, '선봉·변화기 적극이면 첫 턴 스텔스록을 깐다');
-assert(rocks <= battles * 1.5, '이미 깔린 스텔스록은 다시 깔지 않는다');
-assert(immuneRepeats <= battles * 0.1, '효과가 없다는 걸 본 뒤에는 같은 상대에게 다시 쓰지 않는다');
+console.log(`${battles}전 · 스텔스록 ${rocks}회(1턴 ${firstTurnRocks}회) · 독 기술 ${poisonIntoSteel}회 · 실패 예상 기술을 고른 횟수 ${failPicked}`);
+assert(rocks >= battles * 0.8, '스텔스록을 깐다');
+assert.equal(failPicked, 0, '이미 깔린 스텔스록·강철에게 독처럼 실패할 기술은 다른 수가 있으면 고르지 않는다');
 console.log('ai-status-moves PASS');
 
 /* 필드 변화기: 걸려 있는 동안은 다시 안 쓰고, 풀리면 다시 쓴다 */
-import { TrainerAI } from '../src/ai/trainer-ai.js';
-import { Dex } from '@pkmn/sim';
 const T = (s) => s.trim();
 const screenTeam = T(`
 Mr. Mime
@@ -103,15 +105,8 @@ for (let seed = 1; seed <= 20; seed++) {
   }
 }
 console.log(`리플렉터 ${reflects}회(걸려 있는데 또 ${redundantReflect}, 풀린 뒤 다시 ${recast}) · 비바라기 ${rains}회(걸려 있는데 또 ${redundantRain})`);
-assert(reflects >= 10, '물리 상대에게 리플렉터를 깐다');
+/* 원작 점수로는 약점을 찌르는 공격(사이코키네시스)이 리플렉터보다 높아 거의 깔지 않는다 — 깔았다면 겹치지 않는지만 본다 */
 assert(redundantReflect + redundantRain <= 1, '걸려 있는 벽·날씨는 다시 쓰지 않는다');
 
-/* 랭크가 깊게 깎이면 교체 쪽으로 기운다 */
-const ai = new TrainerAI({ gen: Dex.forGen(9), name: 't', stats: { judge: 15, ops: 15, focus: 15, know: 15, mental: 15 }, style: '균형형', styleVec: { phys: 1, spec: 1, status: 1, sw: 1 } });
-const fakeMe = boosts => ({ boosts, moveSlots: [{ id: 'closecombat' }, { id: 'knockoff' }] });
-const fakeFoe = { getStat: k => (k === 'atk' ? 120 : 80) };
-assert.equal(ai.dropPressure(fakeMe({ atk: -1 }), fakeFoe), 0, '위협 한 번은 참는다');
-assert(ai.dropPressure(fakeMe({ atk: -2 }), fakeFoe) > 0);
-assert(ai.dropPressure(fakeMe({ atk: -4, def: -2 }), fakeFoe) >= 40, '크게 깎이면 빠질 이유가 크다');
-assert.equal(ai.dropPressure(fakeMe({ spa: -3 }), fakeFoe) <= 0, true, '안 쓰는 특공 하락은 무시');
-console.log('field/drop PASS');
+/* 랭크가 깎였다고 빠지는지는 ai-anotherred.mjs가 본다 (원작은 랭크 하락을 교체 이유로 보지 않는다) */
+console.log('field PASS');

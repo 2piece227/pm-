@@ -7,6 +7,7 @@
 | [@pkmn/sim](https://github.com/pkmn/ps) | 배틀 엔진 (포켓몬쇼다운 시뮬레이터 추출본) | MIT |
 | [@pkmn/dex](https://github.com/pkmn/ps) | 종족·기술·특성 데이터 | MIT |
 | [Vite](https://vite.dev) | 번들러 | MIT |
+| Pokémon Essentials v21.1 배틀 AI (Maruno 외) + Generation 9 Pack AI (Lucidious89 외) — 포켓몬 어나더레드에 들어 있는 판본 | `src/ai/ar/` 배틀 AI 판단 로직을 JS로 옮겨 씀, `move-codes.gen.js` 기술별 함수 코드표 | Essentials 배포 조건(크레딧 표기)을 따른다 |
 
 ## 도구 아이콘 (사이드바·대시보드·대회 카드·트레이너 지원)
 

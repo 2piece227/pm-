@@ -53,7 +53,9 @@ export class PublicBattle {
       this.condition(r,p[3]);
       if(type==='-damage'&&r.status==='tox'&&p.includes('[from] psn'))r.toxicStage++;
     }
-    if(type==='-status'){r.status=p[3];if(p[3]==='slp')delete r.volatiles.lockedmove;}
+    if(type==='-status'){r.status=p[3];if(p[3]==='slp'){delete r.volatiles.lockedmove;r.sleptTurns=0;}}
+    // Turns spent asleep are public ("cant ... slp"); the remaining sleep counter is not.
+    if(type==='cant'&&p[3]==='slp')r.sleptTurns=(r.sleptTurns||0)+1;
     if(type==='-curestatus'){r.status='';r.toxicStage=0;}
     if(type==='-boost'||type==='-unboost')r.boosts[p[3]]=Math.max(-6,Math.min(6,(r.boosts[p[3]]||0)+(type==='-boost'?1:-1)*Number(p[4])));
     if(type==='-setboost')r.boosts[p[3]]=Number(p[4]);

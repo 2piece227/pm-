@@ -13,45 +13,26 @@ const N = 24;
 
 assert(Object.keys(ROLES).length >= 8); assert(obedience(st, 1) > obedience(st, 0));
 
-/* 랭크업 적극 vs 안 함 */
-const gyara = `Gyarados\nAbility: Intimidate\nLevel: 50\n- Dragon Dance\n- Waterfall\n- Earthquake\n- Crunch`;
-const wall = `Snorlax\nAbility: Thick Fat\nLevel: 50\n- Body Slam\n- Rest\n- Curse\n- Earthquake`;
-let hi = 0, lo = 0;
-for (let s = 1; s <= N; s++) {
-  hi += count(run(gyara, wall, [{ ...defaultTactics(), setup: 2 }], s).log, /\|move\|p1a: Gyarados\|Dragon Dance/);
-  lo += count(run(gyara, wall, [{ ...defaultTactics(), setup: -2 }], s).log, /\|move\|p1a: Gyarados\|Dragon Dance/);
-}
-assert(hi > lo * 1.5 && hi > lo + 5, `랭크업 지시가 용춤 빈도를 바꾼다 (${hi} vs ${lo})`);
+/* 랭크업·교체 같은 성향 지시는 어나더레드 AI 2단계(개성·실력)에서 다시 연결한다 — 지금은 금지 기술·메가 담당만 */
+const gyara = `Gyarados
+Ability: Intimidate
+Level: 50
+- Dragon Dance
+- Waterfall
+- Earthquake
+- Crunch`;
+const wall = `Snorlax
+Ability: Thick Fat
+Level: 50
+- Body Slam
+- Rest
+- Curse
+- Earthquake`;
 
 /* 금지 기술은 안 쓴다 */
 let banned = 0;
 for (let s = 1; s <= N; s++) banned += count(run(gyara, wall, [{ ...defaultTactics(), moves: { waterfall: 'ban' } }], s).log, /\|move\|p1a: Gyarados\|Waterfall/);
 assert.equal(banned, 0, '금지한 폭포오르기는 한 번도 안 쓴다');
-
-/* 교체: 자주 빠짐 vs 끝까지 버팀 — 쓰러지기 전 스스로 빠진 횟수만 센다 */
-const teamA = `Venusaur
-Ability: Overgrow
-Level: 50
-- Giga Drain
-- Sludge Bomb
-
-Blastoise
-Ability: Torrent
-Level: 50
-- Surf
-- Ice Beam`;
-const fire = `Arcanine
-Ability: Intimidate
-Level: 50
-- Flamethrower
-- Extreme Speed`;
-const voluntary = log => { const sw = log.findIndex(l => l.startsWith('|switch|p1a: Blastoise')), fnt = log.findIndex(l => l.startsWith('|faint|p1a: Venusaur')); return sw >= 0 && (fnt < 0 || sw < fnt) ? 1 : 0; };
-let out = 0, stay = 0;
-for (let s = 1; s <= N; s++) {
-  out += voluntary(run(teamA, fire, [{ ...defaultTactics(), switchOut: 2 }, {}], s).log);
-  stay += voluntary(run(teamA, fire, [{ ...defaultTactics(), switchOut: -2, lowHp: 'fight' }, {}], s).log);
-}
-assert(out > stay + 3, `교체 지시가 스스로 빠지는 빈도를 바꾼다 (${out} vs ${stay})`);
 
 /* 메가진화 담당: 담당이 아닌 선봉은 메가진화하지 않는다 */
 const megaTeam = `Charizard @ Charizardite X\nAbility: Blaze\nLevel: 50\n- Flare Blitz\n- Dragon Claw\n\nGyarados @ Gyaradosite\nAbility: Intimidate\nLevel: 50\n- Waterfall\n- Crunch`;
@@ -61,4 +42,4 @@ assert(!r.log.some(l => l.startsWith('|-mega|p1a: Charizard')), '담당이 갸�
 /* 역할 프리셋 */
 const mon = { tactics: { moves: { rest: 'ban' } } };
 applyRole(mon, 'ace'); assert.equal(mon.tactics.switchIn, -2); assert.equal(mon.tactics.moves.rest, 'ban', '역할을 바꿔도 기술 지시는 남는다');
-console.log(`PASS: setup ${hi} vs ${lo}, ban respected, switching ${out} vs ${stay}, mega designation, role presets keep move orders`);
+console.log('PASS: ban respected, mega designation, role presets keep move orders');

@@ -1,3 +1,13 @@
+# 작업56 — 배틀 AI를 어나더레드(Essentials v21.1) AI로 다시 짓기 · 1단계 (검증 완료, 2026-10-25)
+- 요청: 깨어진갑옷이 터지자 방어가 떨어졌다고 도망가는 등 AI가 이상하다. 어나더레드처럼 똑똑한 AI전 — 처음부터 다시 짓되 어나레 기반으로 먼저, 그다음 개성·실력 차이를 ±로.
+- 조사: 어나더레드 Scripts/PluginScripts에서 Essentials AI(Battle_AI·AI_Switch·AI_ChooseMove·GenericEffects·OtherScores·AIBattler·AIMove·MoveEffects 9개)와 Gen9 팩 AI를 읽기 전용으로 꺼냄. 트레이너 329종 중 243종이 실력 100.
+- src/ai/ar/: move-codes.gen.js(moves.dat → 기술 920개 함수 코드·부가효과 확률·대상), battler.js(AIBattler — 우리 쪽은 엔진, 상대는 공개 기록), move.js(MoveData·AIMove·rough_damage·rough_accuracy·변동 위력), handlers.js, ai.js(본체: 교체 검토 → 기술 점수 → 한계선 선택, 교체 후보 점수, 압정 피해), generic.js(랭크 변화·날씨·필드·특성/도구 가치), effects-*.js(원작 9개 파일 + Gen9 팩).
+- src/ai/trainer-ai.js: 같은 인터페이스로 새 AI를 감쌈. 1단계는 전원 실력 100, 금지 기술·메가 담당만 반영. 예전 tactics.js·strategy.js·status-moves.js 삭제.
+- 공개 정보: 상대 기술(본 것+추정), 특성(드러남·단일 특성), 능력치(종족값 추정), 잠든 턴(공개 로그, public-battle.js sleptTurns).
+- 원작과 다르게 둔 것: 원작 Gen9 팩이 독침방어 자리에 덮어쓴 불꽃몸부림 점수를 제자리에.
+- 검증: test/ai-anotherred.mjs(깨어진갑옷 교체 0/200, 위협 1회 교체 0, 무효기·땅에 전기자석파·쓸모없는 칼춤 0, 멸망 직전 교체, 숨은 방어 모름, 마지막 포켓몬 아낌, 실배틀 완주, 결정론·분석 렌더). 옛 AI 기준 테스트(ai-decisions·ai-status-moves·mon-tactics·battle-management)를 원작 기준으로 수정, ai-strategy·battle-tuning 삭제. 전체 통과.
+- 측정(같은 팀, 진영 교대 360전): 새 AI vs 옛 AI 135:225. 원작 특성 — 부가효과를 확률 무시하고 크게 침, 2마리 파티는 마지막 포켓몬을 아껴 자발 교체 0. 2단계(실력·성격 ±)에서 다룰 후보로 남김. 한 판 약 15ms.
+
 # 작업55 — 참가 접수 마감 → 대진 미리 발표 → 상대 대비 (검증 완료, 2026-10-25)
 - 요청: 대진을 하나씩 공개하지 말고, 접수를 대회 며칠 전에 마감하고 대진을 미리 발표해 상대를 보고 대비하게.
 - 접수 기간: 개최 10일 전 ~ 3일 전(SEASON.registrationLead 10, drawLead 3) [임시값]. 마감일 하루가 끝나면 drawCup으로 대진 발표(참가자 확정·추첨)와 소식(우리 선수 첫 상대). 국내 대회 전부 적용.
