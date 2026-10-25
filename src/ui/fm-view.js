@@ -14,7 +14,8 @@ import { CAREER } from '../data/career.js';
 import { ABILITY_KO } from '../data/ko.js';
 import { renderCareer, wireCareer } from './career.js';
 import { renderSeason, wireSeason, renderCupReport } from './season.js';
-import { ensureSeason, cupEligible, cupToday, cupEntrants } from '../engine/season.js';
+import { ensureSeason, cupEligible, cupToday, cupEntrants, liveCupToday, liveCupStep } from '../engine/season.js';
+import { renderLiveCup, wireLiveCup, liveCupButtonLabel } from './live-cup.js';
 import { renderPersonnel, wirePersonnel } from './personnel.js';
 /**
  * FM식 화면 — 상단바(날짜·자금·계속) + 좌측 메뉴 + 본문 하나.
@@ -144,7 +145,7 @@ function renderTop() {
   $('tb-wage').textContent = `${won(upkeep * 7)} / 주`;
   $('tb-rep').textContent = Math.round(a.reputation);
   $('tb-continue').disabled = !!game.gameOver || busy || !!game.pendingStarter || game.opening?.tutorialContractNeeded || !playerRoster(game).length;
-  $('tb-continue').textContent = game.gameOver ? '운영 종료' : game.pendingStarter ? '파트너 선택 대기' : game.opening?.tutorialContractNeeded || !playerRoster(game).length ? '첫 유스 계약이 필요합니다' : '계속 ▷';
+  $('tb-continue').textContent = game.gameOver ? '운영 종료' : game.pendingStarter ? '파트너 선택 대기' : game.opening?.tutorialContractNeeded || !playerRoster(game).length ? '첫 유스 계약이 필요합니다' : liveCupButtonLabel(liveCupToday(game)) || '계속 ▷';
 }
 
 /* ---------------- 받은 메시지함 ---------------- */
@@ -476,6 +477,7 @@ function render() {
   else if (screen === 'scouting') main.innerHTML = renderScouting();
   else if (screen === 'personnel') main.innerHTML = renderPersonnel(game);
   else if (screen === 'debug' && game.debug) main.innerHTML = renderDebug(game);
+  else if (screen === 'live-cup') { main.innerHTML = renderLiveCup(game, todaysLiveCup(), { fresh: liveFresh }); if (liveFresh === 'draw') liveFresh = null; }   // 추첨 애니메이션은 한 번, 방금 끝난 경기 강조는 다음 단계까지
 
   wire();
   wireMonImages(main);
@@ -512,6 +514,10 @@ function wire() {
   wireManagementPages(main,game,()=>{persist();render();},id=>openGymWatch(id),id=>{map.trainerId=id;render();});
   wireShop(main,game,()=>{persist();render();});
   wireDebug(main,game,()=>{persist();render();});
+  if(screen==='live-cup'){
+    wireLiveCup(main,game,{refresh:()=>{persist();render();},openTactics:id=>{detailId=id;trainerTab='tactics';screen='squad';render();}});
+    main.querySelectorAll('[data-cup-watch]').forEach(b=>b.onclick=()=>openCupWatch(b.dataset.cupWatch));
+  }
   main.querySelectorAll('[data-give-item]').forEach(b=>b.onclick=()=>{
     const mon=b.dataset.t ? findTrainer(game.league,b.dataset.t)?.party[Number(b.dataset.i)] : playerAgency(game).box[Number(b.dataset.b)];
     if(mon)openItemPicker(game,mon,()=>{persist();render();},()=>{screen='shop';detailId=null;render();});
@@ -589,6 +595,9 @@ export function initFm({ game: existing }) {
 
   $('tb-continue').onclick = async () => {
     if (busy || game.gameOver || game.pendingStarter || game.opening?.tutorialContractNeeded || !playerRoster(game).length) return;
+    /* 우리 선수가 나가는 유스컵 날: [계속]마다 대진 추첨 → 라운드 하나씩 (우리 경기는 관전) */
+    const live = liveCupToday(game);
+    if (live) { await stepLiveCup(live); return; }
     busy = true; renderTop();
     const before = snapshotGame(game);
     const progress = dayProgress(game.day);
@@ -633,6 +642,23 @@ export function gotoMap() {
   render();
 }
 
+
+/* ---------------- 유스컵 직접 진행 ---------------- */
+let liveFresh = null;
+/** 오늘 직접 진행 중이거나 막 끝낸 유스컵 */
+function todaysLiveCup() { return liveCupToday(game) || ensureSeason(game).events.find(e => e.date === game.day && e.live); }
+async function stepLiveCup(e) {
+  busy = true; renderTop();
+  let result;
+  try { result = await liveCupStep(game, e); persist(); }
+  catch (error) { alert(`대회 진행 중 오류: ${error.message}`); busy = false; render(); return; }
+  liveFresh = result.stage === 'draw' ? 'draw' : 'round';
+  screen = 'live-cup'; detailId = null; busy = false; render();
+  /* 이번 라운드의 우리 경기는 바로 관전 — 보고 나서 다음 라운드를 준비한다 */
+  const mine = (result.matches || []).filter(m => [m.aId, m.bId].some(id => e.entrants.find(x => x.id === id)?.agencyId === game.playerAgencyId));
+  for (const m of mine) { await openCupWatch(m.id); }
+  render();
+}
 
 let watchingGym=false;
 async function openGymWatch(id) {

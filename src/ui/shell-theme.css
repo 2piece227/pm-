@@ -632,3 +632,16 @@ dialog.pkm:not([open]){display:none}
 .ko-rounds{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}.ko-rounds h5{margin:6px 0;font-size:12px}.ko-rounds h5 small{color:var(--sub);font-weight:500}
 .league-pos{display:flex;flex-wrap:wrap;gap:6px 14px;padding:8px 10px;margin:6px 0;border-radius:10px;background:rgba(255,255,255,.04);font-size:12px}.league-pos b{width:100%}
 @media(max-width:700px){.seed-table{overflow-x:auto}.seed-row{min-width:520px}.swiss-table{grid-template-columns:1fr}}
+
+/* ==== 유스컵 직접 진행 ==== */
+.live-stage{padding:6px 14px;border-radius:999px;background:rgba(240,201,110,.15);color:var(--gold);font-weight:900;font-size:13px}
+.live-hint{margin:6px 0 12px;color:var(--accent);font-size:13px}
+.live-bracket .bk-match.draw-in{opacity:0;animation:drawin .45s ease-out forwards}
+@keyframes drawin{from{opacity:0;transform:translateY(-8px) scale(.96)}to{opacity:1;transform:none}}
+.live-bracket .bk-match.just{box-shadow:0 0 0 2px var(--gold) inset}
+.live-bracket .bk-side.mine b{color:var(--accent)}
+.live-prep h3{margin:4px 0}.live-prep h4{margin:12px 0 6px;font-size:13px}
+.live-party{display:flex;flex-wrap:wrap;gap:8px}.live-party span{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 8px;border-radius:10px;background:rgba(255,255,255,.04);font-size:11px;min-width:84px}
+.live-party img{width:52px;height:52px}.live-party span.lead{outline:2px solid var(--accent)}.live-party button{padding:2px 8px!important;font-size:10px}
+.live-party.foe span{background:rgba(255,148,152,.07)}
+.live-champ{text-align:center;border:1px solid var(--gold)}.live-champ h2{font-size:30px;margin:6px 0;color:var(--gold)}

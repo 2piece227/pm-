@@ -29,7 +29,7 @@ import { badgeProgress } from './gym-progress.js';
 import { locationById } from '../data/routes.js';
 import { SPECIES_KO, ko, iGa } from '../data/ko.js';
 import { setupCareerStart, youthCount, youthCapacity, ensureSeats } from './career.js';
-import { cupsToday, cupEntrants, runCup } from './season.js';
+import { cupsToday, cupEntrants, runCup, ensureSeason } from './season.js';
 import { tickRegionalLeague, leagueSeedsFor, leagueParticipantsToday } from './regional-league.js';
 import { ensureInternational, internationalSeason, ensureOfficials, tickInternational, tickPwc } from './international.js';
 import { pwtBreak } from '../data/international.js';
@@ -332,6 +332,9 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
   if(todayCups.some(e=>e.kind==='local'||e.kind==='type'))await ensureOfficials(game);
   const cupOf=new Map();
   for(const e of todayCups){const list=cupEntrants(game,e);if(list.length>=2)for(const t of list)cupOf.set(t.id,e);}
+  /* [계속]으로 직접 진행한(또는 진행 중인) 유스컵 — 나간 선수는 오늘 다른 활동을 하지 않고, 남은 경기는 아래에서 마저 치른다 */
+  const liveCups=ensureSeason(game).events.filter(e=>e.date===game.day&&['live','completed'].includes(e.status)&&e.live);
+  for(const e of liveCups)for(const x of e.entrants)cupOf.set(x.id,e);
   const cupIds=new Set(cupOf.keys());
   /* 지역 리그 경기가 있는 우리 선수도 그날은 다른 활동을 못 한다 */
   const leagueIds=leagueParticipantsToday(game);
@@ -460,6 +463,7 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
     }));
   }
 
+  for(const e of liveCups){if(e.status==='live')await runCup(game,e,onProgress);(report.cupIds??=[]).push(e.id);report.cupId??=e.id;report.youthCupId=e.id;}
   for(const e of todayCups){await runCup(game,e,onProgress);(report.cupIds??=[]).push(e.id);report.cupId??=e.id;if(e.kind==='youth')report.youthCupId=e.id;}
   const internationalReport=await tickInternational(game,onProgress);
   if(internationalReport)report.international=internationalReport;
