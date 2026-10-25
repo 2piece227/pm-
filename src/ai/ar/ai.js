@@ -13,6 +13,7 @@ import { AIBattler, PartyMon, weatherOf, terrainOf, effectiveness, isIneffective
 import { MoveData, AIMove } from './move.js';
 import { handlers, MOVE_FAIL_SCORE, MOVE_USELESS_SCORE, MOVE_BASE_SCORE } from './handlers.js';
 import { GENERIC } from './generic.js';
+import { ENHANCE, effectScale, turnOutlook, setupSenseScore, setupValueScore, matchupBonus } from './enhance.js';
 import './effects-general.js';
 import './effects-switch.js';
 import './effects-misc.js';
@@ -188,6 +189,8 @@ export class ArAI {
   /** 원작 pbGetMoveScores — [기술 번호, 점수, 대상, 이유] */
   getMoveScores(request) {
     const choices = [];
+    /* 보강 3: 이번 턴에 쓰러지나·쓰러뜨리나 (결정 하나에 한 번) */
+    const outlook = ENHANCE.setupSense || ENHANCE.setupValue.on ? turnOutlook(this) : null;
     for (const { rm, i } of this.choosableMoves(request)) {
       const data = new MoveData(this.gen, rm.id, { pp: rm.pp, maxpp: rm.maxpp });
       this.setUpMoveCheck(data);
@@ -206,7 +209,15 @@ export class ArAI {
         const targets = this.targetsFor(data.targetCode(this.user));
         choices.push({ index: i, id: data.id, score: this.getMoveScore(targets), target: -1 });
       }
+      const c = choices.at(-1);
+      if (c && c.index === i) {
+        const valued = setupValueScore(c.score, this.move, this.user, outlook);
+        const s = setupSenseScore(valued, this.move, outlook, MOVE_USELESS_SCORE);
+        if (s !== valued) c.why = 'no_setup';
+        c.score = Math.trunc(s);
+      }
     }
+    this.outlook = outlook;
     this.battle.moldBreaker = false;
     return choices;
   }
@@ -293,7 +304,10 @@ export class ArAI {
       }
     }
     if (this.trainer.hasSkillFlag('ScoreMoves')) {
+      const before = score;
       score = handlers.applyMoveEffectScore(this.move.functionCode, score, this.move, this.user, this, this.battle);
+      /* 보강 1: 공격기의 부가효과(원시의힘 전능력 상승 10% 등)는 발동 확률만큼만 */
+      if (score !== MOVE_USELESS_SCORE) score = before + (score - before) * effectScale(this.move);
       score = handlers.applyGeneralMoveScoreModifiers(score, this.move, this.user, this, this.battle);
     }
     score = Math.trunc(score);
@@ -305,6 +319,8 @@ export class ArAI {
     let score = MOVE_BASE_SCORE;
     if (this.trainer.hasSkillFlag('ScoreMoves')) {
       score = handlers.applyMoveEffectAgainstTargetScore(this.move.functionCode, MOVE_BASE_SCORE, this.move, this.user, this.target, this, this.battle);
+      /* 보강 1: 화염방사 화상 10% 같은 부가효과는 발동 확률만큼만 */
+      if (score !== MOVE_USELESS_SCORE) score = MOVE_BASE_SCORE + (score - MOVE_BASE_SCORE) * effectScale(this.move);
       score = handlers.applyGeneralMoveAgainstTargetScoreModifiers(score, this.move, this.user, this.target, this, this.battle);
     }
     const t = this.move.pbTarget(this.user);
@@ -376,7 +392,8 @@ export class ArAI {
     let reserves = [];
     for (const p of this.partyOrder) {
       if (p === this.side.active[0] || p.fainted || p.hp <= 0) continue;
-      if (this.trainer.hasSkillFlag('ReserveLastPokemon') && p === last) {
+      /* 보강 4: 2마리 파티는 아낄 포켓몬밖에 없어 자발 교체가 통째로 막힌다 — 3마리 이상일 때만 */
+      if (this.trainer.hasSkillFlag('ReserveLastPokemon') && p === last && this.partyOrder.length >= ENHANCE.reserveLastMinParty) {
         if (!terribleMoves || reserves.length > 0) continue;
       }
       reserves.push({ mon: p, rating: 100 });
@@ -419,6 +436,8 @@ export class ArAI {
     const pos = this.positionEffects(0);
     if (pos.Wish > 0 && pkmn.totalhp - pkmn.hp > pos.WishAmount * 2 / 3) score += 20 * Math.min(pkmn.totalhp - pkmn.hp, pos.WishAmount) / pkmn.totalhp;
     if (this.user.effects.PerishSong === 1) score += 20;
+    /* 보강 5: 이 포켓몬이 지금 상대에게 주는 피해와 받는 피해 */
+    score += matchupBonus(this, pkmn);
     return score;
   }
   /** 원작 calculate_entry_hazard_damage */

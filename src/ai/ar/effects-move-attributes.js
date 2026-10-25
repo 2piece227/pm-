@@ -3,6 +3,7 @@
  */
 import { add, copy, handlers, MOVE_USELESS_SCORE } from './handlers.js';
 import { effectiveness, isIneffective } from './battler.js';
+import { addlChance } from './enhance.js';
 
 const F = (code, fn) => add('moveFailure', code, fn);
 const FT = (code, fn) => add('moveFailureAgainstTarget', code, fn);
@@ -325,7 +326,7 @@ const recoil = (div, also = null) => (score, move, user, target, ai) => {
   } else if (!also) return score;
   if (also) {
     const s = handlers.applyMoveEffectAgainstTargetScore(also, 0, move, user, target, ai, ai.battle);
-    if (s !== MOVE_USELESS_SCORE) score += s;
+    if (s !== MOVE_USELESS_SCORE) score += s * addlChance(move);   // 보강 1: 10% 화상·마비만큼
   }
   return score;
 };
@@ -375,6 +376,7 @@ F('TypeAndPowerDependOnUserBerry', (move, user, ai) => {
 BP('TypeAndPowerDependOnUserBerry', (power, move, user, target) => { const r = move.pbBaseDamage(1, user, target); return r === 1 ? 0 : r; });
 
 F('TypeDependsOnUserMorpekoFormRaiseUserSpeed1', (move, user) => !user.isSpecies('morpeko'));
+copy('moveEffect', 'RaiseUserSpeed1', 'TypeDependsOnUserMorpekoFormRaiseUserSpeed1');   // 원작: 오라휠 = 스피드 +1 점수
 
 FT('TargetMovesBecomeElectric', (move, user, target) => !user.fasterThan(target));
 ET('TargetMovesBecomeElectric', (score, move, user, target) => {

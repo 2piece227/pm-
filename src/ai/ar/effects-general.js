@@ -5,6 +5,7 @@
 import { add } from './handlers.js';
 import { MOVE_USELESS_SCORE } from './handlers.js';
 import { isIneffective } from './battler.js';
+import { ENHANCE } from './enhance.js';
 
 const G = (name, fn) => add('generalMove', name, fn);
 const GT = (name, fn) => add('generalMoveAgainstTarget', name, fn);
@@ -131,9 +132,11 @@ GT('predicted_damage', (score, move, user, target, ai) => {
     if (target.effects.Substitute > 0) {
       score += Math.trunc(Math.min(15 * dmg / target.effects.Substitute, 20));
     } else {
-      score += Math.trunc(Math.min(25 * dmg / Math.max(1, target.hp), 30));
+      /* 보강 2: 데미지 몫을 키운다 (원작 25 / 최대 30 / KO +10) */
+      const d = ENHANCE.damage.on ? ENHANCE.damage : { per: 25, cap: 30, ko: 10 };
+      score += Math.trunc(Math.min(d.per * dmg / Math.max(1, target.hp), d.cap));
       if (ai.trainer.hasSkillFlag('HPAware') && dmg > target.hp * 1.1) {
-        score += 10;
+        score += d.ko;
         if (move.multiHitMove() && target.hp === target.totalhp && (target.hasActiveAbility('sturdy') || target.hasActiveItem('focussash'))) score += 8;
       }
     }

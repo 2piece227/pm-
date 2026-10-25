@@ -34,6 +34,7 @@ jobs:
           node test/ai-decisions.mjs
           node test/ai-knowledge.mjs
           node test/ai-anotherred.mjs
+          node test/ai-enhance.mjs
           node test/ai-status-moves.mjs
           node test/mon-tactics.mjs
           node test/ai-field.mjs

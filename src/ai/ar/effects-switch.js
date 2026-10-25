@@ -5,6 +5,7 @@
  */
 import { add } from './handlers.js';
 import { isSuperEffective, effectiveness } from './battler.js';
+import { threatenedWithSafeReserve } from './enhance.js';
 
 const S = (name, fn) => add('shouldSwitch', name, fn);
 const N = (name, fn) => add('shouldNotSwitch', name, fn);
@@ -178,6 +179,9 @@ S('high_damage_from_foe', (b, reserves, ai) => {
   }
   return false;
 });
+
+/* 보강 6 (예전 AI): 이번 턴에 한 방에 쓰러지는데 받아낼 동료가 있다 */
+S('threatened_with_safe_reserve', (b, reserves, ai) => threatenedWithSafeReserve(ai, b, reserves));
 
 /* ---------- 남을 이유 ---------- */
 
