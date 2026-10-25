@@ -11,7 +11,7 @@
  * 1단계: 모든 트레이너가 원작 최상 실력(100)으로 둔다. 실력 차이·성격 ±·포켓몬별 전술 지시는
  * 다음 단계에서 이 위에 얹는다 (지금 지시 중에서는 '금지 기술'만 지킨다).
  */
-import { ArAI } from './ar/ai.js';
+import { ArAI, MOVE_USELESS_SCORE } from './ar/ai.js';
 import { OpponentModel } from './opponent-model.js';
 
 /** 재현 가능한 시뮬을 위한 소형 PRNG (mulberry32) */
@@ -26,6 +26,26 @@ export function makeRng(seed = 1) {
   };
   rng.getState = () => a;
   return rng;
+}
+
+/**
+ * 기술별 지시 '우선'·'자제' — 원작 점수로 고른 좋은 수들 안에서 지시를 따른다.
+ *   우선: 쓸 만한 수(최고점의 80% 이상, 실패·무의미 아님)면 맨 앞으로 끌어올린다.
+ *        효과가 없거나 실패할 기술까지 억지로 쓰지는 않는다.
+ *   자제: 다른 쓸 만한 기술이 있으면 후보에서 뺀다(무의미 점수로 내린다).
+ */
+const PREFER_RANGE = 0.8;   // [임시값]
+export function applyMoveOrders(choices, tactics) {
+  const orders = tactics?.moves || {};
+  if (!choices.length || !Object.keys(orders).length) return choices;
+  const max = Math.max(...choices.map(c => c.score));
+  const useful = c => c.score > MOVE_USELESS_SCORE;
+  for (const c of choices) {
+    const order = orders[c.id];
+    if (order === 'prefer' && useful(c) && c.score >= max * PREFER_RANGE) { c.order = 'prefer'; c.score = Math.max(c.score, max + 1); }
+    if (order === 'avoid' && choices.some(o => o !== c && useful(o) && orders[o.id] !== 'avoid')) { c.order = 'avoid'; c.score = Math.min(c.score, MOVE_USELESS_SCORE); }
+  }
+  return choices;
 }
 
 /** 상대 공개 정보를 읽을 때의 인지 능력 — 1단계는 원작 AI처럼 놓치지 않는다 */
@@ -108,6 +128,7 @@ export class TrainerAI {
       const mine = this.tacticFor(side.active[0]);
       const allowed = choices.filter(c => mine.moves?.[c.id] !== 'ban');
       if (allowed.length && allowed.length < choices.length) choices = allowed;
+      applyMoveOrders(choices, mine);
       decision = core.chooseMove(choices, request);
     }
     return this.finish(decision, choices, side, battle);

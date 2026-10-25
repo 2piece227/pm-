@@ -34,6 +34,18 @@ let banned = 0;
 for (let s = 1; s <= N; s++) banned += count(run(gyara, wall, [{ ...defaultTactics(), moves: { waterfall: 'ban' } }], s).log, /\|move\|p1a: Gyarados\|Waterfall/);
 assert.equal(banned, 0, '금지한 폭포오르기는 한 번도 안 쓴다');
 
+/* 우선 지시: 원작 점수로 쓸 만한 범위 안이면 지시한 기술을 쓴다 */
+{
+  const ape = ['Annihilape', 'Ability: Defiant', 'Level: 50', '- Close Combat', '- Rage Fist', '- Bulk Up', '- Drain Punch'].join('\n');
+  const muk = ['Muk', 'Ability: Sticky Hold', 'Level: 50', '- Gunk Shot', '- Knock Off', '- Shadow Sneak', '- Curse'].join('\n');
+  let plain = 0, pref = 0;
+  for (let s = 1; s <= N; s++) {
+    plain += count(run(ape, muk, [{ ...defaultTactics() }], s).log, /\|move\|p1a: Annihilape\|Drain Punch/);
+    pref += count(run(ape, muk, [{ ...defaultTactics(), moves: { drainpunch: 'prefer' } }], s).log, /\|move\|p1a: Annihilape\|Drain Punch/);
+  }
+  assert(pref > plain + 5, `우선 지시가 드레인펀치 빈도를 올린다 (${pref} vs ${plain})`);
+}
+
 /* 메가진화 담당: 담당이 아닌 선봉은 메가진화하지 않는다 */
 const megaTeam = `Charizard @ Charizardite X\nAbility: Blaze\nLevel: 50\n- Flare Blitz\n- Dragon Claw\n\nGyarados @ Gyaradosite\nAbility: Intimidate\nLevel: 50\n- Waterfall\n- Crunch`;
 const r = run(megaTeam, wall, [{ ...defaultTactics() }, { ...defaultTactics(), mega: true }], 3, { keyStone: true });

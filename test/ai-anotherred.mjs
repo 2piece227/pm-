@@ -136,4 +136,14 @@ const moveName = (battle, d) => d.choice.startsWith('move') ? battle.p1.active[0
   const html = renderBattleAnalysis(analyseBattle(r1));
   assert(html.length > 0 && !html.includes('undefined'), '경기 분석 렌더');
 }
+/* 11. 기술별 지시 — 우선은 쓸 만하면 맨 앞, 실패할 기술은 억지로 안 씀 / 자제는 다른 수가 있으면 뺌 */
+{
+  const { applyMoveOrders } = await import('../src/ai/trainer-ai.js');
+  const c = applyMoveOrders([{ id: 'closecombat', score: 130 }, { id: 'ragefist', score: 110 }], { moves: { ragefist: 'prefer' } });
+  assert(c[1].score > c[0].score, '우선 지시한 분노의주먹이 맨 앞');
+  const f = applyMoveOrders([{ id: 'closecombat', score: 130 }, { id: 'ragefist', score: 20 }], { moves: { ragefist: 'prefer' } });
+  assert.equal(f[1].score, 20, '실패할 기술은 우선이어도 끌어올리지 않는다');
+  const a = applyMoveOrders([{ id: 'closecombat', score: 130 }, { id: 'ragefist', score: 110 }], { moves: { closecombat: 'avoid' } });
+  assert(a[0].score <= 60, '자제는 다른 쓸 만한 수가 있으면 뺀다');
+}
 console.log('ai-anotherred PASS');

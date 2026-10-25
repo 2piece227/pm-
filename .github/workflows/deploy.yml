@@ -33,7 +33,9 @@ jobs:
           node test/save-codec.mjs
           node test/ai-decisions.mjs
           node test/ai-knowledge.mjs
-          node test/ai-strategy.mjs
+          node test/ai-anotherred.mjs
+          node test/ai-status-moves.mjs
+          node test/mon-tactics.mjs
           node test/ai-field.mjs
           node test/ai-variable-power.mjs
           node test/ai-lock-memory.mjs
