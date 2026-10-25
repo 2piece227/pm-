@@ -15,13 +15,14 @@ const after=a.funds;assert(!negotiatePersonnel(g,t.id,offer,{renew:true}).ok);as
 assert(hireCoach(g,'development').ok);assert(!hireCoach(g,'development').ok);
 const campT=a.roster[1],ca=campT.stats.judge;assert(assignCamp(g,campT.id,'judge','development').ok);
 assert(!assignCamp(g,a.roster[2].id,'judge','development').ok);
+/* 유스컵 접수는 개최 3일 전 마감 — 캠프 배정 전에 미리 등록 */
+const youth=a.roster.find(x=>x.isYouth&&x!==campT),cup=ensureSeason(g).events.find(e=>e.date===7);
+assert(registerYouth(g,cup.id,youth.id).ok);assert(!assignCamp(g,youth.id,'judge','development').ok);
 const beforeCamp=restoreGame(snapshotGame(g));
 for(let i=0;i<5;i++)await advanceDay(g);
 assert(!campT.camp);assert(campT.stats.judge>ca);assert.equal(g.log.filter(r=>r.camps?.length).length,5);
 for(let i=0;i<5;i++)await advanceDay(beforeCamp);
 assert.deepEqual(snapshotGame(g),snapshotGame(beforeCamp));
-const youth=a.roster.find(x=>x.isYouth),cup=ensureSeason(g).events.find(e=>e.date===7);
-assert(registerYouth(g,cup.id,youth.id).ok);assert(!assignCamp(g,youth.id,'judge','development').ok);
 const wage=dailyUpkeep(g)*7;assert(wage>=20);
 await advanceDay(g);const payReport=await advanceDay(g);
 assert.equal(payReport.upkeep,a.roster.reduce((sum,t)=>sum+t.contract.wage,0)+20);

@@ -29,7 +29,7 @@ export function ensureSeason(game) {
     const id=`${spec.kind}-${y}-${d}`,date=(y-1)*SEASON.days+d;
     if(game.competitions.events.some(e=>e.id===id)||date<game.day)continue;
     game.competitions.events.push({id,name:`제${y}시즌 ${spec.label} · ${spec.kind==='city'?(d<100?'전반기':'후반기')+' '+(spec.days.indexOf(d)%3+1)+'차':spec.kind==='youth'?(d===7?'개막':'후반'):'연간 오픈'}`,kind:spec.kind,region:'kanto-johto',
-      season:y,date,deadline:date-1,openDay:date-SEASON.registrationLead,status:'scheduled',
+      season:y,date,deadline:date-SEASON.drawLead,openDay:date-SEASON.registrationLead,status:'scheduled',
       eligibility:spec.eligibility,capacity:spec.kind==='local'?32:SEASON.capacity,qualification:'none',format:'knockout',
       prizeMultiplier:SEASON.prizeMultipliers[spec.kind],reputationMultiplier:SEASON.prizeMultipliers[spec.kind],ranking:spec.ranking,rankingWeight:spec.weight,pointsMultiplier:spec.kind==='city'&&d===spec.days.at(-1)?RANKING.lastCityMultiplier:1,rosterSize:6,setFormat:'bo1',musicContext:'kanto',
       registrations:[],entrants:[],matches:[],decisions:[],result:null,viewed:[],watchMode:'results'});
@@ -38,7 +38,7 @@ export function ensureSeason(game) {
   return game.competitions;
 }
 const baseEvent=(game,{id,name,kind,y,d,capacity=SEASON.capacity,ranking=false,weight=0,prize=1,levelCap=null,clauses=[],division=null,region='kanto-johto',city=null,eligibility})=>({
-  id,name,kind,region,city,season:y,date:(y-1)*SEASON.days+d,deadline:(y-1)*SEASON.days+d-1,openDay:(y-1)*SEASON.days+d-SEASON.registrationLead,status:'scheduled',
+  id,name,kind,region,city,season:y,date:(y-1)*SEASON.days+d,deadline:(y-1)*SEASON.days+d-SEASON.drawLead,openDay:(y-1)*SEASON.days+d-SEASON.registrationLead,status:'scheduled',
   eligibility,capacity,qualification:kind==='youth-final'?'series-points':'none',format:'knockout',prizeMultiplier:prize,reputationMultiplier:prize,ranking,rankingWeight:weight,pointsMultiplier:1,
   rosterSize:6,setFormat:'bo1',musicContext:'kanto',levelCap,clauses,division,reform:true,
   registrations:[],entrants:[],matches:[],decisions:[],result:null,viewed:[],watchMode:'results'});
@@ -150,6 +150,7 @@ export async function prepareCupEntrants(game,e){
   e.fillers=(await demoFreeAgents(game,Math.max(DEMO_PROS,e.capacity-n))).map(t=>t.id);
 }
 export function cupEntrants(game,e){
+  if(e.drawnIds&&['drawn','live'].includes(e.status))return e.drawnIds.map(id=>findTrainer(game.league,id)||competitionTrainer(game,id)).filter(Boolean);
   if(e.kind==='youth-final'){
     const top=seriesPoints(game,e.season).slice(0,e.capacity).map(r=>findTrainer(game.league,r.id)).filter(t=>t&&t.isYouth&&t.party?.length);
     return top;
@@ -175,35 +176,50 @@ export function officialParty(party,e){
   }
   return kept;
 }
-export function cupToday(game){return ensureSeason(game).events.find(e=>e.date===game.day&&e.status==='scheduled');}
+export function cupToday(game){return ensureSeason(game).events.find(e=>e.date===game.day&&['scheduled','drawn'].includes(e.status));}
 /** 오늘 열리는 대회 전부 (타입컵은 유스부·오픈부가 같은 날) */
-export function cupsToday(game){return ensureSeason(game).events.filter(e=>e.date===game.day&&e.status==='scheduled');}
-/* ---------------- 대회 진행 — 준비(대진 추첨) → 라운드 → 종료 ----------------
- * 하루 진행에서는 한 번에 끝까지 돌리고(runCup), 우리 선수가 나가는 유스컵은 [계속]을 누를 때마다
- * 대진 추첨 → 라운드 하나씩 진행한다(live). 라운드 사이에 실제 파티의 선봉 순서·전술 지시를 출전 파티에 반영한다.
- * 두 경로의 난수 순서는 같다 — 같은 시드면 같은 결과.
+export function cupsToday(game){return ensureSeason(game).events.filter(e=>e.date===game.day&&['scheduled','drawn'].includes(e.status));}
+/* ---------------- 대회 진행 — 접수 마감일에 대진 발표 → 개최일에 파티 확정 → 라운드 ----------------
+ * 접수는 개최 SEASON.registrationLead일 전부터 SEASON.drawLead일 전까지. 마감일 하루가 끝나면 대진을 발표한다(drawCup).
+ * 그 사이 며칠 동안 상대를 보고 대비하고, 출전 파티는 개최일에 확정한다(startCup).
+ * 하루 진행에서는 개최일에 한 번에 끝까지 돌리고(runCup), 우리 선수가 나가는 유스컵은 [계속]마다 라운드 하나씩(liveCupStep).
+ * 라운드 사이에 실제 파티의 선봉 순서·포켓몬별 전술을 출전 파티에 반영한다. 두 경로의 난수 순서는 같다.
  */
 const cupKey=(e,i)=>`${e.id}:${i}`;
-/** 대회 준비: 참가자 확정·파티 스냅샷·대진 추첨. 참가자가 2명 미만이면 취소 */
-export async function prepareCup(game,e){
-  if(e.status!=='scheduled'||e.date!==game.day)return false;
+/** 대진 발표: 참가자 확정·추첨. 참가자가 2명 미만이면 취소 */
+export async function drawCup(game,e){
+  if(e.status!=='scheduled')return false;
   await prepareCupEntrants(game,e);
   const trainers=cupEntrants(game,e);
   e.decisions=game.league.agencies.filter(a=>a.id!==game.playerAgencyId).flatMap(a=>a.roster.filter(t=>cupEligible(t,e)).map(t=>({trainerId:t.id,score:npcEntryScore(a,t),entered:trainers.includes(t)})));
+  if(trainers.length<2){e.status='cancelled';e.entrants=[];game.league.newsFeed.unshift({day:game.day,kind:'cup',text:`${e.name} · 참가자 부족으로 취소. 상금 지급 없음.`});return false;}
+  const order=[...trainers];
+  for(let i=order.length-1;i>0;i--){const j=Math.floor(game.rng()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
+  if(e.kind==='city'){const scores=citySeedScores(game,e);order.sort((a,b)=>(scores.get(b.id)??RANKING.base)-(scores.get(a.id)??RANKING.base));}
+  let size=2;while(size<order.length)size*=2;
+  e.drawnIds=order.map(t=>t.id);
+  e.slots=seedOrder(size).map(n=>order[n-1]?.id||null);e.draw=[...e.slots];e.round=1;e.status='drawn';e.drawnDay=game.day;
+  /* 우리 선수의 첫 상대를 소식으로 */
+  const n=id=>findTrainer(game.league,id)?.name||competitionTrainer(game,id)?.name||id;
+  const mine=cupPairs(e).filter(p=>p.some(id=>id&&findTrainer(game.league,id)?.agencyId===game.playerAgencyId));
+  game.league.newsFeed.unshift({day:game.day,kind:'cup',cupId:e.id,text:`${e.name} 대진 발표 (개최 D-${e.date-game.day}) · ${mine.length?mine.map(([a,b])=>`${n(a)} vs ${b?n(b):'부전승'}`).join(' / '):`참가 ${order.length}명`}. 일정에서 대진표와 상대 파티를 확인하세요.`});
+  return true;
+}
+/** 개최일: 출전 파티 확정. 그 사이 출전할 수 없게 된 선수는 기권(상대 부전승) */
+export function startCup(game,e){
+  if(e.status!=='drawn'||e.date!==game.day)return false;
+  const trainers=(e.drawnIds||[]).map(id=>findTrainer(game.league,id)||competitionTrainer(game,id)).filter(t=>t&&t.party?.length&&!t.camp);
   /* 상대 트레이너는 배운 기술 중 좋은 4개·지닌 도구·키스톤을 챙겨 나온다 (원작 데이터를 쓰는 관장 파티는 그대로) */
   for(const t of trainers)if(t.agencyId!==game.playerAgencyId&&t.generated!==false)outfitNpcTrainer(t);
   /* 우리 선수의 출전 포켓몬에 대회 표식 — 라운드 사이에 순서·전술을 반영할 때 짝을 찾는다 */
   for(const t of trainers)if(t.agencyId===game.playerAgencyId)t.party.slice(0,e.rosterSize).forEach((m,i)=>{m._cupKey=cupKey(e,i);});
   e.entrants=trainers.map(t=>({id:t.id,name:t.name,agencyId:t.agencyId,agencyName:competitionAgency(game,t),party:officialParty(e.kind==='type'&&t.agencyId!==game.playerAgencyId?[...t.party].filter(m=>hasType(m,e.typeRule)).sort((x,y)=>y.level-x.level).slice(0,e.rosterSize):t.party.slice(0,e.rosterSize),e),definition:structuredClone({name:t.name,isYouth:t.isYouth,badges:t.badges,legacyPro:t.legacyPro,regionalRole:t.regionalRole,stats:effectiveStats(t),nature:t.nature,battlePolicy:t.battlePolicy,mentalDebuff:t.mentalDebuff,lossStreak:t.lossStreak,keyStone:!!t.keyStone})}));
-  if(trainers.length<2){e.status='cancelled';clearCupKeys(game,e);game.league.newsFeed.unshift({day:game.day,kind:'cup',text:`${e.name} · 참가자 부족으로 취소. 상금 지급 없음.`});return false;}
-  for(let i=e.entrants.length-1;i>0;i--){const j=Math.floor(game.rng()*(i+1));[e.entrants[i],e.entrants[j]]=[e.entrants[j],e.entrants[i]];}
-  if(e.kind==='city'){const scores=citySeedScores(game,e);e.entrants.sort((a,b)=>(scores.get(b.id)??RANKING.base)-(scores.get(a.id)??RANKING.base));}
-  let size=2;while(size<trainers.length)size*=2;
-  e.slots=seedOrder(size).map(n=>e.entrants[n-1]?.id||null);e.draw=[...e.slots];e.round=1;e.status='live';
+  if(e.entrants.length<2){e.status='cancelled';clearCupKeys(game,e);game.league.newsFeed.unshift({day:game.day,kind:'cup',text:`${e.name} · 출전 가능한 참가자가 부족해 취소.`});return false;}
+  e.status='live';
   return true;
 }
 /** 라운드 이름 — 결승·준결승·8강… */
-export const cupRoundLabel=(e,round=e.round)=>{const total=Math.log2(e.slots0||e.slots?.length||2);const left=total-round+1;return left===1?'결승':left===2?'준결승':left===3?'8강':`${2**left}강`;};
+export const cupRoundLabel=(e,round=e.round)=>{const total=Math.log2(e.draw?.length||e.slots?.length||2);const left=total-round+1;return left<=1?'결승':left===2?'준결승':left===3?'8강':`${2**left}강`;};
 /** 우리 선수: 실제 파티의 선봉 순서·포켓몬별 전술 지시를 출전 파티에 반영 (등록 6마리·기술·도구는 그대로) */
 export function syncOurEntrants(game,e){
   for(const x of e.entrants){
@@ -220,7 +236,6 @@ export function cupPairs(e){const out=[];for(let i=0;i<(e.slots||[]).length;i+=2
 /** 라운드 하나 — 돌려주는 값: 이번 라운드 경기들 */
 export async function playCupRound(game,e,onProgress=async()=>{}){
   if(e.status!=='live')return [];
-  e.slots0??=e.slots.length;
   const E=id=>e.entrants.find(x=>x.id===id),next=[],played=[],round=e.round;
   for(let i=0;i<e.slots.length;i+=2){
     let a=E(e.slots[i]),b=E(e.slots[i+1]);if(!a||!b){next.push((a||b)?.id||null);continue;}
@@ -239,11 +254,13 @@ export async function playCupRound(game,e,onProgress=async()=>{}){
     await onProgress({id:m.id,state:'done',label:e.name,detail:`${a.name} vs ${b.name} · ${winner.name} 진출${tie?' (무승부 추첨)':''}`});
   }
   e.slots=next;e.round++;
-  if(e.slots.length===1)await finishCup(game,e);
+  if(e.slots.length<=1)await finishCup(game,e);
   return played;
 }
 async function finishCup(game,e){
-  const champion=e.entrants.find(x=>x.id===e.slots[0]),final=e.matches.at(-1),runner=e.entrants.find(x=>x.id===(final.aId===champion.id?final.bId:final.aId));
+  const champion=e.entrants.find(x=>x.id===e.slots[0]),final=e.matches.at(-1);
+  if(!champion||!final){e.status='cancelled';clearCupKeys(game,e);return;}
+  const runner=e.entrants.find(x=>x.id===(final.aId===champion.id?final.bId:final.aId));
   e.result={championId:champion.id,runnerId:runner.id};
   e.scouting=[];
   for(const x of e.entrants){
@@ -263,10 +280,16 @@ async function finishCup(game,e){
   e.status='completed';clearCupKeys(game,e);
   game.league.newsFeed.unshift({day:game.day,kind:'cup',text:`${e.name} · ${champion.name} 우승 (${SEASON.prize*(e.prizeMultiplier??1)}), ${runner.name} 준우승 (${SEASON.runnerPrize*(e.prizeMultiplier??1)}). 일정에서 대진·저장 관전·스카우팅 보고서를 확인하세요.`});
 }
-/** 하루 진행용 — 준비부터 결승까지 한 번에 */
+/** 하루 진행용 — 개최일에 (추첨이 안 됐으면 추첨부터) 결승까지 한 번에 */
 export async function runCup(game,e,onProgress=async()=>{}){
-  if(e.status==='scheduled'&&!(await prepareCup(game,e)))return;
+  if(e.date!==game.day)return;
+  if(e.status==='scheduled'&&!(await drawCup(game,e)))return;
+  if(e.status==='drawn'&&!startCup(game,e))return;
   while(e.status==='live')await playCupRound(game,e,onProgress);
+}
+/** 접수 마감일 하루가 끝날 때 대진 발표 (하루 진행에서 부른다) */
+export async function drawDueCups(game){
+  for(const e of ensureSeason(game).events.filter(e=>e.status==='scheduled'&&e.deadline<=game.day&&e.date>game.day))await drawCup(game,e);
 }
 
 /* ---------------- 유스컵 직접 진행 (live) ---------------- */
@@ -274,18 +297,16 @@ export async function runCup(game,e,onProgress=async()=>{}){
 /** 오늘 [계속]으로 직접 진행할 대회 — 우리 선수가 나가는 유스컵(그랑프리 파이널 포함) */
 export function liveCupToday(game){
   return ensureSeason(game).events.find(e=>e.date===game.day&&['youth','youth-final'].includes(e.kind)
-    &&(e.status==='live'||(e.status==='scheduled'&&cupEntrants(game,e).some(t=>t.agencyId===game.playerAgencyId))));
+    &&(e.status==='live'||(['scheduled','drawn'].includes(e.status)&&cupEntrants(game,e).some(t=>t.agencyId===game.playerAgencyId))));
 }
 /**
- * [계속] 한 번 — 예정이면 대진 추첨, 진행 중이면 라운드 하나.
- * @returns {{stage:'draw'|'round'|'done'|'cancelled', matches?}}
+ * [계속] 한 번 — 라운드 하나 (첫 라운드 전에 추첨이 안 됐으면 추첨, 출전 파티 확정).
+ * @returns {{stage:'round'|'done'|'cancelled', matches?}}
  */
 export async function liveCupStep(game,e){
-  if(e.status==='scheduled'){
-    e.live=true;
-    const ok=await prepareCup(game,e);
-    return {stage:ok?'draw':'cancelled'};
-  }
+  e.live=true;
+  if(e.status==='scheduled'&&!(await drawCup(game,e)))return {stage:'cancelled'};
+  if(e.status==='drawn'&&!startCup(game,e))return {stage:'cancelled'};
   if(e.status==='live'){
     syncOurEntrants(game,e);
     const matches=await playCupRound(game,e);

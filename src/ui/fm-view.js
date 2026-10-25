@@ -219,7 +219,7 @@ function renderOffice() {
 
 function nextPayday() { return game.day + ((7 - (game.day % 7)) % 7); }
 function cupKindLabel(k) { return k==='youth'?'유스컵':k==='city'?'시티컵':k==='local'?'로컬컵':k==='pwt'?'PWT':'대회'; }
-function upcomingCups(n) { return [...ensureSeason(game).events].filter(e=>e.status==='scheduled'&&e.date>=game.day).sort((a,b)=>a.date-b.date).slice(0,n); }
+function upcomingCups(n) { return [...ensureSeason(game).events].filter(e=>['scheduled','drawn'].includes(e.status)&&e.date>=game.day).sort((a,b)=>a.date-b.date).slice(0,n); }
 
 /** 대시보드 왼쪽 위 — 지금 가장 먼저 챙길 일 */
 function renderNextUp(needsFirst) {
@@ -430,7 +430,7 @@ function renderMap() {
 /* ---------------- 활동 일정 ---------------- */
 function scheduledAction(t) {
   if(t.camp)return `캠프 · ${t.camp.remaining}일 남음`;
-  const e=game.competitions?.events.find(e=>e.date===game.day&&e.status==='scheduled'&&e.registrations.includes(t.id));
+  const e=game.competitions?.events.find(e=>e.date===game.day&&['scheduled','drawn'].includes(e.status)&&e.registrations.includes(t.id));
   if(e&&cupEligible(t,e))return e.name+' 참가';
   const fx=upcomingFixture(game,t.id);
   if(fx?.day===game.day)return `${gymById(fx.gymId)?.name} 체육관 관장전 · 자동 관전`;
@@ -490,6 +490,7 @@ function wire() {
   const main = $('main');
   wirePersonnel(main,game,()=>{persist();render();});
   wireSeason(main,game,()=>{persist();render();},openCupWatch);
+  main.querySelectorAll('[data-cup-open]').forEach(b=>b.onclick=()=>{cupViewId=b.dataset.cupOpen;screen='live-cup';detailId=null;render();});
   main.querySelectorAll('[data-open-trainer]').forEach(b=>b.onclick=()=>{detailId=b.dataset.openTrainer;screen='squad';render();});
   wireCareer(main,game,()=>{if(detailId&&!playerRoster(game).some(t=>t.id===detailId))detailId=null;persist();render();});
   main.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{ if(b.dataset.trainer)map.trainerId=b.dataset.trainer;screen=b.dataset.nav; detailId=null; render(); });
@@ -605,7 +606,7 @@ export function initFm({ game: existing }) {
       game = await runDay(game, progress.update);
       window.__game = game;
       persist();
-      screen = 'inbox'; detailId = null; selectedMessage = null; lastView = '';
+      screen = 'inbox'; detailId = null; selectedMessage = null; lastView = ''; cupViewId = null;
     } catch (error) {
       game = restoreGame(before); window.__game = game;
       saveNotice = '진행 실패 · 하루 시작 전 상태로 복구했습니다.';
@@ -646,13 +647,14 @@ export function gotoMap() {
 /* ---------------- 유스컵 직접 진행 ---------------- */
 let liveFresh = null;
 /** 오늘 직접 진행 중이거나 막 끝낸 유스컵 */
-function todaysLiveCup() { return liveCupToday(game) || ensureSeason(game).events.find(e => e.date === game.day && e.live); }
+let cupViewId = null;   // 일정에서 연 대회 (대진 발표 뒤 상대 분석)
+function todaysLiveCup() { return (cupViewId && ensureSeason(game).events.find(e => e.id === cupViewId)) || liveCupToday(game) || ensureSeason(game).events.find(e => e.date === game.day && e.live); }
 async function stepLiveCup(e) {
   busy = true; renderTop();
   let result;
   try { result = await liveCupStep(game, e); persist(); }
   catch (error) { alert(`대회 진행 중 오류: ${error.message}`); busy = false; render(); return; }
-  liveFresh = result.stage === 'draw' ? 'draw' : 'round';
+  liveFresh = 'round'; cupViewId = e.id;
   screen = 'live-cup'; detailId = null; busy = false; render();
   /* 이번 라운드의 우리 경기는 바로 관전 — 보고 나서 다음 라운드를 준비한다 */
   const mine = (result.matches || []).filter(m => [m.aId, m.bId].some(id => e.entrants.find(x => x.id === id)?.agencyId === game.playerAgencyId));

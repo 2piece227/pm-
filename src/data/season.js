@@ -15,7 +15,8 @@ export const TYPE_CITY = {Rock:'회색시티',Water:'블루시티',Electric:'갈
 export const RANKING = {base:1500,k:24,scale:400,minMatches:3,formWindow:5,formWeight:20,
   placement:[40,24,12,4],pointsWeight:0.5,lastCityMultiplier:1.1,
   inactiveAfter:60,inactivePerDay:0.1,maxInactivePenalty:20,localSeedBonus:30};
-export const SEASON = { days:365, youthDays:[7,21], registrationLead:6, capacity:8,
+/* 참가 접수: 개최 registrationLead일 전 ~ drawLead일 전. 마감일 하루가 끝나면 대진 발표 → drawLead일 동안 상대를 보고 대비 [임시값] */
+export const SEASON = { days:365, youthDays:[7,21], registrationLead:10, drawLead:3, capacity:8,
   prize:300, runnerPrize:150, reputation:1, experience:120, growth:0.01,
   fatigue:8, npcBase:0.6, npcAggressionWeight:0.4,
   npcThreshold:0.25, prizeMultipliers:{youth:1,city:3,local:8,pwt:20,pwc:100} };

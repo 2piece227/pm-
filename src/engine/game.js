@@ -29,7 +29,7 @@ import { badgeProgress } from './gym-progress.js';
 import { locationById } from '../data/routes.js';
 import { SPECIES_KO, ko, iGa } from '../data/ko.js';
 import { setupCareerStart, youthCount, youthCapacity, ensureSeats } from './career.js';
-import { cupsToday, cupEntrants, runCup, ensureSeason } from './season.js';
+import { cupsToday, cupEntrants, runCup, ensureSeason, drawDueCups } from './season.js';
 import { tickRegionalLeague, leagueSeedsFor, leagueParticipantsToday } from './regional-league.js';
 import { ensureInternational, internationalSeason, ensureOfficials, tickInternational, tickPwc } from './international.js';
 import { pwtBreak } from '../data/international.js';
@@ -467,6 +467,8 @@ export async function advanceDay(game, { onProgress = async () => {} } = {}) {
   for(const e of todayCups){await runCup(game,e,onProgress);(report.cupIds??=[]).push(e.id);report.cupId??=e.id;if(e.kind==='youth')report.youthCupId=e.id;}
   const internationalReport=await tickInternational(game,onProgress);
   if(internationalReport)report.international=internationalReport;
+  /* 접수가 마감된 대회는 오늘 하루 끝에 대진을 발표한다 */
+  await drawDueCups(game);
   /* 지역 리그(1일차 직위 반영 포함) · PWC */
   const leagueReport=await tickRegionalLeague(game,onProgress);
   if(leagueReport)report.league=leagueReport;

@@ -645,3 +645,5 @@ dialog.pkm:not([open]){display:none}
 .live-party img{width:52px;height:52px}.live-party span.lead{outline:2px solid var(--accent)}.live-party button{padding:2px 8px!important;font-size:10px}
 .live-party.foe span{background:rgba(255,148,152,.07)}
 .live-champ{text-align:center;border:1px solid var(--gold)}.live-champ h2{font-size:30px;margin:6px 0;color:var(--gold)}
+
+.cup-drawn{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 10px;border-radius:10px;background:rgba(240,201,110,.1);border:1px solid rgba(240,201,110,.35)}
