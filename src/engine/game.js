@@ -255,6 +255,24 @@ export function sendToLab(game, index) {
   return { ok: true, msg: `${eulReul(name)} 연구실에 보냈습니다.${mon.item ? ' 지닌 도구는 창고로 돌려받았습니다.' : ''} 사례금 ₽${LAB_REWARD}.`, mon };
 }
 
+/**
+ * 여러 마리를 한 번에 연구실로 — 박스 칸 번호 목록. 훈련 중인 포켓몬은 건너뛴다.
+ * 번호가 밀리지 않게 뒤에서부터 뺀다.
+ * @returns {{ok, sent, skipped, reward, msg}}
+ */
+export function sendManyToLab(game, indices) {
+  const uniq = [...new Set(indices.map(Number))].filter(i => Number.isInteger(i)).sort((x, y) => y - x);
+  let sent = 0, skipped = 0, items = 0;
+  for (const i of uniq) {
+    const mon = playerAgency(game).box[i];
+    const r = sendToLab(game, i);
+    if (r.ok) { sent++; if (mon.item) items++; } else if (mon) skipped++;
+  }
+  if (!sent) return { ok: false, sent, skipped, reward: 0, msg: skipped ? '훈련 중인 포켓몬은 보낼 수 없습니다.' : '보낼 포켓몬을 골라 주세요.' };
+  return { ok: true, sent, skipped, reward: sent * LAB_REWARD,
+    msg: `${sent}마리를 연구실에 보냈습니다. 사례금 ₽${(sent * LAB_REWARD).toLocaleString()}.${items ? ` 지닌 도구 ${items}개는 창고로 돌려받았습니다.` : ''}${skipped ? ` 훈련 중인 ${skipped}마리는 남겼습니다.` : ''}` };
+}
+
 /** 파티 → 박스 (마지막 한 마리는 못 뺀다) */
 export function partyToBox(game, trainerId, index) {
   const a = playerAgency(game);
