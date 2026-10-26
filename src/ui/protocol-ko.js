@@ -12,7 +12,7 @@
 import {
   ABILITY_KO, BOOST_KO, CANT_MSG, ITEM_KO, MOVE_KO, MOVE_TYPE, SPECIES_KO, SPECIES_TYPES,
   STATUS_BADGE, STATUS_KO, STATUS_MSG, STATUS_TICK, WEATHER_MSG, CURE_MSG, ko,
-  eunNeun, eulReul, iGa, euro, gwaWa,
+  eunNeun, eulReul, iGa, euro, gwaWa, VOLATILE_KO, VOLATILE_MSG, TRAP_MSG, TRAP_DAMAGE, TRAP_END,
 } from '../data/ko.js';
 import { animArchetype } from '../data/move-anim.js';
 import {PublicBattle} from '../engine/public-battle.js';
@@ -75,6 +75,11 @@ function formatThink(t) {
 }
 
 /** [from] Sandstorm / [from] item: Leftovers → 'Sandstorm' / 'Leftovers' */
+/** `[of] p1a: X` → 그 포켓몬의 한국어 이름 (없으면 null) */
+const ofName = (parts) => { const raw = parts.find((p) => p.startsWith('[of]')); const id = raw && parseIdent(raw.replace('[of]', '').trim()); return id ? monKo(id) : null; };
+/** 로그 줄에 쓸 효과 이름 — 상태이상·지속 효과·기술·특성·도구 순으로 한국어 */
+const effectKo = (what) => STATUS_KO[what] || VOLATILE_KO[what] || ko(ABILITY_KO, ko(ITEM_KO, ko(MOVE_KO, what)));
+
 function fromSource(parts) {
   const raw = parts.find((p) => p.startsWith('[from]'));
   if (!raw) return null;
@@ -276,6 +281,10 @@ export function toKoreanLog(protocolLog, names, think = []) {
           if (w && w.damage) msg = w.damage(eulReul(name));
           else if (STATUS_TICK[src]) msg = STATUS_TICK[src](eunNeun(name));
           /* 원작 문구: 반동·혼란 자해·흩뿌리기 */
+          /* 조이기류(회오리불꽃·김밥말이·바다회오리 …)·씨뿌리기·저주·소금절이·악몽·뿌리박기·아쿠아링 */
+          else if (parts.includes('[partiallytrapped]')) msg = TRAP_DAMAGE(name, ko(MOVE_KO, src));
+          else if (type === '-damage' && VOLATILE_MSG[src]?.damage) msg = VOLATILE_MSG[src].damage(name);
+          else if (type === '-heal' && VOLATILE_MSG[src]?.heal) msg = VOLATILE_MSG[src].heal(name);
           else if (src === 'Recoil') msg = `${eunNeun(name)} 공격의\n반동으로 데미지를 입었다!`;
           else if (src === 'confusion') msg = `${eunNeun(name)} 영문도 모른 채\n자신을 공격했다!`;
           else if (src === 'Stealth Rock') msg = `${name}에게\n뾰족한 바위가 박혔다!`;
@@ -291,10 +300,10 @@ export function toKoreanLog(protocolLog, names, think = []) {
           } else {
             const label = ko(ABILITY_KO, ko(ITEM_KO, ko(MOVE_KO, src)));
             msg = delta > 0
-              ? `${eunNeun(name)} ${label}(으)로\n체력을 회복했다!`
+              ? `${eunNeun(name)} ${euro(label)}\n체력을 회복했다!`
               : `${label}!\n${eunNeun(name)} 데미지를 입었다!`;
           }
-          const label = { Recoil: '반동', confusion: '혼란' }[src] || ko(ABILITY_KO, ko(ITEM_KO, ko(MOVE_KO, src)));
+          const label = { Recoil: '반동' }[src] || effectKo(src);
           /* 화상·독 같은 지속 피해는 실기처럼 **매 턴 그 상태이상 연출이 다시 돈다** */
           const tick = STATUS_TICK[src] ? src : null;
           push('l-gold', `  ${label}: ${name}  ${before}% → ${after}%`, {
@@ -550,10 +559,13 @@ ${ko(STATUS_KO, st)} 상태가 되었다!`,
         const id = parseIdent(parts[1]);
         const what = (parts[2] || '').replace(/^move:\s*/, '');
         const name = monKo(id);
-        const label = ko(MOVE_KO, what);
+        const label = effectKo(what);
+        /* 원작 문구가 있는 효과는 그 문구로 (사슬묶기는 parts[3]이 막힌 기술). [silent]는 자막 없이 */
+        const extra = parts[3] && !parts[3].startsWith('[') ? ko(MOVE_KO, parts[3]) : null;
+        const silent = parts.includes('[silent]');
         push('l-gold', `  ${name} ← ${label}`, {
-          msg: what === 'confusion' ? `${eunNeun(name)} 혼란에 빠졌다!` : `${name}의\n${label}!`,
-          anim: { k: 'fx', side: id.side, text: label, color: '#a878d8' },
+          msg: silent ? null : VOLATILE_MSG[what]?.start ? VOLATILE_MSG[what].start(name, ofName(parts), extra) : `${name}의\n${label}!`,
+          ...(silent ? {} : { anim: { k: 'fx', side: id.side, text: label, color: '#a878d8' } }),
         });
         break;
       }
@@ -562,9 +574,13 @@ ${ko(STATUS_KO, st)} 상태가 되었다!`,
         const id = parseIdent(parts[1]);
         const what = (parts[2] || '').replace(/^move:\s*/, '');
         const name = monKo(id);
-        push('l-sub', `  ${name} ${ko(MOVE_KO, what)} 해제`, {
-          msg: what === 'confusion' ? `${name}의 혼란이 풀렸다!` : `${name}의 ${ko(MOVE_KO, what)}이(가) 풀렸다!`,
-        });
+        const label = effectKo(what);
+        let msg = null;
+        if (parts.includes('[silent]')) msg = null;   // 하품 → 잠듦처럼 다음 줄이 알려 준다
+        else if (parts.includes('[partiallytrapped]')) msg = TRAP_END(name, label);
+        else if (VOLATILE_MSG[what]) msg = VOLATILE_MSG[what].end ? VOLATILE_MSG[what].end(name) : null;
+        else msg = `${name}의 ${iGa(label)}\n풀렸다!`;
+        push('l-sub', `  ${name} ${label} 해제`, { msg });
         break;
       }
 
@@ -584,8 +600,12 @@ ${ko(STATUS_KO, st)} 상태가 되었다!`,
           push('l-sub', `  ${name} ${item}`, { noField: true, msg: what === 'Focus Band' ? `${eunNeun(name)} 기합의머리띠로\n버텼다!` : what === 'Quick Claw' ? `${eunNeun(name)} 선제공격손톱으로\n행동이 빨라졌다!` : `${name}의\n${item}!` });
           break;
         }
-        const label = ko(ABILITY_KO, ko(MOVE_KO, what));
-        push('l-sub', `  ${name} ${label}`, { msg: `${name}의\n${label}!` });
+        const label = effectKo(what);
+        /* 조이기류가 걸림 / 혼란·헤롱헤롱·대타 발동 — 원작 문구 */
+        const msg = TRAP_MSG[what] ? TRAP_MSG[what](name, ofName(parts) || '상대')
+          : VOLATILE_MSG[what]?.activate ? VOLATILE_MSG[what].activate(name, ofName(parts))
+            : `${name}의\n${label}!`;
+        push('l-sub', `  ${name} ${label}`, { msg });
         break;
       }
 
@@ -608,10 +628,11 @@ ${ko(STATUS_KO, st)} 상태가 되었다!`,
         const reason = (parts[2] || '').replace(/^(ability|move):\s*/, '');
         const name = monKo(id);
         const f = CANT_MSG[reason];
-        push('l-sub', `  ${name} 행동 불가 (${reason})`, {
+        const blocked = parts[3] ? ko(MOVE_KO, parts[3]) : null;   // 도발·사슬묶기로 막힌 기술
+        push('l-sub', `  ${name} 행동 불가 (${effectKo(reason)})`, {
           /* 잠듦·마비·얼음으로 못 움직일 때도 원작처럼 그 상태이상 연출이 돈다 */
           ...(['slp', 'par', 'frz'].includes(reason) ? { anim: { k: 'status', side: id.side, status: reason, text: ko(STATUS_KO, reason) } } : {}),
-          msg: f ? f(eunNeun(name)) : `${eunNeun(name)}
+          msg: f ? f(eunNeun(name), blocked) : `${eunNeun(name)}
 움직일 수 없다!`,
         });
         break;

@@ -196,4 +196,68 @@ export const CANT_MSG = {
 움직일 수 없다!`,
   recharge: (s) => `${s}
 움직일 수 없다!`,
+  Attract: (s) => `${s} 헤롱헤롱해서
+기술을 쓸 수 없다!`,
+  Taunt: (s, mv) => `${s} 도발당한 상태라
+${mv ? eulReul(mv) : '변화 기술을'} 쓸 수 없다!`,
+  Disable: (s, mv) => `${s} 사슬묶기로
+${mv ? eulReul(mv) : '그 기술을'} 쓸 수 없다!`,
+  'Heal Block': (s, mv) => `${s} 회복봉인으로
+${mv ? eulReul(mv) : '회복 기술을'} 쓸 수 없다!`,
+  Torment: (s) => `${s} 트집 때문에
+같은 기술을 연달아 쓸 수 없다!`,
+  Truant: (s) => `${s}
+게으름을 피우고 있다!`,
 };
+
+/** 배틀 로그 줄에 붙는 지속 효과 이름 (엔진 이름 → 한국어) */
+export const VOLATILE_KO = {
+  confusion: '혼란', 'Leech Seed': '씨뿌리기', Curse: '저주', 'Salt Cure': '소금절이', Nightmare: '악몽',
+  Substitute: '대타', Attract: '헤롱헤롱', Yawn: '하품', Taunt: '도발', Encore: '앙코르', Torment: '트집',
+  Disable: '사슬묶기', Ingrain: '뿌리박기', 'Aqua Ring': '아쿠아링', 'Focus Energy': '기충전',
+  'Magnet Rise': '전자부유', 'Heal Block': '회복봉인', Embargo: '금제', flinch: '풀죽음', recharge: '반동',
+  perish0: '멸망 카운트 0', perish1: '멸망 카운트 1', perish2: '멸망 카운트 2', perish3: '멸망 카운트 3',
+};
+
+/**
+ * 지속 효과의 원작(5세대 이후) 문구 — `-start`(걸림) / `-activate`(발동) / `-end`(풀림) / 턴 끝 피해·회복.
+ * (n = 대상 이름, u = 건 쪽 이름 [of], mv = 관련 기술 이름)
+ */
+export const VOLATILE_MSG = {
+  confusion: { start: (n) => `${eunNeun(n)}\n혼란에 빠졌다!`, activate: (n) => `${eunNeun(n)}\n혼란에 빠져 있다!`, end: (n) => `${n}의\n혼란이 풀렸다!` },
+  'Leech Seed': { start: (n) => `${n}에게\n씨앗을 심었다!`, end: (n) => `${eunNeun(n)}\n씨뿌리기에서 벗어났다!`, damage: (n) => `씨뿌리기가 ${n}의\n체력을 빼앗는다!` },
+  Curse: { start: (n, u) => (u ? `${eunNeun(u)} 자신의 체력을 깎아서\n${n}에게 저주를 걸었다!` : `${n}에게\n저주가 걸렸다!`), damage: (n) => `${eunNeun(n)}\n저주를 받고 있다!` },
+  'Salt Cure': { start: (n) => `${eunNeun(n)}\n소금에 절여졌다!`, damage: (n) => `${eunNeun(n)}\n소금절이의 데미지를 입었다!` },
+  Nightmare: { start: (n) => `${eunNeun(n)}\n악몽을 꾸기 시작했다!`, damage: (n) => `${eunNeun(n)}\n악몽에 시달리고 있다!` },
+  Substitute: { start: (n) => `${n}의\n대타가 나타났다!`, activate: (n) => `대타가 ${n} 대신\n공격을 받았다!`, end: (n) => `${n}의 대타는\n사라져 버렸다…` },
+  Attract: { start: (n) => `${eunNeun(n)}\n사랑에 빠졌다!`, activate: (n, u) => `${eunNeun(n)} ${u ? `${u}에게\n` : '\n'}헤롱헤롱하다!`, end: (n) => `${eunNeun(n)}\n헤롱헤롱 상태에서 벗어났다!` },
+  Yawn: { start: (n) => `${eunNeun(n)}\n졸음이 오기 시작했다!` },
+  Taunt: { start: (n) => `${eunNeun(n)}\n도발에 넘어가 버렸다!`, end: (n) => `${n}의\n도발 효과가 풀렸다!` },
+  Encore: { start: (n) => `${eunNeun(n)}\n앙코르를 받았다!`, end: (n) => `${n}의\n앙코르 상태가 풀렸다!` },
+  Torment: { start: (n) => `${eunNeun(n)}\n트집을 잡혔다!`, end: (n) => `${n}의\n트집 상태가 풀렸다!` },
+  Disable: { start: (n, u, mv) => `${n}의 ${mv ? eulReul(mv) : '기술을'}\n쓸 수 없게 되었다!`, end: (n) => `${n}의\n사슬묶기가 풀렸다!` },
+  Ingrain: { start: (n) => `${eunNeun(n)}\n뿌리를 뻗었다!`, heal: (n) => `${eunNeun(n)} 뿌리로부터\n양분을 흡수했다!` },
+  'Aqua Ring': { start: (n) => `${eunNeun(n)}\n물의 베일을 둘렀다!`, heal: (n) => `물의 베일이 ${n}의\n체력을 회복했다!` },
+  'Focus Energy': { start: (n) => `${eunNeun(n)}\n의욕이 넘치고 있다!` },
+  'Magnet Rise': { start: (n) => `${eunNeun(n)}\n전자력으로 떠올랐다!`, end: (n) => `${n}의\n전자력이 사라졌다!` },
+  'Heal Block': { start: (n) => `${eunNeun(n)}\n회복을 봉인당했다!`, end: (n) => `${n}의\n회복봉인이 풀렸다!` },
+  Embargo: { start: (n) => `${eunNeun(n)}\n도구를 쓸 수 없게 되었다!`, end: (n) => `${eunNeun(n)}\n도구를 쓸 수 있게 되었다!` },
+};
+/* 멸망의노래 카운트 — perish3 → "멸망 카운트가 3이 되었다!" */
+for (const k of [0, 1, 2, 3]) VOLATILE_MSG[`perish${k}`] = { start: (n) => `${n}의 멸망 카운트가\n${k}${[0, 1, 3].includes(k) ? '이' : '가'} 되었다!` };
+
+/** 조이기류(바인드) — 걸릴 때 문구는 기술마다 다르다. 피해·풀림은 공통 (n = 대상, u = 건 쪽) */
+export const TRAP_MSG = {
+  Bind: (n, u) => `${eunNeun(n)} ${u}에게\n조이기를 당했다!`,
+  Wrap: (n, u) => `${eunNeun(n)} ${u}에게\n김밥말이를 당했다!`,
+  'Fire Spin': (n) => `${eunNeun(n)}\n불꽃의 소용돌이에 갇혔다!`,
+  Whirlpool: (n) => `${eunNeun(n)}\n소용돌이에 갇혔다!`,
+  'Sand Tomb': (n) => `${eunNeun(n)}\n모래지옥에 사로잡혔다!`,
+  Clamp: (n, u) => `${eunNeun(u)} ${eulReul(n)}\n껍질에 가두었다!`,
+  Infestation: (n, u) => `${eunNeun(n)} ${u}에게\n엉겨붙기를 당했다!`,
+  'Magma Storm': (n) => `${eunNeun(n)}\n마그마의 소용돌이에 갇혔다!`,
+  'Snap Trap': (n) => `${eunNeun(n)}\n덫에 걸렸다!`,
+  'Thunder Cage': (n, u) => `${eunNeun(u)} ${eulReul(n)}\n가두었다!`,
+};
+export const TRAP_DAMAGE = (n, mv) => `${eunNeun(n)} ${mv}의\n데미지를 입고 있다!`;
+export const TRAP_END = (n, mv) => `${eunNeun(n)} ${mv}에서\n풀려났다!`;

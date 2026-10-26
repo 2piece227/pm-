@@ -272,7 +272,7 @@ export const LOCATIONS = [
     wild: [W('Rattata', 13, 16, 8), W('Gastly', 13, 16, 6)],
     trainers: [T('kimono', '기모노', [['Vaporeon', 17]]), T('kimono', '기모노 2', [['Jolteon', 17]]), T('kimono', '기모노 3', [['Flareon', 17]])] },
   { id: 'route38', region: 'johto', kind: 'route', name: '38~39번도로', x: 20.0, y: 33.4, level: [15, 18],
-    wild: [W('Meowth', 16, 18, 6), W('Rattata', 16, 18, 6), W('Raticate', 16, 18, 3), W('Magnemite', 16, 18, 5), W('Snubbull', 16, 18, 4), W('Farfetchd', 16, 18, 3), W('Miltank', 15, 17, 3), W('Tauros', 15, 17, 3)],
+    wild: [W('Meowth', 16, 18, 6), W('Rattata', 16, 18, 6), W('Raticate', 16, 18, 3), W('Magnemite', 16, 18, 5), W('Snubbull', 16, 18, 4), W('Farfetch’d', 16, 18, 3), W('Miltank', 15, 17, 3), W('Tauros', 15, 17, 3)],
     trainers: [
       T('birdkeeper', '재민', [['Pidgeotto', 19], ['Pidgey', 19]]),
       T('lass', '민아', [['Snubbull', 18]]),
@@ -292,7 +292,7 @@ export const LOCATIONS = [
   { id: 'mahogany', region: 'johto', kind: 'town', name: '황토마을', x: 35.7, y: 33.4, level: [24, 30],
     wild: [], trainers: [T('rocket', '조무래기', [['Koffing', 20], ['Zubat', 20]]), T('rocket', '조무래기 2', [['Drowzee', 21], ['Zubat', 21]])] },
   { id: 'route43', region: 'johto', kind: 'route', name: '43번도로', x: 35.3, y: 25.1, level: [15, 18],
-    wild: [W('Pidgeotto', 15, 17, 5), W('Girafarig', 15, 17, 4), W('Venonat', 15, 17, 5), W('Mareep', 15, 17, 5), W('Flaaffy', 15, 17, 3), W('Farfetchd', 15, 17, 2)],
+    wild: [W('Pidgeotto', 15, 17, 5), W('Girafarig', 15, 17, 4), W('Venonat', 15, 17, 5), W('Mareep', 15, 17, 5), W('Flaaffy', 15, 17, 3), W('Farfetch’d', 15, 17, 2)],
     trainers: [T('picnicker', '초원', [['Sentret', 16], ['Furret', 16]]), T('fisherman', '강태공', [['Poliwag', 17], ['Poliwhirl', 17]])] },
   { id: 'lakeofrage', region: 'johto', kind: 'route', name: '분노의호수', x: 35.0, y: 15.2, level: [20, 30],
     wild: [W('Magikarp', 10, 40, 12), W('Gyarados', 20, 30, 3)],
