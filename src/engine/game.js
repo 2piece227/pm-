@@ -215,6 +215,7 @@ export function describeAction(action) {
   const ex = parseExplore(action);
   if (ex) {
     const loc = locationById(ex.locationId);
+    if (loc?.kind === 'safari') return `${loc.name} · 사파리볼 포획 · 최대 ${ex.activities}번 만남 (입장료)`;
     return `${loc?.name || ex.locationId} · ${ex.mode === 'catch' ? '포획 중심' : ex.mode === 'mixed' ? '포획·배틀 병행' : '배틀 중심'} · ${ex.activities}회 (센터 포함)`;
   }
   if(action?.startsWith('gym:')) return `${gymById(action.slice(4))?.name || ''} 체육관 도전 · 자동 관전`;

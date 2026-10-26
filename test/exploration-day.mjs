@@ -95,7 +95,10 @@ assert.equal(r.hpBefore.p1[0].hp,14);assert.equal(r.hpBefore.p1[0].status,'par')
 assert.equal(r.hpBefore.p1[0].pp.scratch,3);
 assert(r.stats.switches.p1>0);
 assert.deepEqual(r.hpAfter.p1.map(p=>p.species),party.map(p=>p.species));
-for(const loc of LOCATIONS) {
+/* 사파리존 구역은 지도에 사파리존 핀 하나로 보인다 (data/safari.js pos) */
+const { SAFARI_ZONES } = await import('../src/data/safari.js');
+for(const z of SAFARI_ZONES) assert(z.pos[0]>=0&&z.pos[0]<=TOWN_MAP.width&&z.pos[1]>=0&&z.pos[1]<=TOWN_MAP.height, z.id);
+for(const loc of LOCATIONS.filter(l=>l.kind!=='safari')) {
   const p=TOWN_POSITIONS[loc.id];assert(p,loc.id);
   assert(p[0]>=0&&p[0]<=TOWN_MAP.width&&p[1]>=0&&p[1]<=TOWN_MAP.height);
 }

@@ -21,6 +21,7 @@ import { consumeBerries } from './shop.js';
 import { recordBattle, addSteps } from './evolution.js';
 import { SUPPLIES, BALL_KEYS, ballCount } from '../data/supplies.js';
 import { CAPTURE_RATE } from '../data/items.gen.js';
+import { SAFARI_RULES } from '../data/safari.js';
 import { Dex } from '@pkmn/dex';
 import { movePP } from './field-state.js';
 
@@ -372,6 +373,64 @@ function hashStr(s) {
   return h >>> 0;
 }
 
+/* ---------------- 사파리존 (data/safari.js) ---------------- */
+
+/** 활동 시각 — 09:00~18:00을 활동 수로 나눈다 */
+const slotTime = (slot, budget) => `${String(9 + Math.floor((slot - 1) * 9 / budget)).padStart(2, '0')}:${String(Math.floor(((slot - 1) * 540 / budget) % 60)).padStart(2, '0')}`;
+
+/**
+ * 사파리존 하루 — 입장료를 내고 사파리볼 30개로 만나는 포켓몬마다 볼을 던진다.
+ * 배틀·경험치·상금·센터 없음. 못 잡으면 스피드가 빠를수록 잘 도망친다. 남은 볼은 반납.
+ * 입장료는 out.money(음수)로 돌려줘 하루 정산이 자금에서 뺀다.
+ */
+async function exploreSafari(game, trainer, location, budget, onActivity, out) {
+  const R = SAFARI_RULES;
+  const agency = game.league.agencies.find(x => x.id === game.playerAgencyId);
+  if (agency && agency.funds < R.fee) { out.lines.push(`입장료 ₽${R.fee.toLocaleString()}가 모자라 사파리존에 들어가지 못했다.`); return out; }
+  out.money -= R.fee;
+  out.safari = { fee: R.fee, thrown: 0 };
+  out.lines.push(`입장료 ₽${R.fee.toLocaleString()}를 내고 사파리볼 ${R.balls}개를 받았다. (일반 몬스터볼은 쓸 수 없다)`);
+  const rng = game.rng;
+  let balls = R.balls;
+  for (let slot = 1; slot <= budget; slot++) {
+    if (balls <= 0) { out.lines.push('사파리볼을 다 써서 밖으로 나왔다.'); break; }
+    const before = trainer.party.map(fieldState);
+    const w = weighted(rng, location.wild);
+    const level = between(rng, w.min, w.max);
+    const wild = await createPokemon({ species: w.species, level, rng });
+    const sp = Dex.species.get(w.species);
+    const rate = CAPTURE_RATE[w.species] ?? CAPTURE_RATE[sp.baseSpecies] ?? 45;
+    const p = captureChance(rate, R.ballMod, 1);   // 배틀하지 않아 HP는 가득
+    const flee = Math.min(R.flee.max, R.flee.base + sp.baseStats.spe / R.flee.perSpeed);
+    const lines = [`야생 ${iGa(K(w.species))} 나타났다! (Lv${level})`];
+    let thrown = 0, caught = false, fled = false;
+    while (balls > 0 && !caught && !fled) {
+      balls--; thrown++;
+      if (rng() < p) caught = true;
+      else if (rng() < flee) fled = true;
+    }
+    out.safari.thrown += thrown;
+    if (caught) {
+      wild.caughtOnDay = game.day;
+      wild.ball = 'safariBall';
+      wild.learned = [...wild.moves];
+      out.catches.push(wild);
+      lines.push(`사파리볼 ${thrown}개를 던져 ${eulReul(K(w.species))} 잡았다! → 소속사 박스로 보냈다.`);
+    } else if (fled) lines.push(`사파리볼 ${thrown}개를 던졌지만 ${eunNeun(K(w.species))} 도망쳤다…`);
+    else lines.push(`사파리볼을 모두 던졌지만 ${eulReul(K(w.species))} 잡지 못했다.`);
+    addSteps(trainer.party);
+    trainer.fatigue = Math.min(100, (trainer.fatigue || 0) + MANAGEMENT.activityFatigue);
+    const event = { kind: 'safari', slot, time: slotTime(slot, budget), lines, money: 0, caught: caught ? wild : null,
+      before, after: trainer.party.map(fieldState) };
+    out.events.push(event);
+    out.lines.push(`[${event.time} · ${slot}/${budget}] ${lines.join(' ')}`);
+    await onActivity(event, budget);
+  }
+  if (balls > 0) out.lines.push(`남은 사파리볼 ${balls}개는 반납했다.`);
+  out.lines.push(`사파리존 종료 — ${out.events.length}회 만남, 포획 ${out.catches.length}마리, 입장료 ₽${R.fee.toLocaleString()}.`);
+  return out;
+}
+
 /** A day is an activity budget; healing consumes exactly the same slot as an encounter. */
 export async function explore(game, trainer, locationId, mode, { activities = EXPLORE_CONFIG.day.default, onActivity = async () => {} } = {}) {
   const location = locationById(locationId);
@@ -381,6 +440,8 @@ export async function explore(game, trainer, locationId, mode, { activities = EX
   if (!location || !trainer.party?.length || !['catch', 'battle', 'mixed'].includes(mode)) {
     out.lines.push('탐험할 장소·파티·활동을 확인해 주세요.'); return out;
   }
+  /* 사파리존은 배정한 활동과 상관없이 사파리볼 포획만 한다 */
+  if (location.kind === 'safari') return exploreSafari(game, trainer, location, budget, onActivity, out);
   const modes = mode === 'mixed' ? ['catch', 'battle'] : [mode];
   const available = modes.filter(m => m === 'catch' ? location.wild.length : location.trainers.length);
   if (!available.length) { out.lines.push('이 장소에서는 지정한 활동을 할 수 없습니다.'); return out; }

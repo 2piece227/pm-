@@ -76,7 +76,7 @@ export async function npcYouthTick(game, challenge) {
       /* 동료: 일주일에 한 번, 파티가 6마리가 될 때까지 */
       if (t.party.length < 6 && (game.day + t.id.length) % 7 === 0) {
         const top = Math.max(...t.party.map(m => m.level));
-        const locs = locationsIn(region).filter(l => l.wild.length && l.level[1] <= top + 2).sort((a, b) => b.level[1] - a.level[1]);
+        const locs = locationsIn(region).filter(l => l.kind !== 'safari' && l.wild.length && l.level[1] <= top + 2).sort((a, b) => b.level[1] - a.level[1]);
         const loc = locs[0];
         if (loc) { const w = loc.wild[Math.floor(game.rng() * loc.wild.length)]; const mon = await createPokemon({ species: w.species, level: Math.max(w.min, Math.min(w.max, top - 3)), rng: game.rng }); if (mon) t.party.push(mon); }
       }

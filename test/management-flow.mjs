@@ -48,7 +48,8 @@ while (game.day <= 7) {
 assert.equal(game.market.length,4,'market refresh must finish before return');
 assert.equal(ATLAS_REGIONS.length,9);
 for (const region of ATLAS_REGIONS.filter(r=>r.playable)) {
-  const ids=new Set(locationsIn(region.id).map(l=>l.id));
+  /* 사파리존 구역은 길로 잇지 않고 사파리존 핀 하나로 들어간다 */
+  const ids=new Set(locationsIn(region.id).filter(l=>l.kind!=='safari').map(l=>l.id));
   const connected=new Set();
   for (const chain of REGION_CHAINS[region.id]) for (const id of chain.split(' ')) { assert(ids.has(id),id); connected.add(id); }
   assert.equal(connected.size,ids.size,`${region.id}: every playable location should appear on the map`);

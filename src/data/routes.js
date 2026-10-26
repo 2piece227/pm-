@@ -14,6 +14,8 @@
  */
 
 /** HGSS 관동·성도 통합 지도 (3000x1316). Referer를 안 보내야 받아준다 */
+import { SAFARI_AREAS } from './safari.js';
+
 export const MAP_IMAGE = 'https://archives.bulbagarden.net/media/upload/c/c2/HGSS_JohtoKanto.jpg';
 
 export const REGIONS = [
@@ -317,6 +319,9 @@ export const LOCATIONS = [
 ];
 
 /** id → 장소 */
+/* 사파리존 구역 (data/safari.js) — 지도에는 사파리존 핀 하나로 보이고, 탐험 목적지로는 구역마다 고른다 */
+LOCATIONS.push(...SAFARI_AREAS);
+
 export const locationById = (id) => LOCATIONS.find((l) => l.id === id) || null;
 
 /** 지역별 장소 목록 */

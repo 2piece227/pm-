@@ -36,6 +36,7 @@ jobs:
           node test/ai-anotherred.mjs
           node test/ai-enhance.mjs
           node test/account.mjs
+          node test/safari.mjs
           node test/battle-volatile-ko.mjs
           node test/ai-status-moves.mjs
           node test/mon-tactics.mjs

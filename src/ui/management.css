@@ -30,3 +30,6 @@ dialog{color:var(--ink);background:#1b2230;border:1px solid #536373;border-radiu
   .ranking-row { display:block; }
   .ranking-row > b, .ranking-row > span { display:block; margin:6px 0; }
 }
+/* 사파리존 (작업62) — 지도 핀과 목적지 패널 */
+.pixel-townmap .atlas-node.safari .safari-ring{fill:#2e7d4a;stroke:#fff;stroke-width:1.5;opacity:.9}.pixel-townmap .atlas-node.safari.selected .safari-ring,.pixel-townmap .atlas-node.safari:hover .safari-ring{fill:#ffdb69;stroke:#183344}.pixel-townmap .atlas-node .safari-mark{font-size:10px;font-weight:900;fill:#fff;stroke:#183344;stroke-width:2px}.pixel-townmap .atlas-node.safari.selected .safari-mark{fill:#183344;stroke:none}
+.safari-areas{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 6px}.safari-areas button{flex:1 1 auto;padding:8px 10px;font-size:11px}.safari-theme{font-size:11px;color:#a6edd9;margin:6px 0}.safari-rules{display:flex;flex-direction:column;gap:5px;background:#203328;border:1px solid #3f6b52;border-radius:6px;padding:11px 12px;margin-top:10px;font-size:11px;color:#cfe8d7}.safari-rules b{color:#e5ce9d;font-size:11px}.safari-rules span:before{content:'· ';color:#7ee4c8}
