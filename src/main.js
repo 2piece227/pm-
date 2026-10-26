@@ -6,10 +6,11 @@
  */
 import { bootOpening } from './ui/opening.js';
 import { initSave } from './engine/save.js';
+import { mountAccountEntry } from './ui/account.js';
 import './ui/management.css';
 
 /* 압축된 저장을 먼저 풀고 시작한다 (engine/save.js) */
-initSave().finally(bootOpening);
+initSave().finally(() => { bootOpening(); mountAccountEntry(document.querySelector('#opening [data-page="title"]')); });
 
 import './ui/pokemon-management.css';
 

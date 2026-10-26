@@ -1,3 +1,11 @@
+# 작업61 — 계정(로그인·회원가입) 기반 — Supabase (검증 완료, 2026-10-26)
+- 요청: 로그인·회원가입. 사용자 선택: 온라인 기능 대비 구조, Supabase.
+- src/net/account.js: 회원가입(이메일·비밀번호·닉네임 — 닉네임은 user_metadata로 보내 DB 트리거가 프로필 생성, 이메일 인증 켠 프로젝트도 동작), 로그인·로그아웃·비밀번호 재설정·로그인 유지·상태 구독, 닉네임 중복 사전 확인(rpc nickname_available), 입력 검사, Supabase 오류 한국어 안내. 설정(VITE_SUPABASE_URL/ANON_KEY)이 없으면 꺼짐. supabase-js 2.117.3(2주 이상 지난 판)은 켤 때만 동적 import — 본 번들 약 215KB 감소.
+- supabase/migrations/0001_accounts.sql: profiles(닉네임 2~12자·한글영문숫자_·대소문자 무시 유일), RLS(읽기 공개·수정 본인), 가입 트리거, nickname_available, updated_at. 다음 온라인 기능은 profiles.id 기준 테이블을 0002_…로.
+- src/ui/account.js·account.css: 타이틀 오른쪽 위 계정 버튼(저장이 없으면 타이틀 메뉴가 안 나와 메뉴 밖에 둠), 로그인/회원가입/재설정/내 계정 창. opening.js: 계정 버튼·창 입력 중에는 타이틀을 넘기지 않음. 창을 다시 그릴 때 비밀번호가 비던 버그는 입력값을 먼저 읽게 고침(브라우저 확인 중 발견).
+- 배포: deploy.yml 빌드에 저장소 Variables SUPABASE_URL·SUPABASE_ANON_KEY 전달(비면 꺼진 채 배포), 테스트 목록에 account·battle-volatile-ko 추가. 연결 방법 docs/accounts.md. .gitignore에 .env.local.
+- 검증: test/account.mjs(설정 없음 → 꺼짐, 입력 검사, 가짜 Supabase로 가입·로그인·로그아웃·닉네임 중복·이메일 중복·메일 인증 흐름·오류 안내), 브라우저(꺼짐 버튼·켜짐 가입 창·모바일 375px), 전체 통과, 빌드 통과. 실제 Supabase 프로젝트와는 아직 연결해 보지 않음.
+
 # 작업60 — 배틀 자막: 지속 효과 원작 문구, 파오리 이름 (검증 완료, 2026-10-26)
 - 제보: 혼란·씨뿌리기·회오리불꽃(바인드류)·상태이상 자막이 이상함(효과는 정상), 파오리 번역 안 됨.
 - 원인: protocol-ko가 -start/-end/-activate를 "○○의 기술!" / "○○의 ○○이(가) 풀렸다!" 범용 문구로 처리 — 혼란 발동은 영어 'confusion!', 멸망의노래 'perish3!', 조사 깨짐, 로그 줄 'psn:'·'(slp)' 영어. 파오리는 routes.js에 'Farfetchd'(정식 'Farfetch’d')로 들어가 한국어 표에서 못 찾음(엔진은 알아들어 효과는 정상).

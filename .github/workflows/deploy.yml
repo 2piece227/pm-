@@ -35,6 +35,8 @@ jobs:
           node test/ai-knowledge.mjs
           node test/ai-anotherred.mjs
           node test/ai-enhance.mjs
+          node test/account.mjs
+          node test/battle-volatile-ko.mjs
           node test/ai-status-moves.mjs
           node test/mon-tactics.mjs
           node test/ai-field.mjs
@@ -44,6 +46,11 @@ jobs:
           node test/ai-ability-suppression.mjs
           node test/ai-boost-memory.mjs
       - run: npm run build
+        env:
+          # 계정(Supabase) — 저장소 Settings → Secrets and variables → Actions → Variables 에 넣는다 (docs/accounts.md).
+          # 비어 있으면 계정 기능은 "준비 중"으로 꺼진 채 배포된다. 공개 키(anon)는 브라우저에 노출되는 값이라 Variables로 충분하다.
+          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

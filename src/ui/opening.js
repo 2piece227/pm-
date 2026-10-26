@@ -51,6 +51,8 @@ function initTitle() {
 
   const press = (e) => {
     if (e.type === 'keydown' && (e.key === 'Tab' || e.key === 'Shift')) return;
+    /* 계정 버튼·계정 창(로그인 입력 중)에서는 타이틀을 넘기지 않는다 */
+    if (document.querySelector('dialog[open]') || e.target?.closest?.('.account-entry')) return;
     open();
   };
   window.addEventListener('keydown', press);

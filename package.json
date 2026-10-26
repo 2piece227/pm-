@@ -16,7 +16,8 @@
     "@pkmn/data": "^0.10.11",
     "@pkmn/dex": "^0.10.11",
     "@pkmn/randoms": "^0.10.11",
-    "@pkmn/sim": "^0.10.11"
+    "@pkmn/sim": "^0.10.11",
+    "@supabase/supabase-js": "2.117.3"
   },
   "devDependencies": {
     "vite": "^8.2.2"
