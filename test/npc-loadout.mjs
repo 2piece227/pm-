@@ -10,6 +10,8 @@ import { toKoreanLog } from '../src/ui/protocol-ko.js';
 import { PublicBattle } from '../src/engine/public-battle.js';
 import { HELD_ITEMS } from '../src/data/items.gen.js';
 import { Dex } from '@pkmn/dex';
+import { championsLearnset } from '../src/data/champions.js';
+import { tmLearnable } from '../src/engine/shop.js';
 
 const rng = () => 0.5;
 const WEAK = ['Growl', 'Smokescreen', 'Tail Whip', 'Leer', 'Scary Face', 'String Shot', 'Sand Attack'];
@@ -25,7 +27,8 @@ const npc = { name: 'NPC', party: [zard] };
 outfitNpcTrainer(npc);
 assert(!zard.moves.some((m) => WEAK.includes(m)), `약한 변화기 없음: ${zard.moves}`);
 assert(!zard.moves.includes('Ember'), '불꽃세례 대신 더 센 불꽃 기술');
-assert(zard.moves.every((m) => zard.learned.includes(m)), '배운 기술 안에서만');
+const champ = new Set(championsLearnset('Charizard'));
+assert(zard.moves.every((m) => zard.learned.includes(m) || champ.has(Dex.moves.get(m).id)), '배운 기술 또는 챔피언스 기술 안에서만');
 assert.equal(new Set(zard.moves.map((m) => Dex.moves.get(m).type)).size >= 2, true, '타입 겹치지 않게');
 assert.equal(HELD_ITEMS[zard.item]?.cat, 'mega', 'Lv35 이상 메가 가능 종은 메가스톤');
 assert.equal(npc.keyStone, true, '키스톤');
@@ -76,4 +79,18 @@ const out = toKoreanLog(['|switch|p2a: Charizard|Charizard, L50, F|100/100', '|d
 const lastField = out.filter((l) => l.field).at(-1).field;
 assert.equal(lastField.p2.species, 'Charizard-Mega-X', '쓰러진 자리에 일반 리자몽이 다시 나타나지 않는다');
 
-console.log('PASS: evolved NPC drops Growl/Ember, learned-only moves, unique items, berries at low level, keeps own items, route trainers moves-only, NPC megas in battle, mega identity across switches, no revert after faint');
+/* 6. 챔피언스 기술표: 기술머신으로 가르칠 수 있고, 강한 NPC만 고른다 */
+assert((await tmLearnable('Starmie')).has('liquidation'), '아쿠스타는 아쿠아브레이크 기술머신(챔피언스)');
+assert(!(await tmLearnable('Staryu')).has('liquidation'), '챔피언스에 없는 별가사리는 그대로');
+assert((await tmLearnable('Charizard-Mega-X')).has('dragondance'), '메가 모습은 기본 종의 표');
+const strong = { party: [await createPokemon({ species: 'Starmie', level: 50, rng })] };
+outfitNpcTrainer(strong, { mega: false });
+assert(strong.party[0].moves.some((m) => !strong.party[0].learned.includes(m)), `Lv50 NPC는 챔피언스 기술도: ${strong.party[0].moves}`);
+const weak = { party: [await createPokemon({ species: 'Starmie', level: 30, rng })] };
+outfitNpcTrainer(weak, { mega: false });
+assert(weak.party[0].moves.every((m) => weak.party[0].learned.includes(m)), `Lv30 NPC는 배운 기술만: ${weak.party[0].moves}`);
+const local = { party: [await createPokemon({ species: 'Starmie', level: 50, rng })] };
+outfitNpcTrainer(local, { items: false });
+assert(local.party[0].moves.every((m) => local.party[0].learned.includes(m)), '탐험 현지 트레이너는 배운 기술만');
+
+console.log('PASS: evolved NPC drops Growl/Ember, learned-only moves, unique items, berries at low level, keeps own items, route trainers moves-only, NPC megas in battle, mega identity across switches, no revert after faint, Champions moves via TM and for strong NPCs');

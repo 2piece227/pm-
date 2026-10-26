@@ -10,6 +10,7 @@ import { Dex } from '@pkmn/dex';
 import { HELD_ITEMS, TMS, EVO_ITEMS } from '../data/items.gen.js';
 import { agencyOf, ownedMon } from './pokemon-management.js';
 import { eulReul, ko, MOVE_KO } from '../data/ko.js';
+import { championsLearnset } from '../data/champions.js';
 
 const GEN = Dex.forGen(9);
 const fail = msg => ({ ok: false, msg });
@@ -83,7 +84,7 @@ export function takeItem(game, mon) {
   return { ok: true, msg: `${eulReul(itemKo(name))} 창고로 돌려놨습니다.` };
 }
 
-/** 이 종이 이 기술머신을 쓸 수 있나 — 9세대 기술머신 기록 우선, SV에 없는 종은 역대 기술머신 기록 [임시값] */
+/** 이 종이 이 기술머신을 쓸 수 있나 — 역대 기술머신 기록 + 포켓몬 챔피언스에서 쓸 수 있는 기술 */
 const lsCache = new Map();
 export async function tmLearnable(species) {
   const sp = GEN.species.get(species);
@@ -95,6 +96,8 @@ export async function tmLearnable(species) {
     const ls = (await GEN.learnsets.get(id))?.learnset || {};
     for (const [mv, src] of Object.entries(ls)) if (src.some(s => /^\dM$/.test(s))) out.add(mv);
   }
+  /* 챔피언스: 레벨이 없는 대전 게임이라 그 종이 쓸 수 있는 기술 목록만 있다 — 기술머신으로 가르칠 수 있게 (아쿠스타의 아쿠아브레이크 등) */
+  for (const mv of championsLearnset(sp.name)) out.add(mv);
   lsCache.set(sp.id, out);
   return out;
 }

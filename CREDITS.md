@@ -18,6 +18,7 @@
 | `public/assets/battle-bg/*.png` (배틀 필드 15종) | [Pokémon Showdown](https://play.pokemonshowdown.com/fx/) 배틀 배경(smogon/pokemon-showdown-client) | 관장 타입별 필드. 각 배경의 원작자 표기는 Showdown 클라이언트 크레딧을 따른다. |
 | `public/assets/items/*.png` (지닌 도구 165종 · 기술머신 타입 18종) | [PokeAPI/sprites](https://github.com/PokeAPI/sprites) `sprites/items` | 상점·도구 칸·기술머신 표. |
 | `src/data/items.gen.js` 도구 이름·설명·가격, 기술머신 목록 | [PokeAPI](https://github.com/PokeAPI/pokeapi) `data/v2/csv` (items, item_names, item_flavor_text, item_categories, machines, moves, move_flavor_text) | `node tools/gen-items.mjs`로 생성. 한국어 공식 명칭·설명. |
+| `src/data/champions-moves.gen.js` 포켓몬 챔피언스 기술표 | [smogon/pokemon-showdown](https://github.com/smogon/pokemon-showdown) `data/mods/champions/learnsets.ts` (MIT) | `node tools/gen-champions-moves.mjs`로 생성. 기술머신으로 가르칠 수 있는 기술·강한 NPC 기술 후보. |
 | `src/data/pokeapi-forms.gen.js` 폼 번호표 | [PokeAPI](https://github.com/PokeAPI/pokeapi) `data/v2/csv/pokemon.csv` | `node tools/gen-pokeapi-forms.mjs`로 생성. 메가진화 등 폼의 BW 애니메이션 GIF 파일 번호(링크만 건다). |
 | `src/data/items.gen.js` 기술 설명 | [pagefaultgames/pokerogue-locales](https://github.com/pagefaultgames/pokerogue-locales) `ko/move.json` effect | 없으면 PokeAPI 한국어 기술 설명. |
 | `public/assets/badges/1~16.png` (관동·성도 배지) | [PokeAPI/sprites](https://github.com/PokeAPI/sprites) `sprites/badges` | 체육관 순회 배지 케이스·관장전 목록. |

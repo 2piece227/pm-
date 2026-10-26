@@ -7,7 +7,8 @@
  *   지닌 도구·키스톤도 NPC에게는 아예 없어서 상대는 메가진화를 한 번도 하지 않았다.
  *
  * 원칙:
- *   - 배운 기술(learned) 안에서만 고른다 — 기술머신·알 기술은 주지 않는다.
+ *   - 배운 기술(learned) 안에서 고른다. Lv35 이상(대전용 장비를 받는 NPC)은 포켓몬 챔피언스에서 그 종이 쓸 수 있는
+ *     기술도 후보에 넣는다 (플레이어도 기술머신으로 가르칠 수 있는 범위). 알 기술은 주지 않는다.
  *   - 난수를 쓰지 않는다. 같은 파티면 같은 장비가 나와 게임 난수 흐름이 그대로다.
  *   - 원작 데이터를 그대로 쓰는 관장 파티(기술·도구가 정해져 있다)는 건드리지 않는다.
  *   - 우리가 준 도구에는 `npcItem` 표시를 남겨, 진화하거나 강해지면 다시 고른다. 원래 들고 있던 도구는 그대로.
@@ -15,6 +16,7 @@
  */
 import { Dex } from '@pkmn/dex';
 import { HELD_ITEMS } from '../data/items.gen.js';
+import { championsLearnset } from '../data/champions.js';
 
 const GEN = Dex.forGen(9);
 
@@ -101,10 +103,11 @@ const isSetup = (id) => id in PHYS_SETUP || id in SPEC_SETUP || id in BOTH_SETUP
 /**
  * 배운 기술 중 4개 — 자속 강한 기술부터, 같은 타입은 겹치지 않게, 쓸 만한 변화기는 최대 2개.
  * 공격기는 최소 2개 (공격기를 2개 못 배웠으면 있는 만큼).
+ * @param extra 배운 기술 말고 더 볼 기술 id (강한 NPC의 챔피언스 기술)
  */
-export function bestMoves(mon) {
+export function bestMoves(mon, extra = []) {
   const sp = battleForme(mon);
-  const pool = [...new Set([...(mon.learned || []), ...(mon.moves || [])])]
+  const pool = [...new Set([...(mon.learned || []), ...(mon.moves || []), ...extra])]
     .map((name) => GEN.moves.get(name)).filter((mv) => mv?.exists && mv.id !== 'struggle');
   const scored = pool.map((mv) => ({ mv, score: isStatus(mv) ? statusScore(mv, sp) : attackScore(mv, sp, mon.level) }));
   const attacksAvailable = scored.filter((s) => !isStatus(s.mv) && s.score > 0).length;
@@ -135,6 +138,9 @@ export function bestMoves(mon) {
   return out.length ? out : (mon.moves || []);
 }
 
+/** 강한 NPC(대전용 장비를 받는 레벨)가 더 고를 수 있는 기술 — 포켓몬 챔피언스 기술표 */
+const extraMoves = (mon) => (mon.level >= LOADOUT.competitiveLevel ? championsLearnset(mon.species) : []);
+
 /** 이 종의 메가스톤들 (리자몽·뮤츠는 2개) */
 export function megaStonesFor(speciesName) {
   return Object.entries(HELD_ITEMS)
@@ -145,7 +151,7 @@ export function megaStonesFor(speciesName) {
 /** 스톤이 여럿이면 이 개체의 기술 구성(물리/특수)에 맞는 쪽 */
 function pickStone(mon, stones) {
   if (stones.length < 2) return stones[0] || null;
-  const moves = bestMoves(mon).map((n) => GEN.moves.get(n)).filter((m) => m?.exists && !isStatus(m));
+  const moves = bestMoves(mon, extraMoves(mon)).map((n) => GEN.moves.get(n)).filter((m) => m?.exists && !isStatus(m));
   const nPhys = moves.filter((m) => m.category === 'Physical').length;
   const phys = nPhys * 2 > moves.length || (nPhys * 2 === moves.length && physShare(speciesOf(mon.species)) >= 0.5);
   const fit = (en) => { const f = speciesOf(megaFormeOf(en, mon.species)); return f?.exists ? (phys ? f.baseStats.atk : f.baseStats.spa) : 0; };
@@ -206,7 +212,7 @@ export function outfitNpcTrainer(trainer, { items = true, mega = true } = {}) {
   }
 
   /* 2. 기술 — 메가스톤이 정해진 뒤에 고른다 (메가리자몽X는 드래곤 자속) */
-  for (const m of party) m.moves = bestMoves(m);
+  for (const m of party) m.moves = bestMoves(m, items ? extraMoves(m) : []);
 
   /* 3. 도구 — 원래 들고 있던 도구는 그대로, 우리가 줬던 도구는 다시 고른다 */
   if (items) {
