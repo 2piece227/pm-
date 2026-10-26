@@ -11,6 +11,7 @@ import { HELD_ITEMS, TMS, EVO_ITEMS } from '../data/items.gen.js';
 import { agencyOf, ownedMon } from './pokemon-management.js';
 import { eulReul, ko, MOVE_KO } from '../data/ko.js';
 import { championsLearnset } from '../data/champions.js';
+import { CHAMPIONS_TMS } from '../data/champions-tms.js';
 
 const GEN = Dex.forGen(9);
 const fail = msg => ({ ok: false, msg });
@@ -19,7 +20,10 @@ export const tmsOf = agency => (agency.tms ??= {});
 export const itemKo = name => HELD_ITEMS[name]?.ko || EVO_ITEMS[name]?.ko || name;
 /** 지니게 할 수 있는 도구 정보 (배틀 도구·메가스톤·진화 도구 중 지닐 수 있는 것) */
 export const holdInfo = name => HELD_ITEMS[name] || (EVO_ITEMS[name]?.holdable ? { ...EVO_ITEMS[name], cat: 'evo' } : null);
-export const TM_BY_MOVE = Object.fromEntries(TMS.map(t => [t.move, t]));
+/** 상점에서 파는 기술머신 전부 — 9세대 229개 + 기술머신 C(챔피언스) */
+export const ALL_TMS = [...TMS, ...CHAMPIONS_TMS];
+export const TM_BY_MOVE = Object.fromEntries(ALL_TMS.map(t => [t.move, t]));
+const CHAMPIONS_TM_IDS = new Set(CHAMPIONS_TMS.map(t => GEN.moves.get(t.move).id));
 
 /* 키스톤(메가링) — 트레이너마다 하나. 원작에선 이야기로 받는 물건이라 가격은 [임시값] */
 export const KEY_STONE = { name: '키스톤', price: 15000 };
@@ -97,7 +101,10 @@ export async function tmLearnable(species) {
     for (const [mv, src] of Object.entries(ls)) if (src.some(s => /^\dM$/.test(s))) out.add(mv);
   }
   /* 챔피언스: 레벨이 없는 대전 게임이라 그 종이 쓸 수 있는 기술 목록만 있다 — 기술머신으로 가르칠 수 있게 (아쿠스타의 아쿠아브레이크 등) */
-  for (const mv of championsLearnset(sp.name)) out.add(mv);
+  const champ = new Set(championsLearnset(sp.name));
+  for (const mv of champ) out.add(mv);
+  /* 기술머신 C는 챔피언스에서 그 기술을 쓰는 종만 (옛 세대 기술머신 기록으로는 안 된다) */
+  for (const mv of CHAMPIONS_TM_IDS) if (!champ.has(mv)) out.delete(mv);
   lsCache.set(sp.id, out);
   return out;
 }

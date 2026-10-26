@@ -7,7 +7,8 @@ import { createPokemon, gainExp, expForLevel } from '../data/pokemon.js';
 import { Dex } from '@pkmn/dex';
 import { ko, SPECIES_KO } from '../data/ko.js';
 import { GYMS } from '../data/gyms.js';
-import { HELD_ITEMS, TMS, EVO_ITEMS } from '../data/items.gen.js';
+import { HELD_ITEMS, EVO_ITEMS } from '../data/items.gen.js';
+import { ALL_TMS } from './shop.js';
 import { SUPPLIES } from '../data/supplies.js';
 import { agencyOf, bagOf, evolutionOptions } from './pokemon-management.js';
 
@@ -86,7 +87,7 @@ export function debugGiveAll(game) {
   a.items ??= {}; a.tms ??= {};
   for (const k of Object.keys(HELD_ITEMS)) a.items[k] = 99;
   for (const k of Object.keys(EVO_ITEMS)) a.items[k] = 99;
-  for (const t of TMS) a.tms[t.move] = 99;
+  for (const t of ALL_TMS) a.tms[t.move] = 99;
   for (const t of a.roster) { t.keyStone = true; const bag = bagOf(t); for (const k of Object.keys(SUPPLIES)) bag[k] = 99; }
   return { ok: true, msg: '모든 도구·기술머신 99개, 키스톤, 탐험 물품을 지급했습니다.' };
 }

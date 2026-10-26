@@ -2,10 +2,10 @@
  * 상점 — 탐험 물품(트레이너 가방) · 지닌 도구 · 열매 · 기술머신 (소속사 창고)
  */
 import { Dex } from '@pkmn/dex';
-import { HELD_ITEMS, TMS, MOVE_DESC_KO, EVO_ITEMS } from '../data/items.gen.js';
+import { HELD_ITEMS, MOVE_DESC_KO, EVO_ITEMS } from '../data/items.gen.js';
 import { ko, MOVE_KO } from '../data/ko.js';
 import { agencyOf } from '../engine/pokemon-management.js';
-import { buyItem, buyTM, itemsOf, tmsOf, buyKeyStone, KEY_STONE } from '../engine/shop.js';
+import { buyItem, buyTM, itemsOf, tmsOf, buyKeyStone, KEY_STONE, ALL_TMS } from '../engine/shop.js';
 import { ko as koT, SPECIES_KO } from '../data/ko.js';
 import { monImage } from './management-widgets.js';
 import { bindLiveSearch } from './live-search.js';
@@ -45,10 +45,10 @@ export function renderShop(game) {
       <div class="shop-grid">${stones.map(([en, v]) => `<article class="shop-item mega-item ${megaOwned.has(v.evolves) ? 'have' : ''}">${itemIcon(en)}<div class="nm"><b>${esc(v.ko)}</b><small>${esc(koT(SPECIES_KO, v.evolves))} → 메가${esc(koT(SPECIES_KO, v.evolves))}${v.future ? ' · 레전즈 Z-A' : ''}${megaOwned.has(v.evolves) ? ' · 우리 소속에 있음' : ''} · 보유 ${stock[en] || 0}</small></div><p>${esc(v.desc || `${koT(SPECIES_KO, v.evolves)}에게 지니게 하면 배틀 중 메가진화할 수 있다.`)}</p><footer><span class="price">₽${won(v.price)} <i>임시</i></span><select class="shop-qty" aria-label="${esc(v.ko)} 수량"><option>1</option><option>2</option></select><button data-buy-item="${esc(en)}" ${a.funds < v.price ? 'disabled' : ''}>구입</button></footer></article>`).join('') || '<p class="muted">찾는 메가스톤이 없습니다.</p>'}</div>`;
   }
   else if (ui.tab === 'tm') {
-    const rows = TMS.filter(t => { const mv = Dex.moves.get(t.move); return (!q || M(t.move).includes(q) || t.move.toLowerCase().includes(q.toLowerCase())) && (ui.type === 'all' || mv.type === ui.type); });
+    const rows = ALL_TMS.filter(t => { const mv = Dex.moves.get(t.move); return (!q || M(t.move).includes(q) || t.move.toLowerCase().includes(q.toLowerCase())) && (ui.type === 'all' || mv.type === ui.type); });
     body = `<div class="shop-filters"><select id="shop-type" aria-label="타입"><option value="all">모든 타입</option>${Object.entries(TYPE_KO).map(([k, v]) => `<option value="${k}" ${ui.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
-      <table class="shop-table"><thead><tr><th>번호</th><th>기술</th><th>분류</th><th>위력</th><th>명중</th><th>보유</th><th>가격</th><th></th></tr></thead><tbody>${rows.map(t => { const mv = Dex.moves.get(t.move); return `<tr><td class="no">${String(t.no).padStart(3, '0')}</td><td>${tmIcon(t.move)}<div class="nm"><b><span class="move-type" data-type="${mv.type}">${TYPE_KO[mv.type]}</span> ${esc(M(t.move))}</b><small>${esc(MOVE_DESC_KO[t.move] || '')}</small></div></td><td>${CAT[mv.category]}</td><td>${mv.basePower || '—'}</td><td>${mv.accuracy === true ? '—' : mv.accuracy}</td><td class="own">${tms[t.move] || 0}</td><td class="price">₽${won(t.price)}</td><td><button data-buy-tm="${esc(t.move)}" ${a.funds < t.price ? 'disabled' : ''}>구입</button></td></tr>`; }).join('') || '<tr><td colspan="8" class="muted">찾는 기술머신이 없습니다.</td></tr>'}</tbody></table>
-      <p class="muted">기술머신은 9세대처럼 한 번 쓰면 사라집니다. 포켓몬 관리 창의 기술 탭에서 사용할 수 있습니다. 가격은 [임시값]입니다.</p>`;
+      <table class="shop-table"><thead><tr><th>번호</th><th>기술</th><th>분류</th><th>위력</th><th>명중</th><th>보유</th><th>가격</th><th></th></tr></thead><tbody>${rows.map(t => { const mv = Dex.moves.get(t.move); return `<tr><td class="no">${String(t.no).padStart(3, '0')}${t.champions ? '<i class="tag tm">챔피언스</i>' : ''}</td><td>${tmIcon(t.move)}<div class="nm"><b><span class="move-type" data-type="${mv.type}">${TYPE_KO[mv.type]}</span> ${esc(M(t.move))}</b><small>${esc(MOVE_DESC_KO[t.move] || '')}</small></div></td><td>${CAT[mv.category]}</td><td>${mv.basePower || '—'}</td><td>${mv.accuracy === true ? '—' : mv.accuracy}</td><td class="own">${tms[t.move] || 0}</td><td class="price">₽${won(t.price)}</td><td><button data-buy-tm="${esc(t.move)}" ${a.funds < t.price ? 'disabled' : ''}>구입</button></td></tr>`; }).join('') || '<tr><td colspan="8" class="muted">찾는 기술머신이 없습니다.</td></tr>'}</tbody></table>
+      <p class="muted">기술머신은 9세대처럼 한 번 쓰면 사라집니다. C로 시작하는 번호는 포켓몬 챔피언스 기술로, 챔피언스에서 그 기술을 쓰는 포켓몬만 배웁니다. 포켓몬 관리 창의 기술 탭에서 사용할 수 있습니다. 가격은 [임시값]입니다.</p>`;
   } else {
     const list = Object.entries(HELD_ITEMS).filter(([en, v]) => (ui.tab === 'berry' ? v.cat === 'berry' : v.cat !== 'berry' && v.cat !== 'mega') && (ui.tab === 'berry' || ui.cat === 'all' || v.cat === ui.cat) && (!q || v.ko.includes(q) || en.toLowerCase().includes(q.toLowerCase())))
       .sort((x, y) => x[1].price - y[1].price || x[1].ko.localeCompare(y[1].ko));

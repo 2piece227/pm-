@@ -93,4 +93,23 @@ const local = { party: [await createPokemon({ species: 'Starmie', level: 50, rng
 outfitNpcTrainer(local, { items: false });
 assert(local.party[0].moves.every((m) => local.party[0].learned.includes(m)), '탐험 현지 트레이너는 배운 기술만');
 
-console.log('PASS: evolved NPC drops Growl/Ember, learned-only moves, unique items, berries at low level, keeps own items, route trainers moves-only, NPC megas in battle, mega identity across switches, no revert after faint, Champions moves via TM and for strong NPCs');
+/* 7. 기술머신 C(챔피언스): 상점에서 사서, 챔피언스에서 그 기술을 쓰는 종만 배운다. 일반 기술머신보다 비싸다 */
+{
+  const { createGame, playerAgency } = await import('../src/engine/game.js');
+  const { buyTM, teachTM, TM_BY_MOVE, ALL_TMS } = await import('../src/engine/shop.js');
+  const { TMS } = await import('../src/data/items.gen.js');
+  assert.equal(ALL_TMS.length, TMS.length + 59, '기술머신 C 59개');
+  assert(!TM_BY_MOVE['Extreme Speed'], '신속은 넣지 않는다');
+  assert(Math.min(...ALL_TMS.filter(t => t.champions).map(t => t.price)) > Math.max(...TMS.map(t => t.price)) - 2001, '일반보다 높은 가격대');
+  assert.equal(TM_BY_MOVE['Iron Tail'].no, 'C08');
+  const g = await createGame({ seed: 5, startEmpty: true }), ag = playerAgency(g); ag.funds = 1e6;
+  const chomp = await createPokemon({ species: 'Garchomp', level: 50, rng }), pika = await createPokemon({ species: 'Pichu', level: 10, rng });
+  ag.roster = [{ id: 't', name: '트', party: [chomp, pika], stats: {} }];
+  assert(buyTM(g, 'Iron Tail', 2).ok);
+  assert.equal(ag.funds, 1e6 - 2 * TM_BY_MOVE['Iron Tail'].price);
+  assert((await teachTM(g, chomp, 'Iron Tail', 0)).ok, '한카리아스: 챔피언스에서 아이언테일을 쓴다');
+  assert.equal(chomp.moves[0], 'Iron Tail');
+  assert(!(await teachTM(g, pika, 'Iron Tail', 0)).ok, '피츄: 옛 세대 기술머신 기록이 있어도 챔피언스에 없으면 못 배운다');
+}
+
+console.log('PASS: evolved NPC drops Growl/Ember, learned-only moves, unique items, berries at low level, keeps own items, route trainers moves-only, NPC megas in battle, mega identity across switches, no revert after faint, Champions moves via TM and for strong NPCs, Champions TM C shop/teach');
