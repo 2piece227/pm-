@@ -66,13 +66,43 @@ export async function evolvePokemon(mon, target, game = null) {
   const opt=evolutionOptions(mon, game).find(e=>e.species===target&&e.ready);
   if(mon.species!==before||!opt) return fail('포켓몬 상태가 바뀌었습니다.');
   if(opt.consume) consumeForEvolution(opt, mon, game ? (agencyOf(game).items ??= {}) : {});
-  const old=Dex.species.get(before), next=Dex.species.get(target);
+  applyEvolution(mon, target, table);
+  return {ok:true,before,after:mon.species,msg:'진화했습니다!'};
+}
+
+/** 진화 적용 — 종·특성(같은 칸)·배운 기술을 바꾼다. 조건 확인은 부르는 쪽이 한다 */
+function applyEvolution(mon, target, table) {
+  const old=Dex.species.get(mon.species), next=Dex.species.get(target);
   const abilitySlot=Object.keys(old.abilities).find(k=>old.abilities[k]===mon.ability)||'0';
   mon.fieldState=fieldState(mon);
   mon.species=next.name;mon.ability=next.abilities[abilitySlot]||next.abilities[0];
   mon.learned=[...new Set([...(mon.learned||mon.moves),...table.filter(m=>m.level<=mon.level).map(m=>m.move)])];
   mon.fieldState=fieldState(mon);
-  return {ok:true,before,after:mon.species,msg:'진화했습니다!'};
+}
+
+/**
+ * NPC 진화 — 레벨업 같은 자동 진화는 그대로, 돌·통신·친밀도처럼 NPC가 조건을 못 맞추는 진화는
+ * 1단계 진화를 Lv20, 2단계 진화를 Lv40에 시킨다 (원작 NPC 트레이너가 그 즈음 진화형을 쓰는 것처럼) [임시값].
+ * 갈래가 여럿이면(이브이·배루키 등) 개체값 합으로 정해 NPC마다 다르게 나온다. 지역 폼(알로라 라이츄 등)으로는 가지 않는다.
+ * @returns {Promise<{before, after}|null>}
+ */
+export const NPC_EVOLUTION = { firstStage: 20, secondStage: 40 };
+export async function evolveNpc(mon) {
+  const opts = evolutionOptions(mon);
+  const auto = opts.filter(e => e.auto);
+  if (auto.length === 1) { const r = await evolvePokemon(mon, auto[0].species); return r.ok ? { before: r.before, after: r.after } : null; }
+  const sp = Dex.species.get(mon.species);
+  const stage = sp.prevo ? (Dex.species.get(sp.prevo).prevo ? 2 : 1) : 0;
+  const need = stage === 0 ? NPC_EVOLUTION.firstStage : NPC_EVOLUTION.secondStage;
+  if (mon.level < need) return null;
+  /* 레벨 조건이 있는 진화(그 레벨 전)는 기다린다 — 여기서는 레벨로 못 가는 진화만 */
+  const branch = opts.filter(e => { const n = Dex.species.get(e.species); return !n.forme && !(n.evoType == null && n.evoLevel && mon.level < n.evoLevel); });
+  if (!branch.length) return null;
+  const ivSum = Object.values(mon.ivs || {}).reduce((a, b) => a + b, 0);
+  const target = branch[ivSum % branch.length].species;
+  const before = mon.species;
+  applyEvolution(mon, target, await levelUpMoves(target));
+  return { before, after: mon.species };
 }
 
 /* ---------------- 트레이닝 센터 (2026-10-23 개편) ----------------

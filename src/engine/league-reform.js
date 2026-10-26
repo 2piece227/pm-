@@ -5,7 +5,7 @@ import { REFORM, SERIES_POINTS, NPC_CURVE, PARENT_SUPPORT } from '../data/league
 import { GYMS } from '../data/gyms.js';
 import { createPokemon, gainExp, expForLevel } from '../data/pokemon.js';
 import { locationsIn } from '../data/routes.js';
-import { evolutionOptions, evolvePokemon } from './pokemon-management.js';
+import { evolveNpc } from './pokemon-management.js';
 
 export const isReform = game => !!game?.reform;
 export const seasonYear = day => Math.floor(((day || 1) - 1) / 365) + 1;
@@ -70,13 +70,13 @@ export async function npcYouthTick(game, challenge) {
       for (const [i, m] of t.party.entries()) {
         const want = Math.max(m.level, target - (i === 0 ? 0 : 2 + (i % 3)));
         if (want > m.level) await gainExp(m, expForLevel(want) - m.exp);
-        const ready = evolutionOptions(m).filter(e => e.auto);
-        if (ready.length === 1) await evolvePokemon(m, ready[0].species);
+        /* 자동 진화 + 돌·통신·친밀도 진화는 Lv20/40에 (pokemon-management evolveNpc) */
+        await evolveNpc(m);
       }
       /* 동료: 일주일에 한 번, 파티가 6마리가 될 때까지 */
       if (t.party.length < 6 && (game.day + t.id.length) % 7 === 0) {
         const top = Math.max(...t.party.map(m => m.level));
-        const locs = locationsIn(region).filter(l => l.kind !== 'safari' && l.wild.length && l.level[1] <= top + 2).sort((a, b) => b.level[1] - a.level[1]);
+        const locs = locationsIn(region).filter(l => l.wild.length && l.level[1] <= top + 2).sort((a, b) => b.level[1] - a.level[1]);
         const loc = locs[0];
         if (loc) { const w = loc.wild[Math.floor(game.rng() * loc.wild.length)]; const mon = await createPokemon({ species: w.species, level: Math.max(w.min, Math.min(w.max, top - 3)), rng: game.rng }); if (mon) t.party.push(mon); }
       }

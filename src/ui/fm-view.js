@@ -31,7 +31,7 @@ import {
   assignAction, playerAgency, playerRoster,
   dailyUpkeep, trainerRating,
   findTrainer, findAgency, rosterLock, exploreAction, parseExplore, describeAction,
-  boxToParty, partyToBox,
+  boxToParty, partyToBox, sendToLab, LAB_REWARD,
 } from '../engine/game.js';
 import { STAT_KEYS, displayStats } from '../data/agencies.js';
 import { STAT_KO } from '../data/styles.js';
@@ -76,6 +76,10 @@ let game = null;
 let screen = 'office';
 let selectedMessage = null;
 let boxSelection = 0;
+/* 박스는 원작처럼 한 칸에 30마리, 버튼으로 넘긴다 */
+const BOX_SIZE = 30, BOX_COUNT = 30;
+let boxPage = 0;
+let boxNotice = '';
 let busy = false;
 let saveNotice = '';
 let mapQuery = '';
@@ -395,11 +399,18 @@ function renderBox() {
   const a = playerAgency(game), roster = playerRoster(game);
   const target = roster.find(t=>t.id === map.trainerId) || roster[0];
   boxSelection = Math.max(0, Math.min(boxSelection, a.box.length - 1));
+  /* 박스 수는 원작처럼 30개, 그보다 많이 잡으면 그만큼 늘어난다 */
+  const pages = Math.max(BOX_COUNT, Math.ceil(a.box.length / BOX_SIZE));
+  boxPage = Math.max(0, Math.min(boxPage, pages - 1));
+  const start = boxPage * BOX_SIZE;
   const selected = a.box[boxSelection];
+  const inPage = selected && boxSelection >= start && boxSelection < start + BOX_SIZE;
   return `<div class="page-h"><div><div class="eyebrow">POKÉMON STORAGE</div><h2>소속사 포켓몬 박스</h2></div><span class="muted">보관 ${a.box.length}마리</span></div>
-    <div class="storage-layout"><section class="card"><div class="section-heading"><h3>보관 중인 포켓몬</h3><span class="muted">포획한 포켓몬은 여기에 도착합니다</span></div><div class="storage-grid">${Array.from({length:Math.max(30,Math.ceil(a.box.length/30)*30)},(_,i)=>a.box[i] ? `<button class="storage-slot ${boxSelection === i?'selected':''}" data-box-select="${i}">${monImage(a.box[i].species)}<b>${K(a.box[i].species)}</b><small>Lv. ${a.box[i].level}</small></button>`:'<div class="storage-slot empty"><span>＋</span></div>').join('')}</div></section>
-    <aside><section class="card storage-detail">${selected ? `<div class="eyebrow">선택한 포켓몬</div>${monImage(selected.species)}<h2>${K(selected.species)} <small>Lv. ${selected.level}</small></h2><p class="muted">${selected.caughtOnDay || 1}일차에 만난 동료</p>${boxInfo(selected)}<div class="move-pills">${selected.moves.map(m=>`<span>${esc(M(m))}</span>`).join('')}</div><button class="item-slot ${selected.item?'has':''}" data-give-item data-b="${boxSelection}">${selected.item&&holdInfo(selected.item)?`${heldIcon(selected.item)}<span><b>${esc(holdInfo(selected.item).ko)}</b><small>지닌 도구 · 바꾸기</small></span>`:'<span class="plus">＋</span><span><b>도구 지니게 하기</b><small>창고에서 고르기</small></span>'}</button><div class="pokemon-actions"><button class="ghost manage-mon" data-b="${boxSelection}">기술·특성·진화 관리</button><button data-nav="training">트레이닝 센터</button></div><label>함께할 트레이너<select id="box-target">${roster.map(t=>`<option value="${t.id}" ${t.id===target?.id?'selected':''}>${esc(t.name)} · ${t.party.length}/6</option>`).join('')}</select></label><button class="to-party" data-b="${boxSelection}" ${!target || target.party.length>=6 || selected.training?'disabled':''}>${selected.training?'장기 훈련 중':'파티에 합류시키기'}</button>${target?.party.length>=6?'<p class="muted">파티가 가득 찼습니다. 한 마리를 박스로 옮겨주세요.</p>':''}` : '<h3>첫 만남을 기다리는 중</h3><p class="muted">지도에서 포켓몬 포획을 배정하세요.</p><button data-nav="map">탐험 지도 열기</button>'}</section>
-    <section class="card party-preview"><h3>${esc(target?.name || '트레이너')}의 파티</h3>${(target?.party||[]).map((m,i)=>`<div class="party-slot">${monImage(m.species)}<div><b>${K(m.species)}</b><small>Lv. ${m.level}</small></div><button class="ghost to-box" data-t="${target.id}" data-i="${i}" ${target.party.length===1?'disabled':''}>박스로</button></div>`).join('')}<p class="muted">${target?.party.length||0} / 6 · 마지막 동료는 파티에 남습니다.</p></section></aside></div>`;
+    <div class="storage-layout"><section class="card"><div class="box-pager"><button class="ghost" data-box-page="${boxPage - 1}" ${boxPage === 0 ? 'disabled' : ''} aria-label="이전 박스">◀</button><div><b>박스 ${boxPage + 1}</b><small>${boxPage + 1} / ${pages} · 이 박스 ${a.box.slice(start, start + BOX_SIZE).length}/${BOX_SIZE}</small></div><button class="ghost" data-box-page="${boxPage + 1}" ${boxPage >= pages - 1 ? 'disabled' : ''} aria-label="다음 박스">▶</button></div>
+    <div class="storage-grid">${Array.from({length:BOX_SIZE},(_,k)=>{ const i = start + k, m = a.box[i]; return m ? `<button class="storage-slot ${boxSelection === i?'selected':''}" data-box-select="${i}">${monImage(m.species)}<b>${K(m.species)}</b><small>Lv. ${m.level}</small></button>`:'<div class="storage-slot empty"><span>＋</span></div>'; }).join('')}</div>
+    ${boxNotice ? `<p class="panel-notice" role="status">${esc(boxNotice)}</p>` : ''}<p class="muted box-help">포획한 포켓몬은 앞쪽 빈 칸부터 들어옵니다. 박스 번호를 넘겨 다른 박스를 볼 수 있습니다.</p></section>
+    <aside><section class="card storage-detail">${selected ? `<div class="eyebrow">선택한 포켓몬${inPage ? '' : ` · 박스 ${Math.floor(boxSelection / BOX_SIZE) + 1}`}</div>${monImage(selected.species)}<h2>${K(selected.species)} <small>Lv. ${selected.level}</small></h2><p class="muted">${selected.caughtOnDay || 1}일차에 만난 동료</p>${boxInfo(selected)}<div class="move-pills">${selected.moves.map(m=>`<span>${esc(M(m))}</span>`).join('')}</div><button class="item-slot ${selected.item?'has':''}" data-give-item data-b="${boxSelection}">${selected.item&&holdInfo(selected.item)?`${heldIcon(selected.item)}<span><b>${esc(holdInfo(selected.item).ko)}</b><small>지닌 도구 · 바꾸기</small></span>`:'<span class="plus">＋</span><span><b>도구 지니게 하기</b><small>창고에서 고르기</small></span>'}</button><div class="pokemon-actions"><button class="ghost manage-mon" data-b="${boxSelection}">기술·특성·진화 관리</button><button data-nav="training">트레이닝 센터</button></div><label>함께할 트레이너<select id="box-target">${roster.map(t=>`<option value="${t.id}" ${t.id===target?.id?'selected':''}>${esc(t.name)} · ${t.party.length}/6</option>`).join('')}</select></label><button class="to-party" data-b="${boxSelection}" ${!target || target.party.length>=6 || selected.training?'disabled':''}>${selected.training?'장기 훈련 중':'파티에 합류시키기'}</button>${target?.party.length>=6?'<p class="muted">파티가 가득 찼습니다. 한 마리를 박스로 옮겨주세요.</p>':''}<button class="ghost to-lab" data-b="${boxSelection}" ${selected.training?'disabled':''}>연구실에 보내기 · +₽${LAB_REWARD} <small>임시</small></button>` : '<h3>첫 만남을 기다리는 중</h3><p class="muted">지도에서 포켓몬 포획을 배정하세요.</p><button data-nav="map">탐험 지도 열기</button>'}</section>
+    <section class="card party-preview">${target ? `<button class="party-head" data-open-trainer="${target.id}" title="${esc(target.name)} 트레이너 화면으로"><h3>${esc(target.name)}의 파티</h3><span>트레이너 화면 ›</span></button>` : '<h3>트레이너의 파티</h3>'}${(target?.party||[]).map((m,i)=>`<div class="party-slot" data-open-trainer="${target.id}" role="button" tabindex="0" title="${esc(target.name)} 트레이너 화면으로">${monImage(m.species)}<div><b>${K(m.species)}</b><small>Lv. ${m.level}</small></div><button class="ghost to-box" data-t="${target.id}" data-i="${i}" ${target.party.length===1?'disabled':''}>박스로</button></div>`).join('')}<p class="muted">${target?.party.length||0} / 6 · 마지막 동료는 파티에 남습니다. 파티를 누르면 트레이너 화면으로 갑니다.</p></section></aside></div>`;
 }
 
 /* ---------------- 맵 ---------------- */
@@ -498,7 +509,10 @@ function wire() {
   wireCareer(main,game,()=>{if(detailId&&!playerRoster(game).some(t=>t.id===detailId))detailId=null;persist();render();});
   main.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{ if(b.dataset.trainer)map.trainerId=b.dataset.trainer;screen=b.dataset.nav; detailId=null; render(); });
   main.querySelectorAll('[data-message]').forEach(b=>b.onclick=()=>{ const m=inboxItems()[Number(b.dataset.message)]; selectedMessage=m.key; read.add(m.key); game.readMessages=[...read]; persist(); render(); });
-  main.querySelectorAll('[data-box-select]').forEach(b=>b.onclick=()=>{boxSelection=Number(b.dataset.boxSelect);render();});
+  main.querySelectorAll('[data-box-select]').forEach(b=>b.onclick=()=>{boxSelection=Number(b.dataset.boxSelect);boxNotice='';render();});
+  main.querySelectorAll('[data-box-page]').forEach(b=>b.onclick=()=>{boxPage=Number(b.dataset.boxPage);boxNotice='';const a=playerAgency(game);if(a.box[boxPage*BOX_SIZE])boxSelection=boxPage*BOX_SIZE;render();});
+  main.querySelectorAll('.to-lab').forEach(b=>b.onclick=()=>{const a=playerAgency(game),m=a.box[Number(b.dataset.b)];if(!m||!confirm(`${K(m.species)} Lv.${m.level} — 연구실에 보낼까요?\n보낸 포켓몬은 돌아오지 않습니다. (사례금 ₽${LAB_REWARD})`))return;const r=sendToLab(game,Number(b.dataset.b));if(!r.ok)alert(r.msg);else boxNotice=r.msg;persist();render();});
+  main.querySelectorAll('.party-slot[data-open-trainer]').forEach(b=>b.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();b.click();}});
   const search=$('route-search');
   if(search) bindLiveSearch(search,{setQuery:v=>{mapQuery=v;},renderHtml:()=>renderMap(),selector:'.route-list',wire:el=>el.querySelectorAll('[data-l]').forEach(b=>{b.onclick=()=>{map.locId=b.dataset.l;render();};})});
   const filter=$('route-filter');if(filter) filter.onchange=()=>{mapFilter=filter.value;render();};

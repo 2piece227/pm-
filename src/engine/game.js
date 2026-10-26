@@ -27,7 +27,7 @@ import { todaysFixture, cancelFixture, pruneFixtures } from './gym-fixtures.js';
 import { gymById } from '../data/gyms.js';
 import { badgeProgress } from './gym-progress.js';
 import { locationById } from '../data/routes.js';
-import { SPECIES_KO, ko, iGa } from '../data/ko.js';
+import { SPECIES_KO, ko, iGa, eulReul } from '../data/ko.js';
 import { setupCareerStart, youthCount, youthCapacity, ensureSeats } from './career.js';
 import { cupsToday, cupEntrants, runCup, ensureSeason, drawDueCups } from './season.js';
 import { tickRegionalLeague, leagueSeedsFor, leagueParticipantsToday } from './regional-league.js';
@@ -237,6 +237,22 @@ export function boxToParty(game, trainerId, index) {
   const [mon] = a.box.splice(index, 1);
   t.party.push(mon);
   return { ok: true };
+}
+
+/**
+ * 박스 정리 — 연구실에 보낸다 (돌아오지 않는다). 사례금 LAB_REWARD [임시값].
+ * 포켓몬 경매가 생기기 전까지의 정리 수단. 지닌 도구는 창고로 돌려받는다. 훈련 중이면 못 보낸다.
+ */
+export const LAB_REWARD = 30;
+export function sendToLab(game, index) {
+  const a = playerAgency(game), mon = a.box[index];
+  if (!mon) return { ok: false, msg: '없는 포켓몬입니다.' };
+  if (mon.training) return { ok: false, msg: '훈련 중인 포켓몬은 보낼 수 없습니다.' };
+  if (mon.item) { a.items ??= {}; a.items[mon.item] = (a.items[mon.item] || 0) + 1; }
+  a.box.splice(index, 1);
+  a.funds += LAB_REWARD;
+  const name = ko(SPECIES_KO, mon.species);
+  return { ok: true, msg: `${eulReul(name)} 연구실에 보냈습니다.${mon.item ? ' 지닌 도구는 창고로 돌려받았습니다.' : ''} 사례금 ₽${LAB_REWARD}.`, mon };
 }
 
 /** 파티 → 박스 (마지막 한 마리는 못 뺀다) */
