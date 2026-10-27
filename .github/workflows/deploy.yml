@@ -38,6 +38,7 @@ jobs:
           node test/account.mjs
           node test/safari.mjs
           node test/box-npc.mjs
+          node test/inbox-model.mjs
           node test/battle-volatile-ko.mjs
           node test/ai-status-moves.mjs
           node test/mon-tactics.mjs

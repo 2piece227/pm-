@@ -44,6 +44,7 @@ import { openNegotiation } from './negotiation.js';
 import * as sfx from './sfx.js';
 import { ATLAS_REGIONS, regionSvg } from './region-map.js';
 import { monImage, wireMonImages, gameDate, dayProgress } from './management-widgets.js';
+import { INBOX_CATS, catLabel, catSender, newsMessage, inCategory, categoryCounts, groupByDay, dayHeading } from './inbox-model.js';
 import { saveGame } from '../engine/save.js';
 import { snapshotGame, restoreGame } from '../engine/checkpoint.js';
 import { runDay } from './day-runner.js';
@@ -75,6 +76,9 @@ const statusLabel = s => ({brn:'화상',psn:'독',tox:'맹독',par:'마비',slp:
 let game = null;
 let screen = 'office';
 let selectedMessage = null;
+/* 받은 소식 — 분류 탭, 안 읽은 것만, 좁은 화면에선 목록↔본문 전환 */
+let inboxCat = 'all', inboxUnreadOnly = false, inboxReading = false, inboxNotice = '';
+const INBOX_HISTORY = 200;
 let boxSelection = 0;
 /* 박스는 원작처럼 한 칸에 30마리, 버튼으로 넘긴다 */
 const BOX_SIZE = 30, BOX_COUNT = 30;
@@ -96,6 +100,7 @@ const map = { region: 'kanto', locId: null, trainerId: null, activities: 6 };
 
 /* 읽은 메시지 — 세션 동안만 */
 const read = new Set();
+const flagged = new Set();
 
 /* 사이드바·대시보드 아이콘 — PokeAPI 도구 도트 (public/assets/items, CREDITS.md) */
 const itemIcon = (name, cls = '') => `<img class="${cls}" src="${(import.meta.env?.BASE_URL??'/')}assets/items/${name}.png" alt="" aria-hidden="true" width="24" height="24">`;
@@ -158,50 +163,43 @@ function renderTop() {
 
 /* ---------------- 받은 메시지함 ---------------- */
 
-/** 게임에서 벌어진 일을 메시지 목록으로 (§9 뉴스 파이프라인 재사용) */
+/** 게임에서 벌어진 일을 메시지 목록으로 (§9 뉴스 파이프라인 재사용) — 분류·보낸 사람·바로가기는 inbox-model.js */
 function inboxItems() {
   const out = [];
-  for(const e of ensureSeason(game).events.filter(e=>e.status==='scheduled'&&game.day>=e.openDay&&game.day<=e.deadline))out.push({key:`cup-register-${e.id}`,day:e.openDay,title:`${e.name} 참가 접수`,needsDecision:true,body:`${e.deadline}일차까지 일정 화면에서 참가 자격에 맞는 트레이너를 등록하세요. 개최일은 ${e.date}일차이며, 오늘의 다른 활동 대신 대회에 참가합니다. 등록하지 않아도 NPC 대회 결과를 볼 수 있습니다.`});
+  const tName = id => playerRoster(game).find(t => t.id === id)?.name;
+  const sys = (m) => out.push({ from: catSender(m.cat), actions: [], ...m });
+  for(const e of ensureSeason(game).events.filter(e=>e.status==='scheduled'&&game.day>=e.openDay&&game.day<=e.deadline))sys({key:`cup-register-${e.id}`,day:e.openDay,cat:'match',title:`${e.name} 참가 접수`,needsDecision:true,body:`${e.deadline}일차까지 일정 화면에서 참가 자격에 맞는 트레이너를 등록하세요. 개최일은 ${e.date}일차이며, 오늘의 다른 활동 대신 대회에 참가합니다. 등록하지 않아도 NPC 대회 결과를 볼 수 있습니다.`,actions:[{label:'참가 등록하기',nav:'schedule'}]});
   const lock = rosterLock(game);
 
-  if (lock) out.push({key:`youth-full-${game.day}`,day:game.day,title:'유스 정원이 가득 찼습니다',body:lock.msg});
-  for(const t of playerRoster(game)) if(t.isYouth&&t.graduation?.decision==='pending') out.push({key:`graduation-${t.id}`,day:t.graduation.qualifiedDay,title:`${t.name}의 진로를 결정해주세요`,needsDecision:true,careerTrainerId:t.id,body:'트레이너 상세에서 프로 콜업·판매·보류를 선택할 수 있습니다.'});
+  if (lock) sys({key:`youth-full-${game.day}`,day:game.day,cat:'club',from:'인사팀',title:'유스 정원이 가득 찼습니다',body:lock.msg,actions:[{label:'계약 · 스태프',nav:'personnel'}]});
+  for(const t of playerRoster(game)) if(t.isYouth&&t.graduation?.decision==='pending') sys({key:`graduation-${t.id}`,day:t.graduation.qualifiedDay,cat:'club',from:'인사팀',title:`${t.name}의 진로를 결정해주세요`,needsDecision:true,careerTrainerId:t.id,trainerId:t.id,body:'트레이너 상세에서 프로 콜업·판매·보류를 선택할 수 있습니다.',actions:[{label:'진로 결정하기',trainer:t.id}]});
 
   /* 포획 배정인데 볼이 없으면 — 탐험이 헛돈다 */
   for (const t of playerRoster(game)) {
     const ex = parseExplore(game.actions[t.id]);
-    if (ex && ex.mode !== 'battle' && !(ballCount(bagOf(t)) > 0)) out.push({ key:`noball-${t.id}-${game.day}`, day:game.day, needsDecision:true, title:`${t.name}의 몬스터볼이 떨어졌습니다`, body:`${ex.mode==='catch'?'포획 중심 배정이라 오늘은 아무 활동도 못 합니다':'포획·배틀 병행이지만 배틀만 하게 됩니다'}. 상점의 탐험 물품에서 몬스터볼을 지급하세요.` });
+    if (ex && ex.mode !== 'battle' && !(ballCount(bagOf(t)) > 0)) sys({ key:`noball-${t.id}-${game.day}`, day:game.day, cat:'explore', from:`${t.name} · 탐험 보고`, trainerId:t.id, needsDecision:true, title:`${t.name}의 몬스터볼이 떨어졌습니다`, body:`${ex.mode==='catch'?'포획 중심 배정이라 오늘은 아무 활동도 못 합니다':'포획·배틀 병행이지만 배틀만 하게 됩니다'}. 상점의 탐험 물품에서 몬스터볼을 지급하세요.`, actions:[{label:'상점에서 볼 지급',nav:'shop'},{label:'배정 바꾸기',nav:'map'}] });
   }
   /* 배정이 이어지니 지친 트레이너를 알려준다 — 쉬게 하는 건 대표의 판단 */
-  for (const t of playerRoster(game)) if ((t.fatigue||0) >= 70) out.push({ key:`slump-${t.id}-${game.day}`, day:game.day, needsDecision:true, title:`${t.name}, 연패로 슬럼프에 빠졌습니다`, body:`컨디션이 ${conditionOf(t)}까지 떨어져 실력이 덜 나옵니다. 컨디션은 지면 크게 깎이고 이기면 돌아옵니다. 쉬운 상대와 붙여 자신감을 되찾게 하거나, 며칠 쉬게 하세요.` });
+  for (const t of playerRoster(game)) if ((t.fatigue||0) >= 70) sys({ key:`slump-${t.id}-${game.day}`, day:game.day, cat:'club', from:'코치', trainerId:t.id, needsDecision:true, title:`${t.name}, 연패로 슬럼프에 빠졌습니다`, body:`컨디션이 ${conditionOf(t)}까지 떨어져 실력이 덜 나옵니다. 컨디션은 지면 크게 깎이고 이기면 돌아옵니다. 쉬운 상대와 붙여 자신감을 되찾게 하거나, 며칠 쉬게 하세요.`, actions:[{label:`${t.name} 보기`,trainer:t.id},{label:'배정 바꾸기',nav:'map'}] });
   for (const f of fixturesOf(game)) if (f.status==='booked' && f.day-game.day<=1) {
     const t=playerRoster(game).find(x=>x.id===f.trainerId), g=gymById(f.gymId);
-    if (t&&g) out.push({ key:`fx-${f.id}-${game.day}`, day:game.day, title:`${f.day===game.day?'오늘':'내일'} ${t.name} vs ${g.name} 관장전`, body:`${gameDate(f.day)}에 ${g.name} 체육관에서 경기가 열립니다. 그날은 탐험 대신 관장전을 치르고, 끝나면 관전이 열립니다.` });
+    if (t&&g) sys({ key:`fx-${f.id}-${game.day}`, day:game.day, cat:'match', trainerId:t.id, title:`${f.day===game.day?'오늘':'내일'} ${t.name} vs ${g.name} 관장전`, body:`${gameDate(f.day)}에 ${g.name} 체육관에서 경기가 열립니다. 그날은 탐험 대신 관장전을 치르고, 끝나면 관전이 열립니다.`, actions:[{label:'체육관 순회',nav:'gyms'},{label:`${t.name} 파티 점검`,trainer:t.id}] });
   }
-  for (const t of playerRoster(game)) for (const m of t.party) { const r = megaReadiness(game, m); if (r && r.state !== 'ok' && r.state !== 'box') out.push({ key:`mega-${t.id}-${m.species}-${r.state}`, day:game.day, needsDecision:true, title:`${t.name}의 ${K(m.species)}는 메가진화하지 못합니다`, body:`${r.text}. ${r.state==='nokey'?'트레이너 화면이나 상점 메가스톤 탭에서 키스톤을 주세요.':'맞는 메가스톤으로 바꿔 주세요.'}` }); }
+  for (const t of playerRoster(game)) for (const m of t.party) { const r = megaReadiness(game, m); if (r && r.state !== 'ok' && r.state !== 'box') sys({ key:`mega-${t.id}-${m.species}-${r.state}`, day:game.day, cat:'growth', trainerId:t.id, needsDecision:true, title:`${t.name}의 ${K(m.species)}는 메가진화하지 못합니다`, body:`${r.text}. ${r.state==='nokey'?'트레이너 화면이나 상점 메가스톤 탭에서 키스톤을 주세요.':'맞는 메가스톤으로 바꿔 주세요.'}`, actions:[{label:`${t.name} 보기`,trainer:t.id},{label:'상점',nav:'shop'}] }); }
   /* 오늘 배정이 비어 있으면 알려준다 — FM의 "할 일" 메시지 */
   const todayCup=cupToday(game),todayEntrants=todayCup?cupEntrants(game,todayCup):[];
   const competing=new Set(todayEntrants.length>=2?todayEntrants.map(t=>t.id):[]);
   const idle = playerRoster(game).filter((t) => !game.actions[t.id] && !t.camp && !competing.has(t.id));
-  if (idle.length) {
-    out.push({
-      key: `idle-${game.day}`, day: game.day, title: '오늘 할 일이 없는 트레이너가 있습니다',
-      body: `${idle.map((t) => t.name).join(', ')} — 맵에서 보낼 곳을 정해주세요.`,
-    });
-  }
+  if (idle.length) sys({ key: `idle-${game.day}`, day: game.day, cat: 'club', title: '오늘 할 일이 없는 트레이너가 있습니다', body: `${idle.map((t) => t.name).join(', ')} — 맵에서 보낼 곳을 정해주세요.`, actions: [{ label: '탐험 지도에서 배정', nav: 'map' }] });
 
-  for (const n of [...(game.league.newsFeed || [])].sort((a,b)=>(b.day||0)-(a.day||0)).slice(0,40)) {
+  for (const n of [...(game.league.newsFeed || [])].sort((a,b)=>(b.day||0)-(a.day||0)).slice(0,INBOX_HISTORY)) {
     if(n.kind==='graduation' && playerRoster(game).some(t=>t.id===n.trainerId&&t.graduation?.decision==='pending'))continue;
-    if (n.kind === 'explore') {
-      const [first, ...rest] = n.text.split(' / ');
-      out.push({ key: `n-${n.day}-${n.trainerId}-${n.text.length}`, day: n.day, kind: n.kind, trainerId: n.trainerId, title: first.replace('탐험을 시작했다.', '탐험 보고'), body: rest.join('\n'), preview: rest.at(-1) });
-    } else {
-      out.push({ key: `n-${n.day}-${n.text}`, day: n.day, kind: n.kind, title: n.text, body: '', reportDay:['gym','training','cup','personnel','pwt'].includes(n.kind)?n.day:null });
-    }
+    out.push(newsMessage(n, { trainerName: tName(n.trainerId) }));
   }
   /* 같은 날 안에서는 배틀·탐험·대회 보고가 먼저, 트레이닝 센터 소식은 맨 뒤 */
   const rank = m => m.kind === 'training' ? 3 : ['explore','gym','cup','pwt'].includes(m.kind) ? 0 : m.key.startsWith('n-') ? 1 : 2;
-  return out.sort((a,b) => Number(!!b.needsDecision)-Number(!!a.needsDecision) || b.day - a.day || rank(a) - rank(b));
+  const seen = new Set();
+  return out.filter(m => !seen.has(m.key) && seen.add(m.key)).sort((a,b) => Number(!!b.needsDecision)-Number(!!a.needsDecision) || b.day - a.day || rank(a) - rank(b));
 }
 
 function renderOffice() {
@@ -213,7 +211,7 @@ function renderOffice() {
     <div class="dash-hero">${renderNextUp(needsFirst)}${renderTeamStatus(roster)}</div>
     <div class="metric-strip"><div>${itemIcon('amulet-coin')}<div><span>사용 가능한 자금</span><b>₽ ${won(a.funds)}</b><small>주급 ${won(dailyUpkeep(game)*7)}</small></div></div><div>${itemIcon('exp-share')}<div><span>소속 트레이너</span><b>${roster.length}</b><small>포켓몬 ${a.box.length + roster.reduce((n,t)=>n+t.party.length,0)}마리</small></div></div><div>${itemIcon('card-key')}<div><span>선수 등록</span><b>${pros}<small>프로</small></b><small>유스 ${youthCount(a)}/${youthCapacity(a)}</small></div></div><div>${itemIcon('potion')}<div><span>다음 급여</span><b>${gameDate(nextPayday())}</b></div></div></div>
     <div class="dash-grid">
-      <section class="card dash-card"><div class="section-heading"><h3>받은 소식</h3><button class="ghost" data-nav="inbox">전체 보기</button></div>${inboxItems().slice(0,5).map(m=>`<button class="news-row" data-nav="inbox"><span class="tag ${m.needsDecision?'urgent':''}">${m.needsDecision?'결정':'소식'}</span><b>${esc(m.title)}</b><small>${m.day}일차 · ${gameDate(m.day)}</small></button>`).join('') || '<p class="muted">아직 소식이 없습니다. 첫 계약을 하면 소식이 들어옵니다.</p>'}</section>
+      <section class="card dash-card"><div class="section-heading"><h3>받은 소식</h3><button class="ghost" data-nav="inbox">전체 보기</button></div>${inboxItems().slice(0,5).map(m=>`<button class="news-row" data-msg-key="${esc(m.key)}"><span class="tag ${m.needsDecision?'urgent':''} cat-${m.cat}">${m.needsDecision?'결정':catLabel(m.cat)}</span><b>${esc(m.title)}</b><small>${m.day}일차 · ${gameDate(m.day)}</small></button>`).join('') || '<p class="muted">아직 소식이 없습니다. 첫 계약을 하면 소식이 들어옵니다.</p>'}</section>
       <section class="card dash-card"><div class="section-heading"><h3>다가오는 대회</h3><button class="ghost" data-nav="schedule">일정</button></div>${upcomingCups(4).map(e=>`<div class="cup-row kind-${e.kind}"><span class="kind"></span><div><b>${esc(e.name)}</b><small>${gameDate(e.date)} · ${cupKindLabel(e.kind)} · 우리 등록 ${e.registrations.length}명</small></div><span class="dd">D-${e.date-game.day}</span></div>`).join('') || '<p class="muted">예정된 대회가 없습니다.</p>'}</section>
       <section class="card dash-card"><div class="section-heading"><h3>지역 순위</h3><button class="ghost" data-nav="schedule">전체</button></div>${renderMiniRanking(a)}</section>
     </div>
@@ -295,12 +293,33 @@ function renderDailySummary(rep, detailed = true) {
 }
 
 function renderInbox() {
-  const items = inboxItems();
-  const selected = items.find(m => m.key === selectedMessage) || items[0];
-  const selectedReport = selected?.trainerId || selected?.reportDay ? game.log.find(r=>r.day===selected.day) : null;
-  return `<div class="page-h"><div><div class="eyebrow">COMMUNICATIONS</div><h2>받은 메시지함</h2></div><span class="muted">${items.length}건</span></div>
-    <div class="mail-layout"><div class="mail-list">${items.map((m,i)=>`<button class="mail-item ${selected?.key === m.key ? 'selected' : ''} ${read.has(m.key)?'':'unread'}" data-message="${i}"><small>${m.day}일차 · 운영팀</small><b>${esc(m.title)}</b><p>${esc((m.preview || m.body || '소속사 소식을 확인하세요.').slice(0,140))}</p></button>`).join('') || '<p class="muted">받은 소식이 없습니다.</p>'}</div>
-    <article class="mail-body">${selected ? `<div class="eyebrow">운영팀 → ${esc(game.playerName || '대표')}</div><h2>${esc(selected.title)}</h2><small>${selected.day}일차 · ${gameDate(selected.day)}</small><hr>${selectedReport ? renderDailySummary(selectedReport) : `<div class="letter">${esc(selected.body || '상세 내용은 관련 화면에서 확인할 수 있습니다.').replace(/\n/g,'<br>')}</div>`}<div class="dialog-actions">${selected?.careerTrainerId?`<button data-open-trainer="${selected.careerTrainerId}">진로 결정하기</button>`:''}<button class="ghost" data-nav="personnel">계약 · 스태프</button><button class="ghost" data-nav="schedule">일정 · 대회 확인</button><button class="ghost" data-nav="map">탐험 지도</button><button class="ghost" data-nav="squad">트레이너 확인</button></div>` : '<h3>새로운 소식을 기다리고 있습니다.</h3>'}</article></div>`;
+  const all = inboxItems(), counts = categoryCounts(all, read, flagged);
+  if (!INBOX_CATS.some(c => c.id === inboxCat)) inboxCat = 'all';
+  const items = all.filter(m => inCategory(m, inboxCat, flagged) && (!inboxUnreadOnly || !read.has(m.key) || m.key === selectedMessage));
+  const selected = items.find(m => m.key === selectedMessage) || (inboxReading ? null : items[0]);
+  const selectedReport = selected?.trainerId && selected.kind === 'explore' || selected?.reportDay ? game.log.find(r=>r.day===selected.day) : null;
+  const tabs = INBOX_CATS.filter(c => !c.hideEmpty || counts[c.id].total).map(c => `<button class="ghost inbox-tab ${inboxCat === c.id ? 'on' : ''}" data-inbox-cat="${c.id}">${c.label}${counts[c.id].unread ? `<span class="badge">${counts[c.id].unread}</span>` : counts[c.id].total && c.id !== 'all' ? `<small>${counts[c.id].total}</small>` : ''}</button>`).join('');
+  const row = m => `<button class="mail-item ${selected?.key === m.key ? 'selected' : ''} ${read.has(m.key)?'':'unread'} ${m.needsDecision?'decision':''}" data-msg-key="${esc(m.key)}"><span class="mail-meta"><i class="cat-chip cat-${m.cat}">${catLabel(m.cat)}</i><small>${esc(m.from)}</small>${flagged.has(m.key)?'<em class="flag">★</em>':''}</span><b>${esc(m.title)}</b><p>${esc((m.preview || m.body || '').slice(0,140))}</p></button>`;
+  const pinned = inboxCat === 'decision' ? [] : items.filter(m => m.needsDecision), rest = items.filter(m => !pinned.includes(m));
+  const list = (pinned.length ? `<div class="mail-group decision">처리할 일 · ${pinned.length}</div>${pinned.map(row).join('')}` : '')
+    + groupByDay(rest).map(g => `<div class="mail-group">${dayHeading(g.day, game.day)} <small>${gameDate(g.day)}</small></div>${g.items.map(row).join('')}`).join('');
+  const nextUnread = items.find(m => !read.has(m.key) && m.key !== selected?.key);
+  const actions = selected ? [...(selected.actions || [])] : [];
+  const reader = selected ? `<button class="ghost mail-back" data-inbox-back>← 목록</button>
+    <header class="mail-head"><div><span class="cat-chip cat-${selected.cat}">${catLabel(selected.cat)}</span>${selected.needsDecision ? '<span class="cat-chip urgent">결정 필요</span>' : ''}</div>
+    <button class="ghost flag-btn ${flagged.has(selected.key)?'on':''}" data-msg-flag="${esc(selected.key)}" title="중요 표시">${flagged.has(selected.key)?'★ 중요':'☆ 중요 표시'}</button></header>
+    <div class="eyebrow">${esc(selected.from)} → ${esc(game.playerName || '대표')}</div><h2>${esc(selected.title)}</h2><small>${selected.day}일차 · ${gameDate(selected.day)}</small><hr>
+    ${inboxNotice ? `<p class="panel-notice">${esc(inboxNotice)}</p>` : ''}
+    ${selectedReport ? renderDailySummary(selectedReport) : selected.body ? `<div class="letter">${esc(selected.body).replace(/\n/g,'<br>')}</div>` : ''}
+    ${selected.choices?.length ? `<div class="mail-choices">${selected.choices.map((c,i)=>`<button data-msg-choice="${i}"><b>${esc(c.label)}</b>${c.hint?`<small>${esc(c.hint)}</small>`:''}</button>`).join('')}</div>` : ''}
+    <div class="dialog-actions">${actions.map(x => x.trainer ? `<button class="ghost" data-open-trainer="${esc(x.trainer)}">${esc(x.label)}</button>` : `<button class="ghost" data-nav="${x.nav}">${esc(x.label)}</button>`).join('')}${nextUnread ? `<button data-msg-key="${esc(nextUnread.key)}">다음 안 읽은 소식 ▶</button>` : ''}</div>`
+    : `<div class="mail-empty"><h3>${items.length ? '소식을 골라 읽어 주세요.' : '이 분류에는 소식이 없습니다.'}</h3></div>`;
+  const unreadHere = items.filter(m => !read.has(m.key)).length;
+  return `<div class="page-h"><div><div class="eyebrow">COMMUNICATIONS</div><h2>받은 소식</h2></div><span class="muted">안 읽음 ${counts.all.unread} · 전체 ${counts.all.total}</span></div>
+    <nav class="inbox-tabs">${tabs}</nav>
+    <div class="mail-layout ${inboxReading ? 'reading' : ''}"><div class="mail-side"><div class="mail-tools"><label><input type="checkbox" data-inbox-unread ${inboxUnreadOnly?'checked':''}> 안 읽은 것만</label><button class="ghost" data-inbox-readall ${unreadHere?'':'disabled'}>모두 읽음</button></div>
+    <div class="mail-list">${list || '<p class="muted mail-none">받은 소식이 없습니다.</p>'}</div></div>
+    <article class="mail-body">${reader}</article></div>`;
 }
 
 /* ---------------- 트레이너 ---------------- */
@@ -517,7 +536,13 @@ function wire() {
   main.querySelectorAll('[data-open-trainer]').forEach(b=>b.onclick=()=>{detailId=b.dataset.openTrainer;screen='squad';render();});
   wireCareer(main,game,()=>{if(detailId&&!playerRoster(game).some(t=>t.id===detailId))detailId=null;persist();render();});
   main.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{ if(b.dataset.trainer)map.trainerId=b.dataset.trainer;screen=b.dataset.nav; detailId=null; render(); });
-  main.querySelectorAll('[data-message]').forEach(b=>b.onclick=()=>{ const m=inboxItems()[Number(b.dataset.message)]; selectedMessage=m.key; read.add(m.key); game.readMessages=[...read]; persist(); render(); });
+  main.querySelectorAll('[data-msg-key]').forEach(b=>b.onclick=()=>{ screen='inbox'; detailId=null; selectedMessage=b.dataset.msgKey; inboxReading=true; inboxNotice=''; read.add(selectedMessage); game.readMessages=[...read]; persist(); render(); });
+  main.querySelectorAll('[data-inbox-cat]').forEach(b=>b.onclick=()=>{ inboxCat=b.dataset.inboxCat; selectedMessage=null; inboxReading=false; inboxNotice=''; render(); });
+  main.querySelectorAll('[data-inbox-unread]').forEach(b=>b.onchange=()=>{ inboxUnreadOnly=b.checked; render(); });
+  main.querySelectorAll('[data-inbox-back]').forEach(b=>b.onclick=()=>{ inboxReading=false; selectedMessage=null; render(); });
+  main.querySelectorAll('[data-inbox-readall]').forEach(b=>b.onclick=()=>{ for(const m of inboxItems())if(inCategory(m,inboxCat,flagged))read.add(m.key); game.readMessages=[...read]; persist(); render(); });
+  main.querySelectorAll('[data-msg-flag]').forEach(b=>b.onclick=()=>{ const k=b.dataset.msgFlag; if(flagged.has(k))flagged.delete(k);else flagged.add(k); game.flaggedMessages=[...flagged]; persist(); render(); });
+  main.querySelectorAll('[data-msg-choice]').forEach(b=>b.onclick=()=>{ const m=inboxItems().find(x=>x.key===selectedMessage), c=m?.choices?.[Number(b.dataset.msgChoice)]; if(!c)return; const r=c.run()||{}; inboxNotice=r.msg||''; persist(); render(); });
   main.querySelectorAll('[data-box-select]').forEach(b=>b.onclick=()=>{const i=Number(b.dataset.boxSelect);boxNotice='';
     if(boxPicking){const m=playerAgency(game).box[i];if(m&&!m.training){if(boxPicked.has(m))boxPicked.delete(m);else boxPicked.add(m);}}else boxSelection=i;render();});
   main.querySelectorAll('[data-box-pick-mode]').forEach(b=>b.onclick=()=>{boxPicking=!boxPicking;boxPicked.clear();boxNotice='';render();});
@@ -625,6 +650,7 @@ export function initFm({ game: existing }) {
   game = existing;
   screen = game.pendingStarter ? 'scouting' : 'office';
   read.clear(); (game.readMessages || []).forEach(k=>read.add(k));
+  flagged.clear(); (game.flaggedMessages || []).forEach(k=>flagged.add(k));
   $('app').hidden = false;
 
   $('tb-continue').onclick = async () => {
@@ -639,7 +665,7 @@ export function initFm({ game: existing }) {
       game = await runDay(game, progress.update);
       window.__game = game;
       persist();
-      screen = 'inbox'; detailId = null; selectedMessage = null; lastView = ''; cupViewId = null;
+      screen = 'inbox'; detailId = null; selectedMessage = null; inboxReading = false; lastView = ''; cupViewId = null;
     } catch (error) {
       game = restoreGame(before); window.__game = game;
       saveNotice = '진행 실패 · 하루 시작 전 상태로 복구했습니다.';
